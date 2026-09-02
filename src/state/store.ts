@@ -1,0 +1,746 @@
+/**
+ * The store.
+ *
+ * The UI renders state and dispatches actions; it never implements mechanics.
+ * Everything here delegates to the engine and then notifies React.
+ *
+ * State is mutated in place and subscribers are woken by a version counter, so
+ * a large GameState does not have to be deep-cloned on every travel tick.
+ */
+
+import {
+  beginTrade,
+  breakDownForParts,
+  buyItem,
+  decantFuel,
+  negotiatePrices,
+  offerPassage,
+  performRepair,
+  performTreatment,
+  rest as restAction,
+  resupply,
+  sellStack,
+  socialise,
+  visitContact,
+  type RepairTarget,
+  type ResupplyKind,
+  type TreatmentOption,
+} from '../engine/actions';
+import { runAutonomousShip } from '../engine/captain';
+import {
+  dismissCombat,
+  endCombat,
+  performAction,
+  startCombat,
+  tickCombat,
+} from '../engine/combat';
+import { beginEvent, dismissEvent, resolveChoice, scopesForLocation, selectEvent } from '../engine/eventEngine';
+import {
+  autoEquipParty,
+  equip as equipItem,
+  moveToBackpack,
+  moveToCargo,
+  unequip,
+} from '../engine/inventory';
+import { pushLog } from '../engine/log';
+import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
+import { beginNewRun, checkRunEnded, createGame, rerollProtagonist, type NewRunDraft } from '../engine/newGame';
+import { upgradeAttribute, upgradeSkill } from '../engine/progression';
+import {
+  negotiate as negotiateRecruit,
+  offerBerth,
+  payTerms,
+  persuade,
+  searchForRecruits,
+  talkTo,
+} from '../engine/recruit';
+import { Rng } from '../engine/rng';
+import {
+  abandonExpedition,
+  beginExpedition,
+  ensureSites,
+  enterNode,
+  exitExpedition,
+} from '../engine/scavenge';
+import { advanceTime, crewMembers } from '../engine/sim';
+import { beginTravel, hoursPerRealSecond, resumeTravel, setSpeed, stepTravel } from '../engine/travel';
+import { SAVE } from '../engine/tuning';
+import type {
+  AttributeKey,
+  Character,
+  CombatAction,
+  GameState,
+  LocationActionKind,
+  LocationId,
+  MissionDef,
+  RecruitCandidate,
+  RecruitVenue,
+  ScreenId,
+  SkillKey,
+  TimeSpeed,
+} from '../engine/types';
+import { listSaves, loadGame, saveGame, type SaveMeta } from '../persistence/storage';
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
+export interface Toast {
+  id: number;
+  lines: string[];
+  title?: string;
+}
+
+class GameStore {
+  state: GameState | null = null;
+  draft: NewRunDraft | null = null;
+  toasts: Toast[] = [];
+  saves: SaveMeta[] = [];
+  busy = false;
+
+  private rng: Rng = new Rng('boot');
+  private listeners = new Set<() => void>();
+  private version = 0;
+  private toastId = 0;
+
+  // -- React binding ------------------------------------------------------
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getSnapshot = (): number => this.version;
+
+  private notify(): void {
+    this.version += 1;
+    for (const listener of this.listeners) listener();
+  }
+
+  /** Run an engine mutation and wake the UI. */
+  private mutate(fn: (state: GameState) => void): void {
+    if (!this.state) return;
+    fn(this.state);
+    this.state.rngCursor = this.rng.position;
+    checkRunEnded(this.state);
+    this.notify();
+  }
+
+  private pushToast(lines: string[], title?: string): void {
+    const cleaned = lines.filter((l) => l && l.trim().length > 0);
+    if (cleaned.length === 0) return;
+    this.toastId += 1;
+    this.toasts = [...this.toasts, { id: this.toastId, lines: cleaned, title }].slice(-4);
+  }
+
+  dismissToast = (id: number): void => {
+    this.toasts = this.toasts.filter((t) => t.id !== id);
+    this.notify();
+  };
+
+  // -- Run lifecycle ------------------------------------------------------
+
+  startNewRun = (seed?: string): void => {
+    this.draft = beginNewRun(seed);
+    this.state = null;
+    this.notify();
+  };
+
+  rerollDraft = (attempt: number): void => {
+    if (!this.draft) return;
+    this.draft = {
+      seed: this.draft.seed,
+      protagonist: rerollProtagonist(this.draft.seed, attempt),
+    };
+    this.notify();
+  };
+
+  setDraftSeed = (seed: string): void => {
+    this.draft = beginNewRun(seed);
+    this.notify();
+  };
+
+  commitDraft = (protagonist: Character): void => {
+    if (!this.draft) return;
+    const seed = this.draft.seed;
+    this.state = createGame(seed, protagonist);
+    this.rng = new Rng(`${seed}:live`, 0);
+    this.draft = null;
+    this.notify();
+    void this.autosave();
+  };
+
+  // -- Navigation ---------------------------------------------------------
+
+  setScreen = (screen: ScreenId): void => {
+    this.mutate((state) => {
+      state.screen = screen;
+    });
+  };
+
+  pushScreen = (screen: ScreenId): void => {
+    this.mutate((state) => {
+      state.screenStack.push(state.screen);
+      state.screen = screen;
+    });
+  };
+
+  back = (): void => {
+    this.mutate((state) => {
+      const previous = state.screenStack.pop();
+      state.screen = previous ?? (state.currentLocationId ? 'cockpit' : 'cockpit');
+    });
+  };
+
+  focusCharacter = (id: string): void => {
+    this.mutate((state) => {
+      state.focusCharacterId = id;
+      state.screenStack.push(state.screen);
+      state.screen = 'character';
+    });
+  };
+
+  toggleDebug = (): void => {
+    this.mutate((state) => {
+      state.debug.enabled = !state.debug.enabled;
+    });
+  };
+
+  toggleRevealHidden = (): void => {
+    this.mutate((state) => {
+      state.debug.revealHidden = !state.debug.revealHidden;
+    });
+  };
+
+  // -- Travel -------------------------------------------------------------
+
+  setCourse = (toId: LocationId): void => {
+    this.mutate((state) => {
+      const result = beginTravel(state, toId, this.rng);
+      if (!result.ok) this.pushToast([result.reason ?? 'Cannot set that course.']);
+    });
+    void this.autosave();
+  };
+
+  setSpeed = (speed: TimeSpeed): void => {
+    this.mutate((state) => setSpeed(state, speed));
+  };
+
+  /** Called by the cockpit ticker while travelling. */
+  tickTravel = (realSeconds: number): void => {
+    if (!this.state?.travel || this.state.travel.paused) return;
+    if (this.state.activeEvent || this.state.combat) return;
+
+    this.mutate((state) => {
+      const hours = hoursPerRealSecond(state) * realSeconds;
+      const before = state.hours;
+      const step = stepTravel(state, hours, this.rng);
+
+      // The base ship keeps living while a party is away.
+      if (state.expedition) {
+        const elapsed = state.hours - before;
+        if (elapsed > 0) runAutonomousShip(state, elapsed, this.rng);
+      }
+
+      if (step.lines.length > 0) this.pushToast(step.lines);
+      if (step.arrived) void this.autosave();
+      if (step.interrupted) void this.autosave();
+    });
+    this.maybeStartPendingCombat();
+  };
+
+  resumeTravel = (): void => {
+    this.mutate((state) => resumeTravel(state));
+  };
+
+  // -- Location actions ---------------------------------------------------
+
+  openLocationAction = (kind: LocationActionKind): void => {
+    if (!this.state) return;
+    switch (kind) {
+      case 'trade':
+        this.mutate((state) => beginTrade(state));
+        break;
+      case 'recruit':
+        this.setScreen('recruitSearch');
+        break;
+      case 'missions':
+      case 'findWork':
+        this.mutate((state) => refreshMissions(state, this.rng));
+        this.setScreen('missionPrep');
+        break;
+      case 'scavenge':
+        this.mutate((state) => {
+          const location = state.currentLocationId ? state.locations[state.currentLocationId] : undefined;
+          if (location) ensureSites(state, location);
+        });
+        this.setScreen('missionPrep');
+        break;
+      case 'repair':
+        this.setScreen('ship');
+        break;
+      case 'medical':
+        this.setScreen('medical');
+        break;
+      case 'social':
+        this.mutate((state) => {
+          const lines = socialise(state, this.rng);
+          this.pushToast(lines, 'Time with the crew');
+        });
+        break;
+      case 'rest':
+        this.setScreen('rest');
+        break;
+      case 'depart':
+        this.setScreen('cockpit');
+        break;
+    }
+  };
+
+  /** Roll a location event on demand — "see what's happening here". */
+  lookForOpportunity = (): void => {
+    this.mutate((state) => {
+      const location = state.currentLocationId ? state.locations[state.currentLocationId] : undefined;
+      const advance = advanceTime(state, 1.5, this.rng);
+      if (advance.lines.length > 0) this.pushToast(advance.lines);
+
+      const def = selectEvent(state, scopesForLocation(location), this.rng, {
+        routine: false,
+        location,
+        danger: location?.danger,
+      });
+      if (!def) {
+        this.pushToast(['Nothing is happening worth your time right now.']);
+        return;
+      }
+      beginEvent(state, def, def.scope[0] ?? 'homeworld');
+      state.screen = 'event';
+    });
+  };
+
+  // -- Events -------------------------------------------------------------
+
+  chooseEventOption = (choiceId: string): void => {
+    this.mutate((state) => {
+      resolveChoice(state, choiceId, this.rng);
+    });
+    void this.autosave();
+  };
+
+  closeEvent = (): void => {
+    this.mutate((state) => {
+      dismissEvent(state);
+      if (state.travel) {
+        state.travel.paused = false;
+        state.screen = 'cockpit';
+      } else if (state.expedition) {
+        state.screen = 'expedition';
+      } else {
+        state.screen = state.currentLocationId ? 'locationActions' : 'cockpit';
+      }
+    });
+    this.maybeStartPendingCombat();
+  };
+
+  // -- Combat -------------------------------------------------------------
+
+  private maybeStartPendingCombat(): void {
+    if (!this.state?.pendingCombat) return;
+    this.mutate((state) => {
+      const encounterId = state.pendingCombat;
+      state.pendingCombat = null;
+      if (!encounterId) return;
+      const returnTo: ScreenId = state.expedition ? 'expedition' : 'cockpit';
+      const combat = startCombat(state, encounterId, this.rng, returnTo);
+      if (!combat) return;
+      tickCombat(state, this.rng);
+    });
+  }
+
+  combatAction = (action: CombatAction, targetId?: string): void => {
+    this.mutate((state) => {
+      const combat = state.combat;
+      if (!combat?.activeId) return;
+      const result = performAction(state, combat.activeId, action, targetId, this.rng);
+      if (result.lines.length > 0) this.pushToast(result.lines);
+      if (!result.ended) tickCombat(state, this.rng);
+    });
+  };
+
+  advanceCombat = (): void => {
+    this.mutate((state) => {
+      if (state.combat && !state.combat.resolution) tickCombat(state, this.rng);
+    });
+  };
+
+  fleeCombat = (): void => {
+    this.mutate((state) => {
+      if (state.combat) endCombat(state, 'fled', this.rng);
+    });
+  };
+
+  closeCombat = (): void => {
+    this.mutate((state) => dismissCombat(state));
+    void this.autosave();
+  };
+
+  // -- Expeditions --------------------------------------------------------
+
+  startExpedition = (siteId: string, partyIds: string[], leaderId: string): void => {
+    this.mutate((state) => {
+      const result = beginExpedition(state, siteId, partyIds, leaderId, this.rng);
+      if (!result.ok) this.pushToast([result.reason ?? 'Cannot deploy.']);
+    });
+    void this.autosave();
+  };
+
+  moveToNode = (nodeId: string): void => {
+    this.mutate((state) => {
+      const before = state.hours;
+      const result = enterNode(state, nodeId, this.rng);
+      const elapsed = state.hours - before;
+      if (elapsed > 0) {
+        const report = runAutonomousShip(state, elapsed, this.rng);
+        result.lines.push(...report.lines);
+      }
+      // Keep the outcome on the expedition itself, not just in a toast that
+      // scrolls away — the expedition screen is where the player is looking.
+      if (state.expedition) {
+        state.expedition.lastResult = {
+          nodeId,
+          text: result.lines[0] ?? '',
+          lines: result.lines,
+        };
+      }
+      this.pushToast(result.lines, 'Site');
+    });
+    this.maybeStartPendingCombat();
+  };
+
+  leaveSite = (): void => {
+    this.mutate((state) => {
+      const lines = exitExpedition(state, this.rng);
+      this.pushToast(lines, 'Back aboard');
+    });
+    void this.autosave();
+  };
+
+  abortExpedition = (): void => {
+    this.mutate((state) => abandonExpedition(state));
+  };
+
+  // -- Missions -----------------------------------------------------------
+
+  acceptMissionById = (missionId: string): void => {
+    this.mutate((state) => {
+      acceptMission(state, missionId);
+    });
+  };
+
+  abandonMissionById = (missionId: string): void => {
+    this.mutate((state) => abandonMission(state, missionId));
+  };
+
+  runMission = (mission: MissionDef, partyIds: string[], leaderId: string | null): void => {
+    this.mutate((state) => {
+      const before = state.hours;
+      const result = resolveMission(state, mission, partyIds, leaderId, this.rng);
+      const elapsed = state.hours - before;
+      if (elapsed > 0 && partyIds.length < crewMembers(state).length) {
+        const report = runAutonomousShip(state, elapsed, this.rng);
+        result.lines.push(...report.lines);
+      }
+      this.pushToast(result.lines, mission.title);
+    });
+    void this.autosave();
+  };
+
+  setMissionPrep = (prep: GameState['missionPrep']): void => {
+    this.mutate((state) => {
+      state.missionPrep = prep;
+    });
+  };
+
+  // -- Recruitment --------------------------------------------------------
+
+  searchRecruits = (venue: RecruitVenue): void => {
+    this.mutate((state) => {
+      const result = searchForRecruits(state, venue, this.rng);
+      this.pushToast(result.lines, 'Asking around');
+      state.screen = 'recruitCandidate';
+    });
+  };
+
+  selectCandidate = (index: number | null): void => {
+    this.mutate((state) => {
+      if (state.recruitment) state.recruitment.selectedIndex = index;
+    });
+  };
+
+  talkToCandidate = (candidate: RecruitCandidate, beat: string): void => {
+    this.mutate((state) => {
+      this.pushToast(talkTo(state, candidate, beat, this.rng));
+    });
+  };
+
+  persuadeCandidate = (candidate: RecruitCandidate): void => {
+    this.mutate((state) => {
+      this.pushToast(persuade(state, candidate, this.rng).lines, 'Persuasion');
+    });
+  };
+
+  negotiateCandidate = (candidate: RecruitCandidate): void => {
+    this.mutate((state) => {
+      this.pushToast(negotiateRecruit(state, candidate, this.rng).lines, 'Negotiation');
+    });
+  };
+
+  payCandidateTerms = (candidate: RecruitCandidate): void => {
+    this.mutate((state) => {
+      this.pushToast(payTerms(state, candidate), 'Terms');
+    });
+  };
+
+  offerCandidateBerth = (candidate: RecruitCandidate): void => {
+    this.mutate((state) => {
+      this.pushToast(offerBerth(state, candidate, this.rng).lines, 'Offer');
+    });
+    void this.autosave();
+  };
+
+  closeRecruiting = (): void => {
+    this.mutate((state) => {
+      state.recruitment = null;
+      state.screen = 'locationActions';
+    });
+  };
+
+  // -- Trade --------------------------------------------------------------
+
+  setTradeMode = (mode: 'buy' | 'sell'): void => {
+    this.mutate((state) => {
+      if (state.trade) state.trade.mode = mode;
+    });
+  };
+
+  negotiateTrade = (): void => {
+    this.mutate((state) => this.pushToast(negotiatePrices(state, this.rng), 'Terms'));
+  };
+
+  buy = (uid: string, qty: number): void => {
+    this.mutate((state) => this.pushToast(buyItem(state, uid, qty, this.rng)));
+  };
+
+  sell = (uid: string, qty: number): void => {
+    this.mutate((state) => this.pushToast(sellStack(state, uid, qty)));
+  };
+
+  resupplyResource = (kind: ResupplyKind, amount: number): void => {
+    this.mutate((state) => this.pushToast(resupply(state, kind, amount, this.rng)));
+  };
+
+  closeTrade = (): void => {
+    this.mutate((state) => {
+      state.trade = null;
+      state.screen = 'locationActions';
+    });
+    void this.autosave();
+  };
+
+  // -- Ship and inventory -------------------------------------------------
+
+  repair = (target: RepairTarget, points: number, payYard: boolean): void => {
+    this.mutate((state) => {
+      this.pushToast(performRepair(state, target, points, payYard, this.rng), 'Repair');
+    });
+    void this.autosave();
+  };
+
+  treat = (option: TreatmentOption): void => {
+    this.mutate((state) => {
+      this.pushToast(performTreatment(state, option, this.rng), 'Treatment');
+    });
+    void this.autosave();
+  };
+
+  equipStack = (characterId: string, uid: string): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character) return;
+      const error = equipItem(character, uid, state.ship);
+      if (error) this.pushToast([error]);
+    });
+  };
+
+  /** Hand out the best gear in the hold across the whole crew. */
+  equipBest = (): void => {
+    this.mutate((state) => {
+      autoEquipParty(crewMembers(state), state.ship);
+      this.pushToast(['Crew equipped from the hold.']);
+    });
+  };
+
+  unequipSlot = (characterId: string, slot: 'weapon' | 'sidearm' | 'armor' | 'tool'): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (character) unequip(character, slot);
+    });
+  };
+
+  takeFromHold = (characterId: string, uid: string): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character || !state.ship) return;
+      const error = moveToBackpack(state.ship, character, uid);
+      if (error) this.pushToast([error]);
+    });
+  };
+
+  stowInHold = (characterId: string, uid: string): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character || !state.ship) return;
+      const error = moveToCargo(state.ship, character, uid);
+      if (error) this.pushToast([error]);
+    });
+  };
+
+  decant = (): void => {
+    this.mutate((state) => this.pushToast(decantFuel(state)));
+  };
+
+  strip = (uid: string): void => {
+    this.mutate((state) => this.pushToast(breakDownForParts(state, uid)));
+  };
+
+  // -- Family and contacts ------------------------------------------------
+
+  visitContact = (id: string): void => {
+    this.mutate((state) => {
+      this.pushToast(visitContact(state, id, this.rng), 'Visit');
+    });
+  };
+
+  offerPassage = (id: string): void => {
+    this.mutate((state) => {
+      this.pushToast(offerPassage(state, id, this.rng), 'Passage');
+    });
+    void this.autosave();
+  };
+
+  // -- Rest ---------------------------------------------------------------
+
+  rest = (hours: number): void => {
+    this.mutate((state) => {
+      const before = state.hours;
+      const result = restAction(state, hours, this.rng);
+      const elapsed = state.hours - before;
+      if (elapsed > 0 && state.expedition) runAutonomousShip(state, elapsed, this.rng);
+      this.pushToast(result.lines, 'Rest');
+      if (!result.interrupted) state.screen = state.currentLocationId ? 'locationActions' : 'cockpit';
+    });
+    void this.autosave();
+  };
+
+  // -- Progression --------------------------------------------------------
+
+  raiseSkill = (characterId: string, skill: SkillKey): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character) return;
+      const result = upgradeSkill(state, character, skill);
+      this.pushToast([result.message]);
+    });
+  };
+
+  raiseAttribute = (characterId: string, attribute: AttributeKey): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character) return;
+      const result = upgradeAttribute(state, character, attribute);
+      this.pushToast([result.message]);
+    });
+  };
+
+  setCaptain = (characterId: string): void => {
+    this.mutate((state) => {
+      if (!state.characters[characterId]) return;
+      const previous = state.characters[state.captainId];
+      if (previous) previous.role = 'crew';
+      state.captainId = characterId;
+      state.characters[characterId]!.role = 'captain';
+      pushLog(state, 'crew', `${state.characters[characterId]!.name} takes command.`);
+    });
+  };
+
+  // -- Persistence --------------------------------------------------------
+
+  autosave = async (): Promise<void> => {
+    if (!this.state) return;
+    try {
+      await saveGame(SAVE.autosaveSlot, this.state);
+    } catch {
+      // A failed autosave must never interrupt play.
+    }
+  };
+
+  saveTo = async (slot: string): Promise<void> => {
+    if (!this.state) return;
+    this.busy = true;
+    this.notify();
+    try {
+      await saveGame(slot, this.state);
+      this.saves = await listSaves();
+      this.pushToast([`Saved to ${slot}.`]);
+    } catch {
+      this.pushToast(['Could not write the save.']);
+    } finally {
+      this.busy = false;
+      this.notify();
+    }
+  };
+
+  loadFrom = async (slot: string): Promise<void> => {
+    this.busy = true;
+    this.notify();
+    try {
+      const loaded = await loadGame(slot);
+      if (!loaded) {
+        this.pushToast(['That save could not be read.']);
+        return;
+      }
+      this.state = loaded;
+      this.draft = null;
+      this.rng = new Rng(`${loaded.seed}:live`, loaded.rngCursor);
+      this.pushToast(['Save loaded.']);
+    } catch {
+      this.pushToast(['That save could not be read.']);
+    } finally {
+      this.busy = false;
+      this.notify();
+    }
+  };
+
+  refreshSaves = async (): Promise<void> => {
+    try {
+      this.saves = await listSaves();
+    } catch {
+      this.saves = [];
+    }
+    this.notify();
+  };
+
+  quitToTitle = (): void => {
+    this.state = null;
+    this.draft = null;
+    this.notify();
+  };
+}
+
+export const store = new GameStore();
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
+
+export type { RepairTarget, ResupplyKind, TreatmentOption };
