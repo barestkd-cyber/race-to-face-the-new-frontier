@@ -12,6 +12,8 @@ import type { Rng } from './rng';
 import { FUEL, SHIPS } from './tuning';
 import {
   SHIP_QUALITIES,
+  SHIP_QUALITY_LABELS,
+  SHIP_SIZE_LABELS,
   SHIP_SYSTEM_KINDS,
   type Character,
   type RoomKind,
@@ -438,4 +440,68 @@ export function functionalRoomCount(ship: Ship): number {
 export function describeShip(ship: Ship): string {
   const rooms = functionalRoomCount(ship);
   return `${ship.size[0]!.toUpperCase()}${ship.size.slice(1)}-class, ${rooms} functional room${rooms === 1 ? '' : 's'}`;
+}
+
+/**
+ * What kind of ship this reads as, from what was actually fitted. Used on the
+ * reveal, where "Small General-Purpose Vessel" tells the player more than a
+ * table of room conditions would.
+ */
+export function shipArchetype(ship: Ship): string {
+  const size = SHIP_SIZE_LABELS[ship.size];
+  const has = (kind: RoomKind) => ship.rooms.some((r) => r.kind === kind);
+
+  let role = 'General-Purpose Vessel';
+  if (has('hangar')) role = 'Tender';
+  else if (has('researchLab') || has('systemsLab')) role = 'Survey Vessel';
+  else if (has('medicalWard') || has('medBay')) role = 'Medical Tender';
+  else if (has('hydroponics')) role = 'Long-Range Hauler';
+  else if (has('cargoBay')) role = 'Light Freighter';
+  else if (has('armory')) role = 'Escort';
+
+  return `${size} ${role}`;
+}
+
+/** Single condition figure across everything fitted, for an at-a-glance read. */
+export function overallCondition(ship: Ship): number {
+  const parts: number[] = [];
+  for (const system of Object.values(ship.systems)) {
+    if (system.installed) parts.push(system.condition);
+  }
+  for (const room of ship.rooms) parts.push(room.condition);
+  if (parts.length === 0) return 0;
+  return parts.reduce((sum, v) => sum + v, 0) / parts.length;
+}
+
+/**
+ * A couple of things worth saying out loud about this hull. Deliberately short:
+ * the reveal is a moment, not an inventory.
+ */
+export function notableFacts(ship: Ship): string[] {
+  const facts: string[] = [];
+
+  const extras = ship.rooms.filter(
+    (r) => !SHIPS.mandatoryRooms.includes(r.kind as (typeof SHIPS.mandatoryRooms)[number]),
+  );
+  const best = extras.sort((a, b) => qualityIndex(b.quality) - qualityIndex(a.quality))[0];
+  if (best) facts.push(`${ROOM_LABELS[best.kind]} fitted`);
+
+  const missing = SHIP_SYSTEM_KINDS.filter((k) => !ship.systems[k].installed);
+  if (missing.length > 0) {
+    facts.push(`No ${missing.map((k) => SYSTEM_LABELS[k].toLowerCase()).join(' or ')}`);
+  }
+
+  const worst = Object.values(ship.systems)
+    .filter((s) => s.installed)
+    .sort((a, b) => a.condition - b.condition)[0];
+  if (worst && worst.condition < 45) {
+    facts.push(`${SYSTEM_LABELS[worst.kind]} in poor condition`);
+  }
+
+  const lifeSupport = ship.systems.lifeSupport;
+  if (lifeSupport.installed && facts.length < 2) {
+    facts.push(`${SHIP_QUALITY_LABELS[lifeSupport.quality]} life support`);
+  }
+
+  return facts.slice(0, 3);
 }

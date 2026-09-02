@@ -1,17 +1,25 @@
 /**
- * App shell: persistent cockpit frame, screen routing, bottom navigation and
- * transient notices. The frame stays put; only the body changes.
+ * App shell.
+ *
+ * The dashboard holds exactly four things, and they are all information about
+ * what is physically with you: your crew, your ship, yourself, and what you are
+ * carrying. Everything else in the game is reached by being somewhere.
+ *
+ * Utilities — saving, the log, debug, quitting — live behind one unobtrusive
+ * control rather than competing with gameplay for dashboard space.
  */
 
 import { useEffect, useState, type ComponentType } from 'react';
 import { stardayLabel } from './engine/log';
-import { untreatedWoundCount } from './engine/actions';
+import { currentPlace } from './engine/places';
+import { ONBOARDING } from './engine/tuning';
 import type { ScreenId } from './engine/types';
 import { Btn, Panel, Row, Sheet } from './ui/components';
 import { store, useGame, useDraft, useToasts } from './ui/useStore';
 
 import { CockpitScreen } from './ui/screens/CockpitScreen';
-import { LocationActionsScreen } from './ui/screens/LocationActionsScreen';
+import { PlaceScreen } from './ui/screens/PlaceScreen';
+import { LocalTravelScreen } from './ui/screens/LocalTravelScreen';
 import { EventScreen } from './ui/screens/EventScreen';
 import { CombatScreen } from './ui/screens/CombatScreen';
 import { TitleScreen } from './ui/screens/TitleScreen';
@@ -41,7 +49,8 @@ const SCREENS: Record<ScreenId, ComponentType> = {
   charGen: CharGenScreen,
   shipReveal: ShipRevealScreen,
   cockpit: CockpitScreen,
-  locationActions: LocationActionsScreen,
+  localTravel: LocalTravelScreen,
+  place: PlaceScreen,
   crew: CrewScreen,
   character: CharacterScreen,
   ship: ShipScreen,
@@ -62,7 +71,7 @@ const SCREENS: Record<ScreenId, ComponentType> = {
   gameOver: GameOverScreen,
 };
 
-/** Screens that take over the whole frame — no navigation out of them. */
+/** Screens that take over the frame entirely. */
 const MODAL_SCREENS = new Set<ScreenId>([
   'title',
   'newGame',
@@ -80,15 +89,10 @@ export function App() {
   const toasts = useToasts();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Before a run exists there is no GameState to hold a screen id, so the
-  // pre-run flow is driven by whether a draft exists. NewGameScreen owns the
-  // handoff into character generation itself.
   const screen: ScreenId = state ? state.screen : draft ? 'newGame' : 'title';
   const Screen = SCREENS[screen] ?? CockpitScreen;
-
   const showFrame = Boolean(state) && !MODAL_SCREENS.has(screen);
 
-  // Warn before a refresh drops an unsaved run.
   useEffect(() => {
     if (!state) return;
     const handler = (event: BeforeUnloadEvent) => {
@@ -99,6 +103,9 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [state]);
 
+  const step = state?.onboardingStep ?? ONBOARDING.DONE;
+  const here = state ? currentPlace(state) : null;
+
   return (
     <div className="app">
       <main className="app__body">
@@ -107,76 +114,51 @@ export function App() {
 
       {showFrame && state && (
         <nav className="navbar">
+          {/* Home. Standing somewhere returns you there; aboard returns you to the shell. */}
           <NavButton
-            label="Nav"
-            icon="🛰"
-            active={screen === 'cockpit'}
-            onClick={() => store.setScreen('cockpit')}
-          />
-          <NavButton
-            label="Here"
-            icon="⚓"
-            active={screen === 'locationActions'}
-            disabled={!state.currentLocationId || Boolean(state.expedition)}
-            onClick={() => store.setScreen('locationActions')}
+            label={here ? 'Here' : 'Cockpit'}
+            icon={here ? '⚑' : '🛰'}
+            active={screen === 'cockpit' || screen === 'place' || screen === 'localTravel'}
+            onClick={() => store.setScreen(here ? 'place' : 'cockpit')}
           />
           <NavButton
             label="Crew"
             icon="👥"
-            active={screen === 'crew' || screen === 'character'}
+            active={screen === 'crew'}
+            hint={step === ONBOARDING.CREW}
             onClick={() => store.setScreen('crew')}
           />
           <NavButton
             label="Ship"
             icon="🚀"
             active={screen === 'ship'}
+            hint={step === ONBOARDING.SHIP}
             disabled={!state.ship || state.ship.destroyed}
             onClick={() => store.setScreen('ship')}
+          />
+          <NavButton
+            label="Self"
+            icon="🧍"
+            active={screen === 'character'}
+            onClick={() => store.focusCharacter(state.playerId)}
           />
           <NavButton
             label="Pack"
             icon="🎒"
             active={screen === 'inventory'}
+            hint={step === ONBOARDING.INVENTORY}
             onClick={() => store.setScreen('inventory')}
           />
-          <NavButton label="More" icon="☰" active={menuOpen} onClick={() => setMenuOpen(true)} />
+          <NavButton label="⋯" icon="☰" active={menuOpen} onClick={() => setMenuOpen(true)} />
         </nav>
       )}
 
-      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Ship's Menu">
+      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Utilities">
         {state && (
           <div className="rows">
             <Row
-              title="Rest"
-              sub="Eight, sixteen or twenty-four hours"
-              onClick={() => {
-                setMenuOpen(false);
-                store.setScreen('rest');
-              }}
-            />
-            <Row
-              title="Medical"
-              sub={
-                untreatedWoundCount(state) > 0
-                  ? `${untreatedWoundCount(state)} untreated wounds`
-                  : 'Nobody needs treatment'
-              }
-              onClick={() => {
-                setMenuOpen(false);
-                store.setScreen('medical');
-              }}
-            />
-            <Row
-              title="Missions and Sites"
-              sub="Contracts, work, and places worth searching"
-              onClick={() => {
-                setMenuOpen(false);
-                store.setScreen('missionPrep');
-              }}
-            />
-            <Row
-              title="Event Log"
-              sub={`Starday ${stardayLabel(state.hours)}`}
+              title="Journal"
+              sub={`Everything logged, up to starday ${stardayLabel(state.hours)}`}
               onClick={() => {
                 setMenuOpen(false);
                 store.setScreen('log');
@@ -244,18 +226,26 @@ function NavButton({
   icon,
   active,
   disabled,
+  hint,
   onClick,
 }: {
   label: string;
   icon: string;
   active?: boolean;
   disabled?: boolean;
+  hint?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      className={active ? 'navbtn navbtn--active' : 'navbtn'}
+      className={[
+        'navbtn',
+        active ? 'navbtn--active' : '',
+        hint && !active ? 'navbtn--hint' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={onClick}
       disabled={disabled}
     >

@@ -1174,6 +1174,259 @@ textarea {
 }
 
 /* ------------------------------------------------------------------ */
+/* Reveal — the run-defining moment gets room to breathe               */
+/* ------------------------------------------------------------------ */
+
+.blackout {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #000;
+  animation: blackout 1.9s ease-in-out forwards;
+  pointer-events: none;
+}
+
+@keyframes blackout {
+  0% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.reveal-in {
+  animation: revealIn 1.5s ease-out both;
+  animation-delay: 0.9s;
+  opacity: 0;
+}
+
+@keyframes revealIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.reveal-in--late {
+  animation-delay: 1.8s;
+}
+
+.reveal-in--last {
+  animation-delay: 2.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blackout {
+    animation-duration: 0.4s;
+  }
+  .reveal-in,
+  .reveal-in--late,
+  .reveal-in--last {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.reveal-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--amber);
+  line-height: 1.15;
+}
+
+.reveal-type {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* ------------------------------------------------------------------ */
+/* Onboarding hints — point at one control, then get out of the way    */
+/* ------------------------------------------------------------------ */
+
+.navbtn--hint {
+  color: var(--amber);
+  box-shadow: inset 0 0 0 1px var(--amber);
+  animation: hintpulse 2s ease-in-out infinite;
+}
+
+@keyframes hintpulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px var(--amber);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px var(--amber), 0 0 10px rgba(232, 163, 61, 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbtn--hint {
+    animation: none;
+  }
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--amber-dim);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(232, 163, 61, 0.09) 0%, rgba(232, 163, 61, 0.03) 100%);
+  margin-bottom: 8px;
+}
+
+.hint__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hint__text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-bright);
+}
+
+.hint__aside {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Windshield scene — the world as seen from the parked ship           */
+/* ------------------------------------------------------------------ */
+
+.scene {
+  position: relative;
+  border: 1px solid var(--bevel-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.scene__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at 50% 55%, transparent 52%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* Label sitting over the windshield, naming where you actually are. */
+.scene__caption {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 4px 8px;
+  background: rgba(6, 9, 14, 0.78);
+  border: 1px solid var(--seam);
+  border-radius: var(--radius);
+}
+
+.scene__where {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-bright);
+}
+
+.scene__sub {
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+/* ------------------------------------------------------------------ */
+/* Place cards — going somewhere, not opening a menu                   */
+/* ------------------------------------------------------------------ */
+
+.placecard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 9px 11px;
+  background: linear-gradient(180deg, #1a212c 0%, #12171f 100%);
+  border: 1px solid var(--seam);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.placecard:active {
+  background: #202834;
+}
+
+.placecard--here {
+  border-left-color: var(--green);
+  background: linear-gradient(180deg, #1c2a22 0%, #141c17 100%);
+}
+
+.placecard--ship {
+  border-left-color: var(--amber);
+}
+
+.placecard__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.placecard__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-bright);
+}
+
+.placecard__sub {
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.placecard__time {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
 /* Desktop expansion — the mobile hierarchy stays authoritative        */
 /* ------------------------------------------------------------------ */
 
@@ -1236,5 +1489,89 @@ textarea {
 @media (max-width: 859px) {
   .cockpit-grid__aside--desktop {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Landscape cockpit — the windshield wants width                      */
+/*                                                                     */
+/* Portrait stays fully functional; landscape simply gets to put the    */
+/* world beside the instruments instead of above them.                 */
+/* ------------------------------------------------------------------ */
+
+.cockpit-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cockpit-shell__view {
+  min-width: 0;
+}
+
+.cockpit-shell__panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (orientation: landscape) and (max-height: 620px) {
+  .app__body {
+    padding: 6px 8px 8px;
+  }
+
+  .cockpit-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+
+  /* Instruments compress rather than wrap onto four rows. */
+  .resources {
+    grid-template-columns: repeat(8, 1fr);
+  }
+
+  .resource {
+    min-height: 38px;
+    padding: 3px 2px;
+  }
+
+  .resource__value {
+    font-size: 12px;
+  }
+
+  .navbar {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .navbtn {
+    min-height: 42px;
+    flex-direction: row;
+    gap: 5px;
+  }
+
+  .navbtn__icon {
+    font-size: 13px;
+  }
+
+  .panel__body {
+    padding: 8px;
+  }
+}
+
+/* A gentle nudge, not an enforced orientation. */
+.rotate-nudge {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 560px) {
+  .rotate-nudge {
+    display: block;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    text-align: center;
+    padding: 4px 0 0;
   }
 }

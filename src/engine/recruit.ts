@@ -519,5 +519,5 @@ export function offerBerth(state: GameState, candidate: RecruitCandidate, rng: R
 
 export function closeRecruitment(state: GameState): void {
   state.recruitment = null;
-  state.screen = 'locationActions';
+  state.screen = state.currentPlaceId ? 'place' : 'cockpit';
 }

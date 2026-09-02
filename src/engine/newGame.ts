@@ -15,9 +15,10 @@ import {
 import { addItem, autoEquipParty, getItem } from './inventory';
 import { pushLog } from './log';
 import { generateSeed, normalizeSeed, streamRng, type Rng } from './rng';
+import { ensurePlaces, placeKnownCharacters } from './places';
 import { generateShip, recomputeShipCapacities } from './ship';
 import { pruneDeadCrew } from './sim';
-import { MORALE, SAVE, SHIPS, START } from './tuning';
+import { MORALE, ONBOARDING, SAVE, SHIPS, START } from './tuning';
 import { generateWorld } from './world';
 import type { Character, GameState, Resources } from './types';
 
@@ -172,6 +173,10 @@ export function createGame(seed: string, protagonist: Character): GameState {
     currentLocationId: world.homeworldId,
     travel: null,
 
+    places: {},
+    // You begin aboard, on the pad behind the house.
+    currentPlaceId: null,
+
     sites: {},
     missions: [],
     expedition: null,
@@ -196,10 +201,18 @@ export function createGame(seed: string, protagonist: Character): GameState {
     recentEvents: {},
     pendingCombat: null,
 
+    onboardingStep: ONBOARDING.startStep,
+
     ending: null,
     focusCharacterId: null,
     missionPrep: null,
   };
+
+  // The homeworld exists as walkable ground from the first moment, and the
+  // people you know are standing somewhere in it rather than in a menu.
+  const homeworldLocation = world.locations[world.homeworldId];
+  if (homeworldLocation) ensurePlaces(state, homeworldLocation);
+  placeKnownCharacters(state, streamRng(seed, 'family', 'places'));
 
   stockShip(state, streamRng(seed, 'kit'));
 

@@ -363,7 +363,7 @@ export function MissionPrepScreen() {
         </Panel>
       )}
 
-      <Btn block tone="ghost" onClick={() => store.setScreen('locationActions')}>
+      <Btn block tone="ghost" onClick={() => store.setScreen(state.currentPlaceId ? 'place' : 'cockpit')}>
         Back
       </Btn>
     </div>

@@ -281,6 +281,23 @@ function migrate(state: GameState): GameState {
   if (!patched.flags) patched.flags = {};
   if (patched.screenStack === undefined) patched.screenStack = [];
   if (patched.crewXp === undefined) patched.crewXp = 0;
+
+  // Saves written before the world had walkable places. Regenerate the places
+  // on next arrival rather than guessing where the player was standing.
+  if (!patched.places) patched.places = {};
+  if (patched.currentPlaceId === undefined) patched.currentPlaceId = null;
+  if (patched.onboardingStep === undefined) patched.onboardingStep = 99;
+
+  // A place id that no longer exists would strand the player outside the ship.
+  if (
+    patched.currentPlaceId &&
+    !(patched.places as Record<string, unknown>)[patched.currentPlaceId as string]
+  ) {
+    patched.currentPlaceId = null;
+    if (patched.screen === 'place' || patched.screen === 'localTravel') {
+      patched.screen = 'cockpit';
+    }
+  }
   if (patched.ending === undefined) patched.ending = null;
   if (patched.missionPrep === undefined) patched.missionPrep = null;
   if (patched.focusCharacterId === undefined) patched.focusCharacterId = null;

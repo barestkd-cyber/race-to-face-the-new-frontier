@@ -9,6 +9,7 @@
 
 import { autoResolveRoutine, beginEvent, selectEvent } from './eventEngine';
 import { pushLog } from './log';
+import { ensurePlaces } from './places';
 import type { Rng } from './rng';
 import { fuelPerHour, isFlyable } from './ship';
 import { advanceTime, applyCrewStress, crewMembers } from './sim';
@@ -142,6 +143,8 @@ export function beginTravel(
   state.travel = travel;
   state.phase = 'enroute';
   state.currentLocationId = null;
+  // Under way means aboard, by definition.
+  state.currentPlaceId = null;
   state.screen = 'cockpit';
 
   pushLog(
@@ -285,6 +288,11 @@ export function arriveAt(state: GameState, locationId: LocationId, rng: Rng): vo
   location.discovered = true;
   state.phase = location.kind === 'homeworld' ? 'homeworld' : 'atLocation';
   state.screen = 'cockpit';
+
+  // You arrive aboard, on whatever pad or berth the ship is now sitting on.
+  // The place has to exist before the player can step off into it.
+  ensurePlaces(state, location);
+  state.currentPlaceId = null;
 
   // Reveal the next node on the main route.
   const index = state.routeIds.indexOf(locationId);

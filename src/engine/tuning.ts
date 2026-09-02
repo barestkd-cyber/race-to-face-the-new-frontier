@@ -992,6 +992,37 @@ export const START = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Onboarding
+// ---------------------------------------------------------------------------
+
+/**
+ * The opening teaches the grammar of the game, not every mechanic. Each step
+ * points at one control, clears when the player uses it, and then gets out of
+ * the way. Set `startStep` to DONE to skip the whole thing.
+ */
+export const ONBOARDING = {
+  INVENTORY: 1,
+  SHIP: 2,
+  CREW: 3,
+  TRAVEL: 4,
+  DONE: 99,
+  startStep: 1,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Local travel — moving around inside a location, on foot
+// ---------------------------------------------------------------------------
+
+export const LOCAL = {
+  /** Hours to cross between districts of the same location. */
+  districtHours: [0.6, 2.2] as [number, number],
+  /** Hours to move between venues inside one district. */
+  venueHours: [0.2, 0.8] as [number, number],
+  /** Walking back out to the ship. */
+  returnToShipHours: 0.5,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Save / persistence
 // ---------------------------------------------------------------------------
 
