@@ -133,7 +133,7 @@ export function RestScreen() {
       <Btn
         block
         tone="ghost"
-        onClick={() => store.setScreen(state.currentLocationId ? 'locationActions' : 'cockpit')}
+        onClick={() => store.setScreen(state.currentPlaceId ? 'place' : 'cockpit')}
       >
         Not yet
       </Btn>

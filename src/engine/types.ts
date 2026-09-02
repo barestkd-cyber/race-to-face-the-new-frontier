@@ -11,6 +11,7 @@
 
 export type CharacterId = string;
 export type LocationId = string;
+export type PlaceId = string;
 export type ItemId = string;
 export type EventId = string;
 export type MissionId = string;
@@ -455,6 +456,16 @@ export interface Character {
   aboard: boolean;
   /** Recruitment terms still owed, if any. */
   owedTerms?: string;
+
+  /**
+   * Where this person physically is when they are not aboard. You cannot offer
+   * someone passage from a menu — you have to go to where they actually are.
+   */
+  placeId?: PlaceId;
+  /** Whether the player knows where to find them. */
+  placeKnown?: boolean;
+  /** Why they cannot talk right now, if they cannot. */
+  availability?: 'available' | 'working' | 'unreachable';
 }
 
 // ---------------------------------------------------------------------------
@@ -830,6 +841,66 @@ export type RecruitVenue =
   | 'mine'
   | 'university'
   | 'shelter';
+
+// ---------------------------------------------------------------------------
+// Places — the world inside a location
+// ---------------------------------------------------------------------------
+
+/**
+ * A Location is somewhere you fly to. A Place is somewhere you walk to once
+ * you are there. Actions hang off Places, not off the Location, so the player
+ * reaches a service by going where it is rather than by opening a menu of
+ * everything the game supports.
+ *
+ * Places form a shallow tree: top-level districts have no parent, and venues
+ * inside them point at their district.
+ */
+export type PlaceKind =
+  | 'homeProperty'
+  | 'house'
+  | 'shipYard'
+  | 'district'
+  | 'market'
+  | 'clinic'
+  | 'shelter'
+  | 'workerCamp'
+  | 'salvageYard'
+  | 'freightOffice'
+  | 'repairYard'
+  | 'fuelDepot'
+  | 'shipMarket'
+  | 'transitHub'
+  | 'bar'
+  | 'government'
+  | 'lodging'
+  | 'dock'
+  | 'concourse'
+  | 'outpost'
+  | 'wilds';
+
+export interface Place {
+  id: PlaceId;
+  locationId: LocationId;
+  /** Undefined for a top-level district of its location. */
+  parentId?: PlaceId;
+  name: string;
+  kind: PlaceKind;
+  subtitle: string;
+  description: string;
+  /** What can actually be done here. Empty means it is only a way through. */
+  actions: LocationActionKind[];
+  /** Hours to walk or ride here from the parent place. */
+  travelHours: number;
+  discovered: boolean;
+  visited: boolean;
+  /** Set when people gather here in a way that makes recruiting plausible. */
+  recruitVenue?: RecruitVenue;
+  /** Scavenge sites reachable from here. */
+  siteIds: string[];
+  danger: number;
+  /** True where the ship is physically parked. */
+  shipHere?: boolean;
+}
 
 export const RECRUIT_VENUE_LABELS: Record<RecruitVenue, string> = {
   workerCamp: 'Worker Camp',
@@ -1312,7 +1383,10 @@ export type ScreenId =
   | 'charGen'
   | 'shipReveal'
   | 'cockpit'
-  | 'locationActions'
+  /** The districts and venues reachable on foot from where you are standing. */
+  | 'localTravel'
+  /** One specific place, and what can actually be done there. */
+  | 'place'
   | 'crew'
   | 'character'
   | 'ship'
@@ -1381,6 +1455,11 @@ export interface GameState {
   currentLocationId: LocationId | null;
   travel: TravelState | null;
 
+  /** Every walkable place across every location, keyed by id. */
+  places: Record<PlaceId, Place>;
+  /** Where the player is standing. Null means aboard the ship. */
+  currentPlaceId: PlaceId | null;
+
   sites: Record<string, ScavengeSite>;
   missions: MissionDef[];
   expedition: ExpeditionState | null;
@@ -1409,6 +1488,12 @@ export interface GameState {
   recentEvents: Record<EventId, number>;
   /** Encounter template id waiting to start combat once the event is dismissed. */
   pendingCombat: string | null;
+
+  /**
+   * Diegetic onboarding cursor. Introduces the interface a step at a time
+   * instead of presenting every control at once. See ONBOARDING in tuning.
+   */
+  onboardingStep: number;
 
   /** Set when the run has ended, with the reason. */
   ending: { kind: 'victory' | 'death' | 'stranded'; text: string } | null;

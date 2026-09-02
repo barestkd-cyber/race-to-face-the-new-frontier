@@ -689,7 +689,11 @@ export function socialise(state: GameState, rng: Rng): string[] {
 // Family and contacts
 // ---------------------------------------------------------------------------
 
-/** People you know who are not aboard — family on the Homeworld, mostly. */
+/**
+ * People you know who are not aboard. This is an INFORMATION list — the crew
+ * screen uses it to answer "who do I know about". It confers no ability to act
+ * on them; for that you have to be standing where they are.
+ */
 export function knownContacts(state: GameState): Character[] {
   const player = state.characters[state.playerId];
   return Object.values(state.characters)
@@ -699,6 +703,41 @@ export function knownContacts(state: GameState): Character[] {
       const bRel = player?.relationships[b.id]?.value ?? 0;
       return bRel - aRel;
     });
+}
+
+/** The people actually standing in the place the player is standing in. */
+export function contactsHere(state: GameState): Character[] {
+  if (!state.currentPlaceId) return [];
+  return knownContacts(state).filter((c) => c.placeId === state.currentPlaceId);
+}
+
+/** Whether this person can be talked to right now, and why not if not. */
+export function contactAccess(
+  state: GameState,
+  id: string,
+): { ok: boolean; reason?: string } {
+  const person = state.characters[id];
+  if (!person) return { ok: false, reason: 'You do not know them.' };
+  if (person.aboard) return { ok: false, reason: 'They are already aboard.' };
+  if (!person.alive) return { ok: false, reason: 'They are gone.' };
+
+  if (!person.placeId) {
+    return { ok: false, reason: 'Nobody can tell you where they are.' };
+  }
+  if (!person.placeKnown) {
+    return { ok: false, reason: 'You do not know where to find them.' };
+  }
+  if (person.placeId !== state.currentPlaceId) {
+    const place = state.places[person.placeId];
+    return { ok: false, reason: place ? `They are at ${place.name}.` : 'They are elsewhere.' };
+  }
+  if (person.availability === 'working') {
+    return { ok: false, reason: 'They are on shift and cannot stop.' };
+  }
+  if (person.availability === 'unreachable') {
+    return { ok: false, reason: 'They will not see you.' };
+  }
+  return { ok: true };
 }
 
 export function isFamily(state: GameState, id: string): boolean {
@@ -711,6 +750,9 @@ export function visitContact(state: GameState, id: string, rng: Rng): string[] {
   const contact = state.characters[id];
   const player = state.characters[state.playerId];
   if (!contact || !player) return ['They are not here.'];
+
+  const access = contactAccess(state, id);
+  if (!access.ok) return [access.reason ?? 'You cannot reach them.'];
 
   const advance = advanceTime(state, rng.float(2, 5), rng);
   lines.push(...advance.lines);
@@ -751,6 +793,10 @@ export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
   if (!contact || !player) return ['They are not here.'];
   if (contact.aboard) return [`${contact.name} is already aboard.`];
 
+  // You cannot offer somebody a berth from the other side of a city.
+  const access = contactAccess(state, id);
+  if (!access.ok) return [access.reason ?? 'You cannot reach them.'];
+
   const rel = player.relationships[id];
   const closeness = rel?.value ?? 0;
   const family = isFamily(state, id);
@@ -768,6 +814,8 @@ export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
   lines.push(...advance.lines);
 
   contact.aboard = true;
+  delete contact.placeId;
+  contact.availability = 'available';
   state.characters[id] = contact;
   state.crewIds.push(id);
   if (family && !state.homeworld.rescuedFamilyIds.includes(id)) {

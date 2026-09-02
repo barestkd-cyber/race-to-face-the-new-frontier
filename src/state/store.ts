@@ -43,6 +43,7 @@ import {
   unequip,
 } from '../engine/inventory';
 import { pushLog } from '../engine/log';
+import { boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
 import { beginNewRun, checkRunEnded, createGame, rerollProtagonist, type NewRunDraft } from '../engine/newGame';
 import { upgradeAttribute, upgradeSkill } from '../engine/progression';
@@ -64,7 +65,7 @@ import {
 } from '../engine/scavenge';
 import { advanceTime, crewMembers } from '../engine/sim';
 import { beginTravel, hoursPerRealSecond, resumeTravel, setSpeed, stepTravel } from '../engine/travel';
-import { SAVE } from '../engine/tuning';
+import { ONBOARDING, SAVE } from '../engine/tuning';
 import type {
   AttributeKey,
   Character,
@@ -172,9 +173,21 @@ class GameStore {
 
   // -- Navigation ---------------------------------------------------------
 
+  /** Which screen clears which onboarding step, when the player opens it. */
+  private static ONBOARDING_TARGET: Partial<Record<ScreenId, number>> = {
+    inventory: ONBOARDING.INVENTORY,
+    ship: ONBOARDING.SHIP,
+    crew: ONBOARDING.CREW,
+  };
+
   setScreen = (screen: ScreenId): void => {
     this.mutate((state) => {
       state.screen = screen;
+      // The hint clears by being acted on, not by being dismissed.
+      const target = GameStore.ONBOARDING_TARGET[screen];
+      if (target !== undefined && state.onboardingStep === target) {
+        state.onboardingStep = target + 1;
+      }
     });
   };
 
@@ -253,17 +266,78 @@ class GameStore {
     this.mutate((state) => resumeTravel(state));
   };
 
-  // -- Location actions ---------------------------------------------------
+  // -- Moving around a world on foot --------------------------------------
 
-  openLocationAction = (kind: LocationActionKind): void => {
+  /** Step off the ship onto whatever it is parked on. */
+  stepOutside = (): void => {
+    this.mutate((state) => {
+      const result = disembark(state, this.rng);
+      if (!result.ok) {
+        this.pushToast([result.reason ?? 'There is nowhere to go.']);
+        return;
+      }
+      state.screen = 'place';
+      this.advanceOnboardingTo(state, ONBOARDING.DONE);
+    });
+  };
+
+  /** Walk to a district or venue. Costs time. */
+  goToPlace = (placeId: string): void => {
+    this.mutate((state) => {
+      const result = walkTo(state, placeId, this.rng);
+      if (!result.ok) {
+        this.pushToast([result.reason ?? 'You cannot get there.']);
+        return;
+      }
+      if (result.lines.length > 0) this.pushToast(result.lines);
+      state.screen = 'place';
+    });
+    void this.autosave();
+  };
+
+  /** Walk back and board the ship. */
+  returnToShip = (): void => {
+    this.mutate((state) => {
+      const result = boardShip(state, this.rng);
+      if (!result.ok) {
+        this.pushToast([result.reason ?? 'You cannot get back yet.']);
+        return;
+      }
+      if (result.lines.length > 0) this.pushToast(result.lines);
+      state.screen = 'cockpit';
+    });
+    void this.autosave();
+  };
+
+  openLocalTravel = (): void => {
+    this.mutate((state) => {
+      const location = state.currentLocationId ? state.locations[state.currentLocationId] : undefined;
+      if (location) ensurePlaces(state, location);
+      state.screen = 'localTravel';
+    });
+  };
+
+  // -- Contextual actions, dispatched from a place ------------------------
+
+  /**
+   * Actions reach the player because of where they are standing. A place only
+   * offers what it plausibly contains, so there is no global Trade or Recruit.
+   */
+  openPlaceAction = (kind: LocationActionKind): void => {
     if (!this.state) return;
     switch (kind) {
       case 'trade':
         this.mutate((state) => beginTrade(state));
         break;
-      case 'recruit':
-        this.setScreen('recruitSearch');
+      case 'recruit': {
+        // The place is the venue — no separate "where would you like to look".
+        const place = this.state.currentPlaceId
+          ? this.state.places[this.state.currentPlaceId]
+          : undefined;
+        const venue = place?.recruitVenue ?? 'bar';
+        this.searchRecruits(venue);
         break;
+      }
       case 'missions':
       case 'findWork':
         this.mutate((state) => refreshMissions(state, this.rng));
@@ -284,17 +358,35 @@ class GameStore {
         break;
       case 'social':
         this.mutate((state) => {
-          const lines = socialise(state, this.rng);
-          this.pushToast(lines, 'Time with the crew');
+          this.pushToast(socialise(state, this.rng), 'Time spent');
         });
         break;
       case 'rest':
         this.setScreen('rest');
         break;
       case 'depart':
-        this.setScreen('cockpit');
+        this.returnToShip();
         break;
     }
+  };
+
+  // -- Onboarding ---------------------------------------------------------
+
+  private advanceOnboardingTo(state: GameState, step: number): void {
+    if (state.onboardingStep < step) state.onboardingStep = step;
+  }
+
+  /** Called when the player uses the control the current step points at. */
+  completeOnboardingStep = (step: number): void => {
+    this.mutate((state) => {
+      if (state.onboardingStep === step) state.onboardingStep = step + 1;
+    });
+  };
+
+  skipOnboarding = (): void => {
+    this.mutate((state) => {
+      state.onboardingStep = ONBOARDING.DONE;
+    });
   };
 
   /** Roll a location event on demand — "see what's happening here". */
@@ -336,7 +428,7 @@ class GameStore {
       } else if (state.expedition) {
         state.screen = 'expedition';
       } else {
-        state.screen = state.currentLocationId ? 'locationActions' : 'cockpit';
+        state.screen = state.currentPlaceId ? 'place' : 'cockpit';
       }
     });
     this.maybeStartPendingCombat();
@@ -511,7 +603,7 @@ class GameStore {
   closeRecruiting = (): void => {
     this.mutate((state) => {
       state.recruitment = null;
-      state.screen = 'locationActions';
+      state.screen = state.currentPlaceId ? 'place' : 'cockpit';
     });
   };
 
@@ -542,7 +634,7 @@ class GameStore {
   closeTrade = (): void => {
     this.mutate((state) => {
       state.trade = null;
-      state.screen = 'locationActions';
+      state.screen = state.currentPlaceId ? 'place' : 'cockpit';
     });
     void this.autosave();
   };
@@ -637,7 +729,7 @@ class GameStore {
       const elapsed = state.hours - before;
       if (elapsed > 0 && state.expedition) runAutonomousShip(state, elapsed, this.rng);
       this.pushToast(result.lines, 'Rest');
-      if (!result.interrupted) state.screen = state.currentLocationId ? 'locationActions' : 'cockpit';
+      if (!result.interrupted) state.screen = state.currentPlaceId ? 'place' : 'cockpit';
     });
     void this.autosave();
   };

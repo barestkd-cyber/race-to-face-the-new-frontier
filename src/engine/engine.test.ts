@@ -17,6 +17,8 @@ import {
 } from './check';
 import { attributeTotal, createCharacter, generateProtagonistDraft } from './character';
 import { applyRawWound, computeSeverityScore, severityFromScore, tickWounds } from './wounds';
+import { childPlaces, districtsAt, shipPlace, walkTo } from './places';
+import { offerPassage } from './actions';
 import { skillUpgradeCost, attributeUpgradeCost } from './progression';
 import { Rng, streamRng } from './rng';
 import { generateShip, safeCrewCapacity } from './ship';
@@ -462,6 +464,106 @@ function countVictories(prefix: string, strategy: 'balanced' | 'explore' | 'rush
   }
   return victories;
 }
+
+// ---------------------------------------------------------------------------
+// Places and physical access
+// ---------------------------------------------------------------------------
+
+describe('places', () => {
+  it('gives the homeworld walkable districts with the ship parked on one', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-1', 'protagonist'));
+    const state = createGame('PLACES-1', draft.character);
+
+    const districts = districtsAt(state, 'loc_homeworld');
+    expect(districts.length).toBeGreaterThanOrEqual(4);
+
+    const parked = shipPlace(state);
+    expect(parked, 'the ship has to be somewhere').toBeTruthy();
+    expect(parked!.shipHere).toBe(true);
+
+    // You begin aboard, not standing in a district.
+    expect(state.currentPlaceId).toBeNull();
+
+    // Districts hold venues, so actions live two steps in rather than on a menu.
+    const withVenues = districts.filter((d) => childPlaces(state, d.id).length > 0);
+    expect(withVenues.length).toBeGreaterThan(0);
+  });
+
+  it('never exposes an action a place does not contain', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-2', 'protagonist'));
+    const state = createGame('PLACES-2', draft.character);
+    const location = state.locations['loc_homeworld']!;
+
+    for (const place of Object.values(state.places)) {
+      for (const action of place.actions) {
+        expect(
+          location.actions.includes(action),
+          `${place.name} offers ${action} which ${location.name} does not support`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('puts family somewhere real rather than in a menu', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-3', 'protagonist'));
+    const state = createGame('PLACES-3', draft.character);
+
+    const family = state.homeworld.familyIds.map((id) => state.characters[id]!);
+    expect(family.length).toBeGreaterThan(0);
+    for (const person of family) {
+      expect(person.placeId, `${person.name} has no location`).toBeTruthy();
+      expect(state.places[person.placeId!], 'their location must exist').toBeTruthy();
+    }
+    // At least one relative is findable from the start, so the opening has
+    // somewhere obvious to go.
+    expect(family.some((p) => p.placeKnown)).toBe(true);
+  });
+
+  it('refuses passage to anyone you are not standing next to', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-4', 'protagonist'));
+    const state = createGame('PLACES-4', draft.character);
+    const rng = new Rng('PLACES-4:live');
+
+    const relative = state.homeworld.familyIds
+      .map((id) => state.characters[id]!)
+      .find((p) => p.placeKnown && p.availability === 'available');
+    if (!relative) return;
+
+    const crewBefore = state.crewIds.length;
+
+    // Aboard the ship: no access at all.
+    state.currentPlaceId = null;
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'cannot recruit from the cockpit').toBe(crewBefore);
+
+    // Standing somewhere else on the same world: still no.
+    const elsewhere = Object.values(state.places).find((p) => p.id !== relative.placeId);
+    state.currentPlaceId = elsewhere!.id;
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'cannot recruit across the city').toBe(crewBefore);
+
+    // Standing where they actually are: now it can work.
+    state.currentPlaceId = relative.placeId!;
+    const player = state.characters[state.playerId]!;
+    player.relationships[relative.id] = { value: 60, familiarity: 80, kind: 'family' };
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'standing with them should work').toBe(crewBefore + 1);
+  });
+
+  it('charges time for walking around', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-5', 'protagonist'));
+    const state = createGame('PLACES-5', draft.character);
+    const rng = new Rng('PLACES-5:live');
+
+    const before = state.hours;
+    const target = districtsAt(state, 'loc_homeworld').find((d) => !d.shipHere)!;
+    const result = walkTo(state, target.id, rng);
+
+    expect(result.ok).toBe(true);
+    expect(state.hours, 'crossing a city is not free').toBeGreaterThan(before);
+    expect(state.currentPlaceId).toBe(target.id);
+  });
+});
 
 describe('campaign simulation', () => {
   it('creates a playable starting state', () => {

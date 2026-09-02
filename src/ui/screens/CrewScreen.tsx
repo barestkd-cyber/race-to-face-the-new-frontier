@@ -86,6 +86,14 @@ export function CrewScreen() {
             that adds stress to the whole crew and drags morale down for as long as
             it lasts. Cut the roster, or fit better quarters and life support.
           </p>
+        ) : crew.length <= 1 ? (
+          <p className="prose" style={{ marginTop: 8 }}>
+            <span className="amber">You are currently alone.</span> Safe capacity is the
+            lower of quarters and life support, and yours stretches to {capacity}. Those
+            empty berths are the difference between a solo run and a crew — but nobody
+            signs on from a menu. You will have to go where people are and convince
+            them.
+          </p>
         ) : (
           <p className="prose prose--dim" style={{ marginTop: 8 }}>
             Safe capacity is the lower of quarters and life support. Stay at or under
@@ -160,9 +168,10 @@ export function CrewScreen() {
 
       <Panel title="Known, not aboard" aside={`${known.length}`}>
         <p className="prose prose--dim">
-          Family and contacts still on the homeworld or elsewhere on the route. They
-          are not under your protection until they are on the ship, and when the clock
-          runs out they are lost with everything else.
+          Family and contacts still out there. This is a record, not a roster — you
+          cannot offer anyone passage from here. Go to where they are and ask them
+          yourself. When the clock runs out, anyone still planetside is lost with
+          everything else.
         </p>
         {known.length === 0 ? (
           <Empty>You know nobody outside the crew.</Empty>
@@ -182,9 +191,15 @@ export function CrewScreen() {
                 }
                 right={
                   rescuedIds.has(person.id) ? (
-                    <Chip tone="green">Rescued</Chip>
-                  ) : familyIds.has(person.id) ? (
-                    <Chip tone="amber">At home</Chip>
+                    <Chip tone="green">Aboard</Chip>
+                  ) : !person.placeKnown ? (
+                    <Chip>Whereabouts unknown</Chip>
+                  ) : person.availability === 'working' ? (
+                    <Chip tone="amber">On shift</Chip>
+                  ) : person.availability === 'unreachable' ? (
+                    <Chip tone="red">Not seeing anyone</Chip>
+                  ) : person.placeId && state.places[person.placeId] ? (
+                    <Chip tone="cyan">{state.places[person.placeId]!.name}</Chip>
                   ) : undefined
                 }
               />

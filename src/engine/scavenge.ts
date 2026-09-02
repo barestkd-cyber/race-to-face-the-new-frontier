@@ -598,7 +598,7 @@ export function exitExpedition(state: GameState, rng: Rng): string[] {
 
   state.expedition = null;
   state.phase = state.currentLocationId ? 'atLocation' : 'enroute';
-  state.screen = 'locationActions';
+  state.screen = state.currentPlaceId ? 'place' : 'cockpit';
 
   return lines;
 }
@@ -607,7 +607,7 @@ export function exitExpedition(state: GameState, rng: Rng): string[] {
 export function abandonExpedition(state: GameState): void {
   state.expedition = null;
   state.phase = state.currentLocationId ? 'atLocation' : 'enroute';
-  state.screen = 'locationActions';
+  state.screen = state.currentPlaceId ? 'place' : 'cockpit';
 }
 
 export function siteProgress(state: GameState): { cleared: number; known: number; total: number } {
