@@ -782,17 +782,32 @@ export const EVENTS = {
 
 export const RECRUIT = {
   searchHours: [3, 8] as [number, number],
-  /** Candidates found, weighted by venue and population tier. */
+  /**
+   * Candidates found, weighted by venue and population tier.
+   *
+   * Raised from an average of ~1.5 per search. Combined with the willingness
+   * change below this is what makes recruiting a plan rather than a lottery —
+   * necessary once the player starts alone and every hire is load-bearing.
+   */
   candidateCountWeights: [
-    { count: 0, weight: 20 },
-    { count: 1, weight: 42 },
-    { count: 2, weight: 27 },
-    { count: 3, weight: 11 },
+    { count: 0, weight: 8 },
+    { count: 1, weight: 27 },
+    { count: 2, weight: 35 },
+    { count: 3, weight: 22 },
+    { count: 4, weight: 8 },
   ],
-  /** Starting willingness range. */
-  baseWillingness: [18, 62] as [number, number],
+  /**
+   * Starting willingness range, raised from 18-62.
+   *
+   * People on a world with two extinction clocks running are already looking
+   * for a way off. Persuasion should be what closes a deal that is plausible,
+   * not what drags an unwilling stranger the whole distance: at 18-62 against
+   * a threshold of 70, three maxed persuasion attempts averaged +33 and only
+   * 19% of candidates ever signed.
+   */
+  baseWillingness: [35, 75] as [number, number],
   /** Willingness needed to accept. */
-  joinThreshold: 70,
+  joinThreshold: 60,
   /** Willingness change per persuasion outcome. */
   persuasionDelta: {
     exceptional: 26,
@@ -907,12 +922,15 @@ export const START = {
   /**
    * Crew aboard at the start, protagonist included.
    *
-   * Two was not enough: one bad encounter ended the run before the Homeworld
-   * phase could show itself, and a Group Mission needs two people while
-   * somebody stays with the ship. Note this can start you over safe Quarters
-   * capacity on a poor hull, which is a real cost, not an oversight.
+   * You begin alone, every run. Safe capacity is never below 1, so a solo start
+   * is never in violation on any hull — every additional body is a choice the
+   * player makes against a cost they can see on the crew screen.
+   *
+   * This makes recruitment the first real objective rather than an optional
+   * system: a Group Mission needs two people, and the autonomous base ship has
+   * nothing to simulate until somebody can be left aboard.
    */
-  startingCrew: [3, 4] as [number, number],
+  startingCrew: [1, 1] as [number, number],
   /** Family members generated on the homeworld. */
   familyCount: [2, 4] as [number, number],
 

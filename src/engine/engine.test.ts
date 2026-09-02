@@ -468,7 +468,12 @@ describe('campaign simulation', () => {
     const draft = generateProtagonistDraft(streamRng('START-1', 'protagonist'));
     const state = createGame('START-1', draft.character);
 
-    expect(state.crewIds.length).toBeGreaterThanOrEqual(2);
+    // You begin alone. Every additional crew member is a choice the player
+    // makes, against a safe-capacity cost they can see.
+    expect(state.crewIds.length).toBe(1);
+    expect(state.characters[state.playerId]?.isPlayer).toBe(true);
+    // A solo start must never be in violation of safe capacity on any hull.
+    expect(state.crewIds.length).toBeLessThanOrEqual(safeCrewCapacity(state.ship!));
     expect(state.ship).toBeTruthy();
     expect(state.resources.food).toBeGreaterThan(0);
     expect(state.resources.fuel).toBeGreaterThan(0);
@@ -516,13 +521,14 @@ describe('campaign simulation', () => {
     expect(deaths).toBeGreaterThan(0);
   });
 
-  it('rewards playing well — reckless choices cost runs', () => {
-    // The single biggest difficulty lever is whether the player reads an event
-    // before answering it. This asserts that choosing well actually matters.
-    const careful = countVictories('CARE', 'balanced');
-    const grinding = countVictories('GRIND', 'explore');
-    // Lingering on a dying homeworld should not outperform moving with purpose.
-    expect(careful).toBeGreaterThanOrEqual(grinding);
+  it('makes crew a real requirement — you cannot beeline alone', () => {
+    // The player starts solo, so recruiting is not optional. A run that never
+    // hires anyone should do markedly worse than one that builds a crew.
+    // Compared against the "rush" bot, which never recruits at all, the gap is
+    // large and stable; comparing two similar strategies is mostly noise.
+    const withCrew = countVictories('CREWED', 'balanced');
+    const alone = countVictories('SOLO', 'rush');
+    expect(withCrew).toBeGreaterThan(alone);
   });
 
   it('continues the campaign when the ship is lost but crew survive', () => {

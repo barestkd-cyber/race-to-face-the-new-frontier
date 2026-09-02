@@ -32,16 +32,18 @@ be read alongside *how* the person was playing.
 
 ## 2. Measured baseline
 
-40 headless runs per playstyle, current tuning:
+40 headless runs per playstyle, current tuning — **you start alone**:
 
-| Playstyle | Victory | Death | Avg days | Locations | Fights |
+| Playstyle | Victory | Death | Avg days | Locations | Hires |
 | --- | --- | --- | --- | --- | --- |
-| **Balanced** (treat wounds, resupply, hire, push on) | **33%** | 63% | 108 | 3.3 / 7 | 3.5 |
-| **Rush** (beeline, minimal upkeep) | 36% | 60% | 84 | 3.6 / 7 | 3.5 |
-| **Explore** (grind every location) | 8% | 80% | 153 | 3.6 / 7 | 4.2 |
+| **Balanced** (treat wounds, resupply, hire, push on) | **25%** | 70% | 98 | 3.0 / 7 | 3.3 |
+| **Explore** (grind every location) | 8% | 90% | 72 | 3.0 / 7 | 2.1 |
+| **Rush** (beeline, never recruits) | 3% | 98% | 36 | 2.1 / 7 | 0.0 |
 
-Lingering is punished, which is the intended shape: the homeworld clock should
-make "one more day" a real gamble.
+Two shapes worth noting. Lingering is punished — the homeworld clock should make
+"one more day" a real gamble. And **beelining alone is close to impossible**:
+the rush bot never hires anyone and wins 3% of the time. Since the player starts
+solo, recruiting is not an optional system, it is the first objective.
 
 ### Combat, by encounter
 
@@ -67,9 +69,12 @@ make "one more day" a real gamble.
 
 Note the action counts. Hard fights end fast because someone dies. Easy fights
 drag because an untrained crew genuinely cannot fight — Skill 0 is near-zero
-capability by design, so two people with no combat training take a long time to
-kill five rats. That is coherent, but "the easy fights are boring" is a fair
-criticism and worth watching.
+capability by design, so a couple of people with no combat training take a long
+time to kill five rats. That is coherent, but "the easy fights are boring" is a
+fair criticism and worth watching.
+
+Those numbers were measured with a multi-person crew. Solo, every fight is
+harder, which is the point of hiring.
 
 ---
 
@@ -109,38 +114,71 @@ and from **Crew → Equip Crew From Hold** — and it weighs a weapon by the
 *character's skill with it*, because a knife in untrained hands is worse than
 their own fists.
 
-### Starting crew 2–3 → **3–4**
+### Starting crew → **exactly 1, always**
 
-Two people could not absorb one bad encounter, and a Group Mission needs two
-while somebody stays with the ship. This can start you over safe Quarters
-capacity on a poor hull, which is a real cost rather than an oversight.
+Owner decision, and the right one. Safe capacity is never below 1, so a solo
+start is **never in violation on any hull** — measured across 400 generated
+starts, 100% now begin at or under capacity. Every additional body is then a
+choice made against a cost the crew screen shows you.
+
+An earlier attempt at 3–4 crew (mine, to buy survivability) put **60% of runs
+over capacity at hour zero**, which was worse than the problem it solved.
+
+### Recruitment — **retuned, and this is the interesting one**
+
+Starting alone did not make the game harder so much as it *exposed* that
+recruitment was already undertuned. Three spare crew had been hiding it. Over
+120 Homeworld searches:
+
+| | Before | After |
+| --- | --- | --- |
+| Candidates per search | 1.53 | **2.17** |
+| Avg starting willingness | 39 | **55** |
+| Join threshold | 70 | **60** |
+| Conversion | 19% | **47%** |
+| **Hires per search** | **0.29** | **1.02** |
+
+The old gap was arithmetic: candidates started 31 points below the threshold,
+and three maxed persuasion attempts average about +33. You needed near-perfect
+rolls just to *reach* the bar, so hiring was luck rather than a plan. Only 18 of
+40 runs ever recruited anyone; 21 died still alone.
+
+Three changes together (`baseWillingness` 18–62 → 35–75, `joinThreshold` 70 →
+60, and a fatter `candidateCountWeights` distribution) took the balanced win
+rate from 5% back to 25% with the solo start intact. Money was never the
+obstacle — zero candidates had unaffordable terms in either sample.
 
 ### Encounter size now scales with the party
 
-A swarm template could field eight bodies. Against two people that is not a hard
-fight, it is a long one — and crew size swings from two to six over a campaign.
+A swarm template could field eight bodies. Against a small party that is not a
+hard fight, it is a long one — and crew size swings from one to six over a
+campaign.
 
 ---
 
 ## 4. What to tune first
 
-1. **`WOUNDS.healthLoss`** (11 / 25 / 40 / 58). Already compressed once: at
+1. **`RECRUIT` as a whole, now that it is load-bearing.** Just retuned to roughly
+   one hire per search. Since the player starts alone, this single system gates
+   Group Missions, the autonomous base ship, and any redundancy against a bad
+   encounter. If it feels too generous or still too slow, it is the
+   highest-leverage thing in the file.
+2. **`WOUNDS.healthLoss`** (11 / 25 / 40 / 58). Already compressed once: at
    minor = 6 a knife fight took sixty exchanges. The top end is what makes
    `enc_lone_gunman` a 20% survival proposition. This is the main lever on
    "combat too lethal".
-2. **`CHECK.minTarget` = 5 and Skill 0.** The spec locks Skill 0 as near-zero
+3. **`CHECK.minTarget` = 5 and Skill 0.** The spec locks Skill 0 as near-zero
    capability, which is why untrained crew flail. Correct in principle, but it
    is what makes low-tier fights drag. Consider whether an *Assisted* or
    *Improvised* context should grant a floor above 5.
-3. **`HOMEWORLD_CLOCK` band weights.** Terminal days observed from 7 to 48. A
-   day-7 roll removes the entire Homeworld phase the opening is built around.
-   The 10% weight on the 7–13 band may be too punishing for a first run.
-4. **`FUEL.creditsPerUnit` = 5.** Deliberately below the spec anchor to make the
+4. **`HOMEWORLD_CLOCK` band weights.** Terminal days observed from 7 to 48. A
+   day-7 roll removes the entire Homeworld phase the opening is built around,
+   which now also means no time to hire anyone. The 10% weight on the 7–13 band
+   may be too punishing for a first run.
+5. **`FUEL.creditsPerUnit` = 5.** Deliberately below the spec anchor to make the
    route affordable. Push it up once income is tuned.
-5. **`TRAVEL.meaningfulEventsPerDay` = 0.55.** "Travel interrupts too often" is
+6. **`TRAVEL.meaningfulEventsPerDay` = 0.55.** "Travel interrupts too often" is
    an explicit success criterion; this is the dial.
-6. **`RECRUIT.joinThreshold` = 70.** Recruitment is the main answer to
-   attrition, so how hard it is to hire is load-bearing.
 7. **Event wound severities in content.** Authors were given 21–95 with 81–95 as
    mortal. Events are where most casualties actually come from, so this table is
    worth a pass with fresh eyes.
