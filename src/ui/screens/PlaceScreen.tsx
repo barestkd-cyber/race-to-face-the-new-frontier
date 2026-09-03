@@ -6,7 +6,8 @@
  * passage who is on the other side of the city.
  */
 
-import { contactAccess, contactsHere, isFamily } from '../../engine/actions';
+import { contactAccess, contactsHere, isFamily, relationshipLabel } from '../../engine/actions';
+import { safeCrewCapacity } from '../../engine/ship';
 import { formatDuration } from '../../engine/log';
 import { childPlaces, currentPlace, PLACE_KIND_LABELS } from '../../engine/places';
 import { missionsHere } from '../../engine/missions';
@@ -69,6 +70,12 @@ const ACTIONS: Record<LocationActionKind, ActionSpec> = {
     description: 'Eight, sixteen, or twenty-four hours.',
     time: '8–24 hours',
   },
+  askForecast: {
+    label: 'Ask About the Forecasts',
+    description:
+      'Freight crews and dispatchers hear things first. A sharper read on how long this world has.',
+    time: '1½–3 hours',
+  },
   depart: {
     label: 'Return to the Ship',
     description: 'Walk back and board.',
@@ -125,6 +132,20 @@ export function PlaceScreen() {
             {people.map((person) => {
               const access = contactAccess(state, person.id);
               const family = isFamily(state, person.id);
+              const rel = state.characters[state.playerId]?.relationships[person.id];
+              const relLabel = rel ? relationshipLabel(rel.value, rel.familiarity) : null;
+
+              // The offer is a decision, so its costs and its odds sit right
+              // on it: a berth, a mouth, and how likely they are to say yes.
+              const capacity = state.ship && !state.ship.destroyed ? safeCrewCapacity(state.ship) : 0;
+              const aboardAfter = crew.length + 1;
+              const likelihood =
+                (rel?.value ?? 0) >= 40
+                  ? 'they trust you — likely yes'
+                  : (rel?.value ?? 0) >= 10
+                    ? 'they might — hard to say'
+                    : 'they barely know you — a real ask';
+
               return (
                 <div key={person.id} className="panel panel--inset" style={{ marginBottom: 0 }}>
                   <div className="panel__body panel__body--tight">
@@ -138,21 +159,28 @@ export function PlaceScreen() {
                           {family ? 'Family' : 'Contact'} · {person.lifeHistory.career}
                         </span>
                       </span>
+                      {relLabel && <Chip tone={rel && rel.value >= 30 ? 'green' : undefined}>{relLabel}</Chip>}
                     </div>
                     {access.ok ? (
-                      <div className="btn-row" style={{ marginTop: 6 }}>
-                        <Btn small wide onClick={() => store.visitContact(person.id)} sub="2–5 hours">
-                          Talk
-                        </Btn>
-                        <Btn
-                          small
-                          wide
-                          tone="primary"
-                          onClick={() => store.offerPassage(person.id)}
-                        >
-                          Offer Passage
-                        </Btn>
-                      </div>
+                      <>
+                        <p className="tiny faint" style={{ margin: '6px 0 0' }}>
+                          Passage fills {aboardAfter} of {capacity} berths, adds one mouth —{' '}
+                          {likelihood}.
+                        </p>
+                        <div className="btn-row" style={{ marginTop: 6 }}>
+                          <Btn small wide onClick={() => store.visitContact(person.id)} sub="2–5 hours">
+                            Talk
+                          </Btn>
+                          <Btn
+                            small
+                            wide
+                            tone="primary"
+                            onClick={() => store.offerPassage(person.id)}
+                          >
+                            Offer Passage
+                          </Btn>
+                        </div>
+                      </>
                     ) : (
                       <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
                         {access.reason}

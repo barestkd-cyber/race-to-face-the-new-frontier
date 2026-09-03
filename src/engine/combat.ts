@@ -632,7 +632,7 @@ export function performAction(
     return { lines, ended: true };
   }
 
-  combat.log.push(...lines);
+  pushCombatLines(combat, lines);
   if (combat.log.length > 80) combat.log.splice(0, combat.log.length - 80);
   combat.activeId = null;
 
@@ -922,7 +922,27 @@ function checkResolution(state: GameState): CombatState['resolution'] | null {
   const crewUp = combat.combatants.filter((c) => !c.hostile && isActive(state, c));
   const hostilesUp = combat.combatants.filter((c) => c.hostile && isActive(state, c));
 
-  if (hostilesUp.length === 0) return 'victory';
+  if (hostilesUp.length === 0) {
+    // If your own side already broke and ran, the hostiles leaving afterwards
+    // does not turn a rout into a win.
+    if (crewUp.length === 0) {
+      const anyCrewAlive = combat.combatants.some((c) => {
+        if (c.hostile) return false;
+        const ch = characterFor(state, c);
+        return ch?.alive;
+      });
+      return anyCrewAlive ? 'fled' : 'defeat';
+    }
+    // Held the ground. Whether anyone is left to loot depends on how they went.
+    const anyHostileFled = combat.combatants.some((c) => c.hostile && c.fled);
+    const anyHostileDown = combat.combatants.some((c) => {
+      if (!c.hostile) return false;
+      const ch = combat.hostiles[c.characterId];
+      return !ch?.alive || (!c.fled && !isActive(state, c));
+    });
+    return anyHostileFled && !anyHostileDown ? 'droveOff' : 'victory';
+  }
+
   if (crewUp.length === 0) {
     const anyFled = combat.combatants.some((c) => !c.hostile && c.fled);
     const anyAlive = combat.combatants.some((c) => {
@@ -936,6 +956,23 @@ function checkResolution(state: GameState): CombatState['resolution'] | null {
   return null;
 }
 
+/**
+ * Append to the fight log without stuttering: an action that repeats the
+ * previous line verbatim (a failed escape three rounds running) collapses into
+ * one line with a count instead of three copies.
+ */
+function pushCombatLines(combat: CombatState, lines: string[]): void {
+  for (const line of lines) {
+    const last = combat.log[combat.log.length - 1];
+    if (last === line) {
+      combat.log[combat.log.length - 1] = `${line} (again)`;
+      continue;
+    }
+    if (last === `${line} (again)`) continue;
+    combat.log.push(line);
+  }
+}
+
 export function endCombat(
   state: GameState,
   resolution: NonNullable<CombatState['resolution']>,
@@ -943,19 +980,23 @@ export function endCombat(
 ): void {
   const combat = state.combat;
   if (!combat) return;
+  // A fight ends exactly once. Without this, your own escape can later be
+  // overwritten by a "victory" when the last hostile also runs.
+  if (combat.resolution) return;
 
   combat.resolution = resolution;
   const template = ENCOUNTER_INDEX.get(combat.encounterId);
   const lines: string[] = [];
 
-  if (resolution === 'victory') {
+  if (resolution === 'victory' || resolution === 'droveOff') {
     let credits = 0;
     const container = state.ship && !state.ship.destroyed ? state.ship.cargo : null;
 
+    // You only strip the ones who did not walk away.
     for (const combatant of combat.combatants) {
-      if (!combatant.hostile) continue;
+      if (!combatant.hostile || combatant.fled) continue;
       const character = combat.hostiles[combatant.characterId];
-      if (character?.alive && !combatant.fled) continue;
+      if (character?.alive && isActive(state, combatant)) continue;
       credits += combatant.creditDrop ?? 0;
       for (const drop of combatant.drops ?? []) {
         const target = container ?? activeParty(state)[0]?.backpack;
@@ -965,21 +1006,35 @@ export function endCombat(
 
     if (credits > 0) {
       state.resources.credits += credits;
-      lines.push(`Recovered ${credits} credits.`);
+      lines.push(`Taken from the fallen: ${credits} credits.`);
     }
 
     state.crewXp += XP.perCombatVictory;
-    lines.push(template?.victoryText ?? 'The fight is over.');
+    if (resolution === 'victory') {
+      lines.push(template?.victoryText ?? 'The fight is over.');
+    } else {
+      lines.push('They break contact and leave you the ground.');
+    }
   } else if (resolution === 'defeat') {
     lines.push('You are overrun.');
   } else if (resolution === 'fled') {
-    lines.push('You break contact and get clear, with nothing to show for it.');
+    lines.push('You break contact and get clear.');
+    // Fleeing inside a site means falling back to the way in, not standing in
+    // the room you just ran out of.
+    if (state.expedition) {
+      const site = state.sites[state.expedition.siteId];
+      if (site) {
+        state.expedition.currentNodeId = site.entranceId;
+        lines.push('You fall back to the way in.');
+      }
+    }
   } else {
     lines.push('The fight breaks off without resolution.');
   }
 
   // Anyone killed in the fight leaves the roster before anything reads it.
   const dead = pruneDeadCrew(state);
+  combat.casualties = dead.map((c) => `${c.name} ${c.surname}`);
   for (const casualty of dead) {
     const line = `${casualty.name} ${casualty.surname} was killed. ${casualty.departedReason ?? ''}`.trim();
     lines.push(line);
@@ -987,7 +1042,7 @@ export function endCombat(
   }
 
   for (const line of lines) pushLog(state, 'combat', line);
-  combat.log.push(...lines);
+  pushCombatLines(combat, lines);
 
   // Stress from having been in a fight at all.
   for (const member of crewMembers(state)) applyStress(member, COMBAT_STRESS_ON_END);

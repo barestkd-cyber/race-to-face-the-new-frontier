@@ -9,6 +9,7 @@
  */
 
 import {
+  askAboutForecasts,
   beginTrade,
   breakDownForParts,
   buyItem,
@@ -63,7 +64,7 @@ import {
   enterNode,
   exitExpedition,
 } from '../engine/scavenge';
-import { advanceTime, crewMembers } from '../engine/sim';
+import { advanceTime, crewMembers, pruneDeadCrew } from '../engine/sim';
 import { beginTravel, hoursPerRealSecond, resumeTravel, setSpeed, stepTravel } from '../engine/travel';
 import { ONBOARDING, SAVE } from '../engine/tuning';
 import type {
@@ -121,11 +122,79 @@ class GameStore {
   /** Run an engine mutation and wake the UI. */
   private mutate(fn: (state: GameState) => void): void {
     if (!this.state) return;
+
+    // Snapshot the roster and interrupt state so this one choke point can
+    // notice everything the engine did, wherever it did it.
+    const crewBefore = this.state.crewIds.slice();
+    const hadCombat = Boolean(this.state.combat);
+    const hadEvent = Boolean(this.state.activeEvent);
+
     fn(this.state);
     this.state.rngCursor = this.rng.position;
+
+    // Normalise the roster BEFORE diffing it: combat prunes its own dead, but
+    // hazard and mission deaths leave the body on the books until someone
+    // sweeps. Sweeping here means every death path reaches the farewell.
+    pruneDeadCrew(this.state);
+
+    // A death gets one beat, whatever code path caused it.
+    this.queueFarewells(crewBefore);
+
+    // The first time there is real XP to spend, say so once. The spend
+    // controls live inside the character sheet, which nobody reopens unprompted.
+    if (!this.state.flags['xpNudged'] && this.state.crewXp >= 10) {
+      this.state.flags['xpNudged'] = true;
+      this.pushToast(
+        ['Crew XP banked. Open a crew member — Self, or tap anyone — and raise a skill under Skills.'],
+        'Experience',
+      );
+    }
+
+    // When a fight or an event takes the screen, yesterday's news gets off it.
+    if (
+      (!hadCombat && this.state.combat) ||
+      (!hadEvent && this.state.activeEvent)
+    ) {
+      this.toasts = [];
+    }
+
     checkRunEnded(this.state);
     this.notify();
   }
+
+  /** Queue an acknowledgment for every crew member who just died. */
+  private queueFarewells(crewBefore: string[]): void {
+    const state = this.state;
+    if (!state) return;
+    for (const id of crewBefore) {
+      if (state.crewIds.includes(id)) continue;
+      const person = state.characters[id];
+      if (!person || person.alive) continue; // left, not died
+      if (state.pendingFarewells.some((f) => f.characterId === id)) continue;
+      const relation =
+        state.homeworld.familyIds.includes(id) ||
+        state.characters[state.playerId]?.relationships[id]?.kind === 'family'
+          ? 'family'
+          : 'crew';
+      state.pendingFarewells.push({
+        characterId: id,
+        name: person.name,
+        surname: person.surname,
+        portraitSeed: person.portraitSeed,
+        relation,
+        cause: person.departedReason ?? 'Killed',
+      });
+      pushLog(state, 'milestone', `${person.name} ${person.surname} is gone. ${person.departedReason ?? ''}`.trim());
+    }
+  }
+
+  /** The player has read the farewell and chosen to carry on. */
+  dismissFarewell = (): void => {
+    this.mutate((state) => {
+      state.pendingFarewells.shift();
+    });
+    void this.autosave();
+  };
 
   private pushToast(lines: string[], title?: string): void {
     const cleaned = lines.filter((l) => l && l.trim().length > 0);
@@ -360,6 +429,12 @@ class GameStore {
         this.mutate((state) => {
           this.pushToast(socialise(state, this.rng), 'Time spent');
         });
+        break;
+      case 'askForecast':
+        this.mutate((state) => {
+          this.pushToast(askAboutForecasts(state, this.rng), 'Word going around');
+        });
+        void this.autosave();
         break;
       case 'rest':
         this.setScreen('rest');
@@ -669,6 +744,17 @@ class GameStore {
     this.mutate((state) => {
       autoEquipParty(crewMembers(state), state.ship);
       this.pushToast(['Crew equipped from the hold.']);
+    });
+  };
+
+  /** Equip just the selected party — used from mission prep. */
+  equipSelected = (ids: string[]): void => {
+    this.mutate((state) => {
+      const party = ids
+        .map((id) => state.characters[id])
+        .filter((c): c is Character => Boolean(c) && c.alive);
+      autoEquipParty(party, state.ship);
+      this.pushToast(['Party equipped from the hold.']);
     });
   };
 

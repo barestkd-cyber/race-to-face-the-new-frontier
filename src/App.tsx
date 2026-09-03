@@ -15,6 +15,7 @@ import { currentPlace } from './engine/places';
 import { ONBOARDING } from './engine/tuning';
 import type { ScreenId } from './engine/types';
 import { Btn, Panel, Row, Sheet } from './ui/components';
+import { Portrait } from './ui/Portrait';
 import { store, useGame, useDraft, useToasts } from './ui/useStore';
 
 import { CockpitScreen } from './ui/screens/CockpitScreen';
@@ -194,6 +195,16 @@ export function App() {
         )}
       </Sheet>
 
+      {/*
+        A death is acknowledged before anything else happens — after combat has
+        said its piece, and never on top of an open event.
+      */}
+      {state &&
+        state.pendingFarewells.length > 0 &&
+        !state.combat &&
+        !state.activeEvent &&
+        screen !== 'gameOver' && <Farewell entry={state.pendingFarewells[0]!} />}
+
       {toasts.length > 0 && (
         <div className="toasts">
           {toasts.map((toast) => (
@@ -217,6 +228,41 @@ export function App() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One quiet beat for a death: a face, a cause, a line, and Carry On. */
+function Farewell({ entry }: { entry: import('./engine/types').FarewellEntry }) {
+  const FAMILY_LINES = [
+    'You grew up in the same rooms. There is no version of this you were ready for.',
+    'The whole point of the ship was carrying the people you could not lose.',
+    'You will keep flying. That is not the same as being all right.',
+  ];
+  const CREW_LINES = [
+    'They signed on knowing the odds. Knowing them is not the same as beating them.',
+    'They trusted you with where they stood. Remember where that was.',
+    'The berth is empty now. The work they did is not.',
+  ];
+  const lines = entry.relation === 'family' ? FAMILY_LINES : CREW_LINES;
+  const line = lines[entry.portraitSeed % lines.length]!;
+
+  return (
+    <div className="farewell" role="alertdialog" aria-label={`${entry.name} ${entry.surname} is gone`}>
+      <div className="farewell__card">
+        <Portrait seed={entry.portraitSeed} size="lg" />
+        <div className="farewell__name">
+          {entry.name} {entry.surname}
+        </div>
+        <div className="farewell__cause">
+          {entry.relation === 'family' ? 'Family · ' : ''}
+          {entry.cause}
+        </div>
+        <p className="farewell__line">{line}</p>
+        <Btn block tone="primary" onClick={() => store.dismissFarewell()}>
+          Carry On
+        </Btn>
+      </div>
     </div>
   );
 }

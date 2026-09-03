@@ -45,6 +45,9 @@ export function ShipScreen() {
   }
 
   const ship = state.ship;
+  // Management needs hands aboard; while a party is deployed this is a status
+  // board, not a workshop.
+  const deployed = Boolean(state.expedition);
   if (!ship) {
     return <Empty>You have no ship. There is nothing to inspect.</Empty>;
   }
@@ -150,7 +153,7 @@ export function ShipScreen() {
           <Btn
             block
             onClick={() => store.decant()}
-            disabled={!canistersAboard || tanksFull || ship.destroyed}
+            disabled={deployed || !canistersAboard || tanksFull || ship.destroyed}
             sub={
               !canistersAboard
                 ? 'No canisters in the hold'
@@ -335,22 +338,27 @@ export function ShipScreen() {
               </p>
             )}
 
+            {deployed && (
+              <p className="tiny amber">
+                A party is away. Nobody is aboard to swing a wrench until they are back.
+              </p>
+            )}
             <div className="btn-row" style={{ marginTop: 8 }}>
               <Btn
                 tone="go"
                 wide
-                disabled={!selfQuote.canAfford}
+                disabled={deployed || !selfQuote.canAfford}
                 onClick={() => store.repair(target, points, false)}
-                sub={`${selfQuote.parts} parts · ${formatDuration(selfQuote.hours)}`}
+                sub={deployed ? 'Party away' : `${selfQuote.parts} parts · ${formatDuration(selfQuote.hours)}`}
               >
                 Repair Ourselves
               </Btn>
               <Btn
                 tone="primary"
                 wide
-                disabled={!yardAvailable || !yardQuote.canAfford}
+                disabled={deployed || !yardAvailable || !yardQuote.canAfford}
                 onClick={() => store.repair(target, points, true)}
-                sub={`${yardQuote.credits} cr · ${formatDuration(yardQuote.hours)}`}
+                sub={deployed ? 'Party away' : `${yardQuote.credits} cr · ${formatDuration(yardQuote.hours)}`}
               >
                 Pay The Yard
               </Btn>

@@ -287,6 +287,7 @@ function migrate(state: GameState): GameState {
   if (!patched.places) patched.places = {};
   if (patched.currentPlaceId === undefined) patched.currentPlaceId = null;
   if (patched.onboardingStep === undefined) patched.onboardingStep = 99;
+  if (!patched.pendingFarewells) patched.pendingFarewells = [];
 
   // A place id that no longer exists would strand the player outside the ship.
   if (

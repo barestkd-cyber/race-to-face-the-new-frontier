@@ -781,6 +781,8 @@ export type LocationActionKind =
   | 'medical'
   | 'social'
   | 'rest'
+  /** Work the crowd for a sharper read on the extinction clocks. */
+  | 'askForecast'
   | 'depart';
 
 export interface MarketState {
@@ -1237,6 +1239,16 @@ export interface CombatAction {
   reason?: string;
 }
 
+export interface FarewellEntry {
+  characterId: CharacterId;
+  name: string;
+  surname: string;
+  portraitSeed: number;
+  /** Player's relation to them, for the tone of the line. */
+  relation: 'family' | 'crew';
+  cause: string;
+}
+
 export interface CombatState {
   id: string;
   title: string;
@@ -1247,8 +1259,15 @@ export interface CombatState {
   activeId: string | null;
   round: number;
   log: string[];
-  /** Set when combat has ended. */
-  resolution?: 'victory' | 'defeat' | 'fled' | 'truce';
+  /**
+   * Set when combat has ended. 'victory' means the hostiles are down and the
+   * ground is yours; 'droveOff' means they ran and you held; 'fled' means you
+   * got out. Only 'victory' loots — nobody strips the pockets of someone who
+   * got away.
+   */
+  resolution?: 'victory' | 'droveOff' | 'defeat' | 'fled' | 'truce';
+  /** Names of crew killed in this fight, so the ending reads what it cost. */
+  casualties?: string[];
   /** Where to return once combat resolves. */
   returnTo: ScreenId;
   canFlee: boolean;
@@ -1494,6 +1513,14 @@ export interface GameState {
    * instead of presenting every control at once. See ONBOARDING in tuning.
    */
   onboardingStep: number;
+
+  /**
+   * Crew deaths waiting to be acknowledged. Every death gets one beat — a
+   * name, a face, a line — before play carries on. Queued here by the store
+   * whenever the roster shrinks, shown once combat has finished saying its
+   * piece.
+   */
+  pendingFarewells: FarewellEntry[];
 
   /** Set when the run has ended, with the reason. */
   ending: { kind: 'victory' | 'death' | 'stranded'; text: string } | null;

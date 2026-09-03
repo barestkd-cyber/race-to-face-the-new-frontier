@@ -22,10 +22,12 @@ import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../e
 import { WOUNDS } from '../../engine/tuning';
 import { conditionLabel, SEVERITY_LABELS } from '../../engine/wounds';
 import {
+  ATTRIBUTE_KEYS,
   ATTRIBUTE_LABELS,
   BODY_REGION_LABELS,
   FACETS,
   SKILL_GROUPS,
+  SKILL_KEYS,
   SKILL_LABELS,
   type AttributeKey,
   type SkillKey,
@@ -127,6 +129,14 @@ export function CharacterScreen() {
     .sort((a, b) => b.rel.familiarity - a.rel.familiarity);
 
   const surfaced = character.traitKnowledge.filter((k) => k.known > 0);
+
+  const attrsRaisable = ATTRIBUTE_KEYS.filter(
+    (key) => quoteAttributeUpgrade(state, character, key).affordable,
+  ).length;
+  const skillsRaisable = SKILL_KEYS.filter(
+    (key) => quoteSkillUpgrade(state, character, key).affordable,
+  ).length;
+
 
   return (
     <div className="stack">
@@ -314,7 +324,7 @@ export function CharacterScreen() {
       </Fold>
 
       {/* -- Attributes ---------------------------------------------------- */}
-      <Fold title="Attributes">
+      <Fold title={attrsRaisable > 0 ? `Attributes · ${attrsRaisable} can raise` : 'Attributes'}>
         <p className="prose prose--dim">
           Attributes magnify skill; they never replace it. Raising one costs XP from
           this person first, then the shared crew pool.
@@ -344,7 +354,7 @@ export function CharacterScreen() {
       </Fold>
 
       {/* -- Skills -------------------------------------------------------- */}
-      <Fold title="Skills">
+      <Fold title={skillsRaisable > 0 ? `Skills · ${skillsRaisable} can raise` : 'Skills'}>
         <p className="prose prose--dim">
           Each skill has a potential grade and a hard ceiling. Grade and any knowledge
           specialisation are fixed for life — training moves the number, not the

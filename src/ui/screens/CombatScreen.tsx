@@ -53,18 +53,39 @@ export function CombatScreen() {
     : undefined;
 
   if (combat.resolution) {
+    // The banner tells the truth about what this cost. A fight that killed
+    // somebody does not get a triumphant header, whatever the tactical result.
+    const lost = combat.casualties ?? [];
+    const RESOLUTION_LABELS: Record<string, string> = {
+      victory: 'Fight won',
+      droveOff: 'Drove them off',
+      fled: 'Got clear',
+      defeat: 'Overrun',
+      truce: 'Stood down',
+    };
+    const aside = lost.length > 0 ? 'Costly' : (RESOLUTION_LABELS[combat.resolution] ?? '');
+    const summary =
+      combat.resolution === 'victory'
+        ? 'The ground is yours.'
+        : combat.resolution === 'droveOff'
+          ? 'They wanted it less than you did. They broke off and left you standing.'
+          : combat.resolution === 'fled'
+            ? 'You broke contact and got clear.'
+            : combat.resolution === 'defeat'
+              ? 'You were overrun.'
+              : 'The fight broke off without resolution.';
+
     return (
       <div className="stack">
-        <Panel title={combat.title} aside={combat.resolution.toUpperCase()}>
-          <p className="prose">
-            {combat.resolution === 'victory'
-              ? 'The fight is over and you are still standing.'
-              : combat.resolution === 'fled'
-                ? 'You broke contact and got clear.'
-                : combat.resolution === 'defeat'
-                  ? 'You were overrun.'
-                  : 'The fight broke off without resolution.'}
-          </p>
+        <Panel title={combat.title} aside={aside}>
+          {lost.length > 0 && (
+            <p className="prose">
+              <span className="red">
+                {lost.join(' and ')} did not make it out.
+              </span>
+            </p>
+          )}
+          <p className={lost.length > 0 ? 'prose prose--dim' : 'prose'}>{summary}</p>
         </Panel>
 
         <Panel title="After Action">

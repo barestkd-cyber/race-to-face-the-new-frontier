@@ -121,7 +121,7 @@ const HOMEWORLD_DISTRICTS: DistrictTemplate[] = [
         subtitle: 'Boards, brokers, and rumour',
         description:
           'Departure boards nobody trusts, a wall of paid notices, and people who make a living knowing things.',
-        actions: ['findWork', 'missions'],
+        actions: ['findWork', 'missions', 'askForecast'],
       },
     ],
   },

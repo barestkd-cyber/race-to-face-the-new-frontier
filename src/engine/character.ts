@@ -712,3 +712,77 @@ export function isAre(character: Character): string {
 export function generateShipName(rng: Rng): string {
   return `${rng.pick(NAME_TABLES.shipPrefixes)} ${rng.pick(NAME_TABLES.shipNouns)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Auto-allocation
+// ---------------------------------------------------------------------------
+
+/**
+ * Spend a draft's free points the way this person's life would have spent
+ * them: weighted toward the background's biases and toward what they are
+ * already good at. Exists so "accept the captain as dealt" is a real choice
+ * and nobody is forced through 43 rows of arithmetic to start playing.
+ *
+ * Respects every cap the manual path respects. Mutates the draft in place.
+ */
+export function autoSpendDraft(draft: ProtagonistDraft, rng: Rng): void {
+  const { character, bias } = draft;
+
+  // Attributes: background pull, plus a mild preference for rounding out
+  // anything dismal, the way a working adult compensates for weak spots.
+  let attrBudget = draft.attributePoints - attributesSpent(draft);
+  let guard = 0;
+  while (attrBudget > 0 && guard++ < 200) {
+    const options = ATTRIBUTE_KEYS.filter(
+      (key) => character.attributes[key] < ATTRIBUTE_GEN.maxPerAttribute,
+    );
+    if (options.length === 0) break;
+    const pick = rng.weighted(
+      options.map((key) => ({
+        value: key,
+        weight:
+          2 +
+          (bias.attribute[key] ?? 0) * 2 +
+          (character.attributes[key] <= 3 ? 2 : 0),
+      })),
+    );
+    character.attributes[pick] += 1;
+    attrBudget -= 1;
+  }
+
+  // Skills: double down where life already left something. Spreading one
+  // point everywhere makes a character who is bad at everything.
+  let skillBudget = draft.skillPoints - skillsSpent(draft);
+  guard = 0;
+  while (skillBudget > 0 && guard++ < 400) {
+    const options = SKILL_KEYS.filter(
+      (key) => character.skills[key] < skillCap(character, key),
+    );
+    if (options.length === 0) break;
+    const pick = rng.weighted(
+      options.map((key) => ({
+        value: key,
+        weight: 1 + (bias.skill[key] ?? 0) + character.skills[key] * 0.6,
+      })),
+    );
+    character.skills[pick] += 1;
+    skillBudget -= 1;
+  }
+
+  character.maxHealth = deriveMaxHealth(character.attributes);
+  character.health = character.maxHealth;
+}
+
+function attributesSpent(draft: ProtagonistDraft): number {
+  return ATTRIBUTE_KEYS.reduce(
+    (sum, key) => sum + (draft.character.attributes[key] - draft.baseAttributes[key]),
+    0,
+  );
+}
+
+function skillsSpent(draft: ProtagonistDraft): number {
+  return SKILL_KEYS.reduce(
+    (sum, key) => sum + (draft.character.skills[key] - draft.baseSkills[key]),
+    0,
+  );
+}

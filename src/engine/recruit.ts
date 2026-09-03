@@ -7,7 +7,7 @@
  */
 
 import { assessChance, bestAssessor } from './assess';
-import { generateRecruit } from './character';
+import { createCharacter, generateRecruit } from './character';
 import { performCheck, selectParticipants, type CheckContext } from './check';
 import { autoEquipParty } from './inventory';
 import { pushLog } from './log';
@@ -230,6 +230,38 @@ const TALK_BEATS = [
   'Tell them what happened to the last berth you filled.',
 ];
 
+/**
+ * What they actually say back. Three voices per beat, picked by who they are,
+ * so a conversation reads as a person answering rather than a meter moving.
+ */
+const BEAT_REPLIES: Record<string, string[]> = {
+  'Ask why they are still here.': [
+    '"Everyone with somewhere to go has gone. I’m still deciding what I’m willing to owe for it."',
+    'They look at the queue, then at you. "Because the lists don’t call people like me."',
+    '"I was waiting," they say, and don’t finish the sentence.',
+  ],
+  'Ask what they can actually do.': [
+    'They answer with specifics — names of machines, names of procedures. No padding.',
+    '"Depends who’s asking me to do it." But they walk you through their last job honestly.',
+    'They hold up their hands: calluses in the right places for the story they tell.',
+  ],
+  'Ask what they want out of it.': [
+    '"Out. After that, don’t worry — I’m cheap to keep."',
+    'They name their terms without blinking. They have clearly rehearsed this.',
+    '"A bunk. Work that matters. People who don’t leave each other behind."',
+  ],
+  'Tell them where you are going.': [
+    'They repeat the route back to you slowly, testing whether you flinch at your own plan.',
+    '"The long leg past the transit station kills crews." They say it like a question about you.',
+    'Something shifts in their face at the word frontier. Hunger, or fear. Maybe both.',
+  ],
+  'Tell them what happened to the last berth you filled.': [
+    'They listen without interrupting. "Thanks for not dressing it up."',
+    '"And you’re telling me this because?" — but they sit back down.',
+    'A long silence. "At least you bury it honest," they say finally.',
+  ],
+};
+
 export function availableBeats(candidate: RecruitCandidate): string[] {
   return TALK_BEATS.filter((b) => !candidate.usedBeats.includes(b));
 }
@@ -247,6 +279,12 @@ export function talkTo(
   const advance = advanceTime(state, 0.5, rng);
   lines.push(...advance.lines);
 
+  // Their answer first, then what you noticed, then how it moved them.
+  const replies = BEAT_REPLIES[beat];
+  if (replies) {
+    lines.push(replies[candidate.character.portraitSeed % replies.length]!);
+  }
+
   lines.push(...observeCandidate(state, candidate, rng));
 
   // Talking alone moves the needle a little, in either direction.
@@ -254,13 +292,7 @@ export function talkTo(
   candidate.willingness = Math.max(0, Math.min(100, candidate.willingness + shift));
   candidate.assessment = assessCandidate(state, candidate.character, candidate.willingness);
 
-  lines.push(
-    shift > 3
-      ? 'That lands well.'
-      : shift < 0
-        ? 'That does not help.'
-        : 'They hear you out.',
-  );
+  lines.push(shift > 3 ? 'They seem warmer.' : shift < 0 ? 'They seem cooler.' : 'They hear you out.');
 
   return lines;
 }
@@ -513,6 +545,33 @@ export function offerBerth(state: GameState, candidate: RecruitCandidate, rng: R
   state.morale = clampMorale(state.morale + MORALE.crewRecruitBonus);
   lines.push(`${character.name} ${character.surname} signs on as ${character.role}.`);
   pushLog(state, 'crew', `${character.name} ${character.surname} joined the crew.`);
+
+  // A promise of passage for family is a person, not a line of flavour text.
+  // They board too: a berth filled and a mouth fed, which is the real price
+  // the player agreed to.
+  if (candidate.terms.kind === 'passage' && candidate.terms.met) {
+    const dependent = createCharacter({ rng, aboard: true });
+    dependent.surname = character.surname;
+    dependent.age = rng.chance(0.5)
+      ? Math.max(16, character.age - rng.int(18, 26))
+      : character.age + rng.int(-8, 8);
+    dependent.aboard = true;
+    dependent.role = 'crew';
+
+    dependent.relationships[character.id] = { value: 70, familiarity: 95, kind: 'family' };
+    character.relationships[dependent.id] = { value: 70, familiarity: 95, kind: 'family' };
+    for (const member of crew) {
+      member.relationships[dependent.id] = { value: 0, familiarity: 3, kind: 'crew' };
+      dependent.relationships[member.id] = { value: 0, familiarity: 3, kind: 'crew' };
+    }
+
+    state.characters[dependent.id] = dependent;
+    state.crewIds.push(dependent.id);
+    lines.push(
+      `${character.name}'s family comes too: ${dependent.name} ${dependent.surname} boards with them.`,
+    );
+    pushLog(state, 'crew', `${dependent.name} ${dependent.surname} boarded as ${character.name}'s family.`);
+  }
 
   return { joined: true, lines };
 }

@@ -11,7 +11,7 @@ import { ENCOUNTER_INDEX, SITE_ARCHETYPES } from '../content';
 import type { SiteArchetype } from '../content/contentTypes';
 import { assessDanger, bestAssessor, type RiskAssessment } from './assess';
 import { performCheck, selectParticipants, type CheckContext } from './check';
-import { addItem, partyToolBonus } from './inventory';
+import { addItem, getItem, partyToolBonus } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
 import { streamRng } from './rng';
@@ -73,16 +73,23 @@ type SiteCheckSkill =
 let siteCounter = 0;
 let nodeCounter = 0;
 
-function pickArchetype(location: LocationState, rng: Rng): SiteArchetype | null {
-  const candidates = SITE_ARCHETYPES.filter(
+function pickArchetype(
+  location: LocationState,
+  rng: Rng,
+  exclude?: Set<string>,
+): SiteArchetype | null {
+  const forKind = SITE_ARCHETYPES.filter((a) => a.locationKinds.includes(location.kind));
+  const candidates = forKind.filter(
     (a) =>
-      a.locationKinds.includes(location.kind) &&
       location.danger >= a.danger[0] - 20 &&
       location.danger <= a.danger[1] + 25,
   );
-  const pool = candidates.length > 0
-    ? candidates
-    : SITE_ARCHETYPES.filter((a) => a.locationKinds.includes(location.kind));
+  let pool = candidates.length > 0 ? candidates : forKind;
+  // Two sites with the same description on one board read as a copy-paste bug
+  // even when the roll was fair, so repeats are a last resort only.
+  if (exclude && pool.some((a) => !exclude.has(a.id))) {
+    pool = pool.filter((a) => !exclude.has(a.id));
+  }
   if (pool.length === 0) return null;
   return rng.pick(pool);
 }
@@ -202,9 +209,10 @@ export function generateSite(
   seed: string,
   location: LocationState,
   index: number,
+  excludeArchetypes?: Set<string>,
 ): ScavengeSite | null {
   const rng = streamRng(seed, 'site', location.id, index);
-  const archetype = pickArchetype(location, rng);
+  const archetype = pickArchetype(location, rng, excludeArchetypes);
   if (!archetype) return null;
 
   const special = archetype.special === true || rng.chance(SCAVENGE.specialSiteChance);
@@ -294,10 +302,12 @@ export function ensureSites(state: GameState, location: LocationState): Scavenge
   const rng = streamRng(state.seed, 'sitecount', location.id);
   const count = rng.int(2, location.condition === 'abandoned' ? 5 : 3);
   const sites: ScavengeSite[] = [];
+  const used = new Set<string>();
 
   for (let i = 0; i < count; i++) {
-    const site = generateSite(state.seed, location, i);
+    const site = generateSite(state.seed, location, i, used);
     if (!site) continue;
+    used.add(site.archetype);
     state.sites[site.id] = site;
     location.siteIds.push(site.id);
     sites.push(site);
@@ -536,7 +546,8 @@ export function enterNode(state: GameState, nodeId: string, rng: Rng): NodeResol
     if (node.loot) {
       for (const entry of node.loot) {
         expedition.carried.push({ ...entry });
-        lines.push(`Recovered ${entry.qty} × ${entry.itemId.replace(/_/g, ' ')}.`);
+        const itemName = getItem(entry.itemId)?.name ?? entry.itemId.replace(/_/g, ' ');
+        lines.push(`Recovered ${entry.qty} × ${itemName}.`);
       }
     }
     if (node.lootCredits) {
