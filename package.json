@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit --pretty",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:single": "vite build --config vite.config.single.ts && node scripts/inline.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -6,3 +6,6 @@ dist-ssr
 .vite
 coverage
 *.log
+
+# Single-file build output
+dist-single/
