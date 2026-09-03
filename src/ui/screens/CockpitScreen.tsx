@@ -236,7 +236,7 @@ export function CockpitScreen() {
           <Panel title="Homeworld Forecast" aside={clock.urgency.toUpperCase()}>
             <p className="prose">{clock.text}</p>
             <div className="split" style={{ marginTop: 6 }}>
-              <span className="tiny dim">Day {clock.elapsedDays} elapsed</span>
+              <span className="tiny dim">Starday {clock.elapsedDays + 1}</span>
               <Chip
                 tone={
                   clock.urgency === 'critical' || clock.urgency === 'urgent'

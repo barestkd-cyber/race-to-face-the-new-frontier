@@ -24,6 +24,7 @@ export function CrewScreen() {
   }
 
   const crew = crewMembers(state);
+  const deployed = Boolean(state.expedition);
 
   const ship = state.ship;
   const shipUsable = Boolean(ship && !ship.destroyed);
@@ -135,15 +136,16 @@ export function CrewScreen() {
             tone="primary"
             wide
             onClick={() => setPickingCaptain(true)}
-            disabled={crew.length === 0}
+            disabled={crew.length === 0 || deployed}
+            sub={deployed ? 'Party away — no changes of command' : undefined}
           >
             Set Captain
           </Btn>
           <Btn
             wide
             onClick={() => store.equipBest()}
-            disabled={!shipUsable || crew.length === 0}
-            sub="Best available gear from the hold"
+            disabled={!shipUsable || crew.length === 0 || deployed}
+            sub={deployed ? 'Party away' : 'Best available gear from the hold'}
           >
             Equip Crew From Hold
           </Btn>

@@ -202,6 +202,7 @@ export function createGame(seed: string, protagonist: Character): GameState {
     pendingCombat: null,
 
     onboardingStep: ONBOARDING.startStep,
+    pendingFarewells: [],
 
     ending: null,
     focusCharacterId: null,

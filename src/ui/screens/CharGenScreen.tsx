@@ -11,9 +11,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Btn, Chip, Empty, Fold, KV, Panel, StatLine } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useDraft } from '../useStore';
-import { deriveMaxHealth } from '../../engine/character';
+import { autoSpendDraft, deriveMaxHealth } from '../../engine/character';
 import { skillCap } from '../../engine/check';
+import { ATTRIBUTE_INFO, SKILL_INFO } from '../../engine/glossary';
 import type { NewRunDraft } from '../../engine/newGame';
+import { Rng } from '../../engine/rng';
 import { skillCapLabel } from '../../engine/progression';
 import { ATTRIBUTE_GEN } from '../../engine/tuning';
 import {
@@ -110,6 +112,29 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
     });
   };
 
+  /**
+   * Let the background finish the sheet. Same caps and rules as doing it by
+   * hand — this is a real allocation, not a skip button, and every number it
+   * writes can still be inspected above before committing.
+   */
+  const spendForMe = () => {
+    const working: typeof draft.protagonist = {
+      ...draft.protagonist,
+      character: {
+        ...character,
+        attributes: { ...attributes },
+        skills: { ...skills },
+      },
+    };
+    autoSpendDraft(working, new Rng(`${draft.seed}:autospend`));
+    setAttributes({ ...working.character.attributes });
+    setSkills({ ...working.character.skills });
+  };
+
+  // One glossary line open at a time — tap a name to see what it means.
+  const [infoKey, setInfoKey] = useState<string | null>(null);
+  const toggleInfo = (key: string) => setInfoKey((cur) => (cur === key ? null : key));
+
   const takeCommand = () => {
     const committed: Character = {
       ...character,
@@ -154,7 +179,7 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
         </div>
       </Panel>
 
-      <Panel title="Derived" tight>
+      <Panel title="At a Glance" tight>
         <KV
           items={[
             ['Health', <span key="hp" className="value readout">{maxHealth}</span>],
@@ -172,6 +197,22 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
         <p className="tiny faint">
           Health follows Endurance and Strength, so it moves as you allocate.
         </p>
+        {unspent && (
+          <div style={{ marginTop: 8 }}>
+            <Btn
+              block
+              tone="go"
+              onClick={spendForMe}
+              sub="Follows their background — every point still visible below"
+            >
+              Spend For Me
+            </Btn>
+            <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
+              Or place them yourself in Attributes and Skills. Tap any stat's name to
+              see what it does.
+            </p>
+          </div>
+        )}
       </Panel>
 
       <Fold title={`Attributes — ${attrRemaining} left`} defaultOpen>
@@ -187,12 +228,21 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
               <span className="label">{FACETS[facet].label}</span>
               {FACETS[facet].attributes.map((key) => (
                 <div key={key} className="split" style={{ gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    onClick={() => toggleInfo(key)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') toggleInfo(key); }}
+                  >
                     <StatLine
                       name={ATTRIBUTE_LABELS[key]}
                       value={attributes[key]}
                       max={ATTRIBUTE_MAX}
                     />
+                    {infoKey === key && (
+                      <span className="tiny cyan">{ATTRIBUTE_INFO[key]}</span>
+                    )}
                   </div>
                   <div className="btn-row" style={{ flexWrap: 'nowrap' }}>
                     <Btn
@@ -231,9 +281,20 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
                 const cap = skillCap(character, key);
                 return (
                   <div key={key} className="split" style={{ gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                      onClick={() => toggleInfo(key)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') toggleInfo(key); }}
+                    >
                       <StatLine name={SKILL_LABELS[key]} value={skills[key]} />
                       <span className="tiny faint">{skillCapLabel(character, key)}</span>
+                      {infoKey === key && (
+                        <span className="tiny cyan" style={{ display: 'block' }}>
+                          {SKILL_INFO[key]}
+                        </span>
+                      )}
                     </div>
                     <div className="btn-row" style={{ flexWrap: 'nowrap' }}>
                       <Btn
@@ -274,7 +335,7 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
             onClick={takeCommand}
             sub={
               unspent
-                ? `${attrRemaining} attribute and ${skillRemaining} skill points will be lost`
+                ? `Spend these now — they don't keep. ${attrRemaining} attr · ${skillRemaining} skill unspent`
                 : 'All points allocated'
             }
           >

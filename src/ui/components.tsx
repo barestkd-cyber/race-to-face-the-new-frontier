@@ -22,6 +22,7 @@ export function Panel({
   tight,
   flush,
   riveted = true,
+  id,
 }: {
   title?: string;
   aside?: ReactNode;
@@ -30,9 +31,12 @@ export function Panel({
   tight?: boolean;
   flush?: boolean;
   riveted?: boolean;
+  /** DOM id, for scroll targets. */
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={[
         'panel',
         inset ? 'panel--inset' : '',

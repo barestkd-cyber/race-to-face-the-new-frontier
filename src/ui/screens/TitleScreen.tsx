@@ -145,13 +145,6 @@ export function TitleScreen() {
         </div>
       </Panel>
 
-      <Panel title="How a run works">
-        <p className="prose prose--dim">
-          The seed fixes the world, the protagonist, the ship, and the route. It does not fix what
-          you do with any of them. The same seed replayed will hand you the same starting hand and
-          nothing else.
-        </p>
-      </Panel>
 
       <Sheet open={loadOpen} onClose={() => setLoadOpen(false)} title="Saved Runs">
         {saves.length === 0 ? (

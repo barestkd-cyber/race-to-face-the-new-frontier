@@ -22,8 +22,9 @@ import type { Rng } from './rng';
 import { medicalFacility, qualityIndex, safeCrewCapacity, SYSTEM_LABELS } from './ship';
 import { advanceTime, applyStress, clampMorale, crewMembers } from './sim';
 import { autoResolveRoutine, selectEvent } from './eventEngine';
-import { MEDICINE, REPAIR, REST, SHIPS } from './tuning';
+import { HOMEWORLD_CLOCK, MEDICINE, REPAIR, REST, SHIPS } from './tuning';
 import { requiresSurgery, treatWound } from './wounds';
+import { estimateTerminalDay } from './world';
 import type {
   Character,
   GameState,
@@ -689,6 +690,58 @@ export function socialise(state: GameState, rng: Rng): string[] {
 // Family and contacts
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The forecast
+// ---------------------------------------------------------------------------
+
+/**
+ * Work the crowd at the transit hub for what people actually know about the
+ * clocks. This is what turns the forecast from wallpaper into an object of
+ * play: time spent here buys a tighter window, judged by Evaluation.
+ */
+export function askAboutForecasts(state: GameState, rng: Rng): string[] {
+  const lines: string[] = [];
+  const hours = rng.float(1.5, 3);
+  const advance = advanceTime(state, hours, rng);
+  lines.push(...advance.lines);
+
+  if (state.homeworld.ended) return ['It no longer matters what anyone forecast.'];
+
+  if (state.homeworld.forecastQuality >= HOMEWORLD_CLOCK.maxForecastQuality) {
+    lines.push('Nobody here knows more than you already do. The rest is waiting.');
+    return lines;
+  }
+
+  const crew = crewMembers(state);
+  const check = performCheck(
+    {
+      skill: 'persuasion',
+      secondarySkill: 'negotiation',
+      attributes: ['evaluation', 'socialAwareness'],
+      participantIds: selectParticipants(crew, 'persuasion', 'individual'),
+      label: 'Work the crowd about the forecasts',
+    },
+    { characters: state.characters, morale: state.morale, hours: state.hours },
+    rng,
+  );
+
+  if (check.outcome === 'exceptional' || check.outcome === 'success') {
+    state.homeworld.forecastQuality += 1;
+    const estimate = estimateTerminalDay(state.homeworld, state.hours);
+    lines.push(
+      'A dispatcher, two freight crews and a retired atmospherics engineer, cross-checked against each other.',
+      `The picture sharpens: ${estimate.text.toLowerCase()}`,
+    );
+    pushLog(state, 'milestone', `Forecast refined: ${estimate.text}`);
+  } else if (check.outcome === 'partial') {
+    lines.push('Rumour, mostly. A few threads worth pulling next time.');
+  } else {
+    lines.push('Everyone repeats the same broadcasts you already heard. Nothing new.');
+  }
+
+  return lines;
+}
+
 /**
  * People you know who are not aboard. This is an INFORMATION list — the crew
  * screen uses it to answer "who do I know about". It confers no ability to act
@@ -777,9 +830,37 @@ export function visitContact(state: GameState, id: string, rng: Rng): string[] {
   }
 
   state.morale = clampMorale(state.morale + rng.int(0, 3));
-  lines.push(`You spend a few hours with ${contact.name}.`);
+
+  // The visit itself, in their voice. Family time on a dying world should not
+  // read like a receipt.
+  const isKin = state.homeworld.familyIds.includes(id) || rel.kind === 'family';
+  const FAMILY_VISITS = [
+    `${contact.name} cooks like the shortages are somebody else's problem, and for two hours they are.`,
+    `You argue about the ship, the route, the risk — the way only family argues, where the fight is the closeness.`,
+    `${contact.name} keeps steering the talk away from the forecasts. You let them, mostly.`,
+    `Old photographs, old grudges, old jokes. The house holds all three better than anywhere you are going.`,
+  ];
+  const CONTACT_VISITS = [
+    `${contact.name} talks shop, then rumours, then — quietly — about what they would do with a way off.`,
+    `A few hours of honest company. Out here that is worth more than it used to be.`,
+    `${contact.name} asks more questions about your ship than about you. Fair enough.`,
+  ];
+  const pool = isKin ? FAMILY_VISITS : CONTACT_VISITS;
+  lines.push(pool[(contact.portraitSeed + Math.floor(rel.familiarity / 10)) % pool.length]!);
+  lines.push(rel.value >= 60 ? 'You are close.' : 'Closer than you were.');
+
   pushLog(state, 'crew', `Visited ${contact.name} ${contact.surname}.`);
   return lines;
+}
+
+/** How a relationship reads at a glance — used wherever a person is listed. */
+export function relationshipLabel(value: number, familiarity: number): string {
+  if (familiarity < 15) return 'Barely known';
+  if (value >= 60) return 'Close';
+  if (value >= 30) return 'Warm';
+  if (value >= 5) return 'Friendly';
+  if (value > -20) return 'Distant';
+  return 'Strained';
 }
 
 /**

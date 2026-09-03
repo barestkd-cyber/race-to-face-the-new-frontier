@@ -18,6 +18,8 @@ import {
 import { attributeTotal, createCharacter, generateProtagonistDraft } from './character';
 import { applyRawWound, computeSeverityScore, severityFromScore, tickWounds } from './wounds';
 import { childPlaces, districtsAt, shipPlace, walkTo } from './places';
+import { endCombat } from './combat';
+import type { GameState } from './types';
 import { offerPassage } from './actions';
 import { skillUpgradeCost, attributeUpgradeCost } from './progression';
 import { Rng, streamRng } from './rng';
@@ -562,6 +564,111 @@ describe('places', () => {
     expect(result.ok).toBe(true);
     expect(state.hours, 'crossing a city is not free').toBeGreaterThan(before);
     expect(state.currentPlaceId).toBe(target.id);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Combat resolution truthfulness (audit P0-1)
+// ---------------------------------------------------------------------------
+
+describe('combat resolution', () => {
+  function makeCombatFixture(seed: string) {
+    const draft = generateProtagonistDraft(streamRng(seed, 'protagonist'));
+    const state = createGame(seed, draft.character);
+    const rng = new Rng(`${seed}:combat`);
+
+    const combat: NonNullable<GameState['combat']> = {
+      id: 'cmb_test',
+      title: 'Test Fight',
+      combatants: [],
+      hostiles: {},
+      activeId: null,
+      round: 3,
+      log: [],
+      returnTo: 'cockpit',
+      canFlee: true,
+      encounterId: 'enc_scavenger_pair',
+    };
+    state.combat = combat;
+    return { state, combat, rng };
+  }
+
+  const crewCombatant = (state: GameState, fled: boolean) => ({
+    id: 'c1',
+    characterId: state.playerId,
+    name: 'You',
+    hostile: false,
+    meter: 0,
+    range: 'medium' as const,
+    inCover: false,
+    fled,
+    portraitSeed: 1,
+  });
+
+  const hostileCombatant = (fled: boolean, credit: number) => ({
+    id: 'h1',
+    characterId: 'hst_test',
+    name: 'Raider',
+    hostile: true,
+    meter: 0,
+    range: 'medium' as const,
+    inCover: false,
+    fled,
+    portraitSeed: 2,
+    creditDrop: credit,
+    drops: [],
+  });
+
+  it('a fled fight can never be overwritten into a victory', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-1');
+    combat.combatants = [crewCombatant(state, true), hostileCombatant(true, 500)];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'fled', rng);
+    expect(state.combat?.resolution).toBe('fled');
+
+    // The stale double-call the audit caught live: hostiles disperse after the
+    // player already ran, and a second resolution tried to declare victory.
+    endCombat(state, 'victory', rng);
+    expect(state.combat?.resolution, 'first resolution stands').toBe('fled');
+    expect(state.resources.credits, 'no loot for running away').toBe(credits);
+  });
+
+  it('hostiles who got away are not loot', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-2');
+    combat.combatants = [crewCombatant(state, false), hostileCombatant(true, 500)];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'droveOff', rng);
+    expect(state.combat?.resolution).toBe('droveOff');
+    expect(state.resources.credits, 'they left with their pockets').toBe(credits);
+  });
+
+  it('the fallen are lootable and a death is named', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-3');
+
+    // A dead hostile drops; a dead crew member is recorded by name.
+    const deadHostile = hostileCombatant(false, 300);
+    combat.hostiles[deadHostile.characterId] = {
+      ...state.characters[state.playerId]!,
+      id: deadHostile.characterId,
+      alive: false,
+    };
+
+    const extra = createCharacter({ rng: streamRng('CBT-3', 'extra'), aboard: true });
+    extra.alive = false;
+    extra.departedReason = 'Killed — test';
+    state.characters[extra.id] = extra;
+    state.crewIds.push(extra.id);
+
+    combat.combatants = [crewCombatant(state, false), deadHostile];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'victory', rng);
+    expect(state.resources.credits).toBe(credits + 300);
+    expect(combat.casualties).toEqual([`${extra.name} ${extra.surname}`]);
+    expect(state.crewIds.includes(extra.id), 'dead crew leave the roster').toBe(false);
   });
 });
 

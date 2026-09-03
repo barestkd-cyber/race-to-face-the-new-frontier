@@ -185,7 +185,12 @@ export function generateMissions(
   const sites = ensureSites(state, location).filter((s) => !s.exhausted);
 
   for (let i = 0; i < count; i++) {
-    const template = rng.weighted(TEMPLATES.map((t) => ({ value: t, weight: t.weight })));
+    // Never post the same job twice on one board — two identical listings read
+    // as a bug even when the roll was fair.
+    const used = new Set(missions.map((m) => m.title));
+    const fresh = TEMPLATES.filter((t) => !used.has(t.title));
+    const pool = fresh.length > 0 ? fresh : TEMPLATES;
+    const template = rng.weighted(pool.map((t) => ({ value: t, weight: t.weight })));
 
     // A site mission needs a site to point at.
     if (template.usesSite && sites.length === 0) continue;
@@ -262,10 +267,14 @@ export function partyRules(mission: MissionDef, crewCount: number): PartyRules {
       return { min: 1, max: 1, label: 'Exactly one person.' };
     case 'group': {
       const cap = Math.min(mission.capacity, MISSIONS.groupMaxCapacity, crewCount);
+      const max = Math.max(MISSIONS.groupMin, cap);
       return {
         min: MISSIONS.groupMin,
-        max: Math.max(MISSIONS.groupMin, cap),
-        label: `Between ${MISSIONS.groupMin} and ${Math.max(MISSIONS.groupMin, cap)} people.`,
+        max,
+        label:
+          max === MISSIONS.groupMin
+            ? `Exactly ${max} people.`
+            : `Between ${MISSIONS.groupMin} and ${max} people.`,
       };
     }
     case 'crew':
@@ -300,6 +309,14 @@ export interface MissionResult {
 
 function templateFor(mission: MissionDef): MissionTemplate {
   return TEMPLATES.find((t) => t.title === mission.title) ?? TEMPLATES[0]!;
+}
+
+/**
+ * The skill a job actually runs on, so party selection can show each person's
+ * number for THIS work instead of asking the player to pick blind.
+ */
+export function missionPrimarySkill(mission: MissionDef): SkillKey {
+  return templateFor(mission).skill;
 }
 
 /**

@@ -5,11 +5,26 @@
  * job, pick who goes, pick who leads. Only one party can be out at a time.
  */
 
+import { useEffect, useMemo } from 'react';
 import { assessDanger, bestAssessor } from '../../engine/assess';
-import { canRunMission, missionsHere, partyRules, validateParty } from '../../engine/missions';
+import { availableAttacks } from '../../engine/inventory';
+import {
+  canRunMission,
+  missionPrimarySkill,
+  missionsHere,
+  partyRules,
+  validateParty,
+} from '../../engine/missions';
 import { briefSite } from '../../engine/scavenge';
 import { crewMembers } from '../../engine/sim';
-import type { MissionDef, MissionKind, ScavengeSite } from '../../engine/types';
+import {
+  SKILL_LABELS,
+  type Character,
+  type MissionDef,
+  type MissionKind,
+  type ScavengeSite,
+  type SkillKey,
+} from '../../engine/types';
 import { Btn, Chip, CrewRow, Duration, Empty, KV, Panel, Row } from '../components';
 import { store, useGame } from '../useStore';
 
@@ -109,6 +124,35 @@ export function MissionPrepScreen() {
     : { ok: true };
   const deployed = Boolean(state.expedition);
   const needsLeader = selectedIds.length >= 2;
+
+  /** What this job actually runs on, shown per person so nobody picks blind. */
+  const jobSkill: SkillKey = selectedMission
+    ? missionPrimarySkill(selectedMission)
+    : 'scavenging';
+
+  /**
+   * The audit's dead brother: a melee-only party walking into rifle country
+   * with no warning. One line here is the difference.
+   */
+  const loadoutWarning = useMemo(() => {
+    if (selectedIds.length === 0) return null;
+    const party = selectedIds
+      .map((id) => state.characters[id])
+      .filter((c): c is Character => Boolean(c));
+    const anyRanged = party.some((member) =>
+      availableAttacks(member, state.ship).some((attack) =>
+        attack.ranges.some((range) => range === 'medium' || range === 'long'),
+      ),
+    );
+    if (anyRanged) return null;
+    return 'Nobody in this party is carrying a ranged weapon.';
+  }, [selectedIds, state.characters, state.ship]);
+
+  // "Prepare" answers below the fold on a phone — bring the answer to the tap.
+  useEffect(() => {
+    if (!prep?.missionId && !prep?.siteId) return;
+    document.getElementById('party-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [prep?.missionId, prep?.siteId]);
   const leaderId = prep?.leaderId ?? null;
 
   return (
@@ -269,14 +313,20 @@ export function MissionPrepScreen() {
         <Panel
           title="Party"
           aside={`${selectedIds.length}/${rules.max}`}
+          id="party-panel"
         >
           <p className="prose">
             {selectedMission ? selectedMission.title : (selectedSite?.name ?? '')} — {rules.label}
+          </p>
+          <p className="tiny faint" style={{ marginTop: 2 }}>
+            This work runs on <span className="cyan">{SKILL_LABELS[jobSkill]}</span> — each
+            person's number for it is shown on their row.
           </p>
           <div className="rows">
             {crew.map((member) => {
               const picked = selectedIds.includes(member.id);
               const atCap = !picked && selectedIds.length >= rules.max;
+              const jobValue = member.skills[jobSkill] ?? 0;
               return (
                 <CrewRow
                   key={member.id}
@@ -285,10 +335,16 @@ export function MissionPrepScreen() {
                   onClick={atCap ? undefined : () => toggleMember(member.id)}
                   right={
                     <span
-                      style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, width: 84 }}
+                      style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, width: 112 }}
                     >
-                      <span className="tiny">
-                        Rest {Math.round(member.rested)} · Str {Math.round(member.stress)}
+                      <span
+                        className={jobValue >= 40 ? 'tiny green' : jobValue >= 15 ? 'tiny' : 'tiny amber'}
+                        style={{ textAlign: 'right' }}
+                      >
+                        {SKILL_LABELS[jobSkill]} {jobValue}
+                      </span>
+                      <span className="tiny faint" style={{ textAlign: 'right' }}>
+                        Rested {Math.round(member.rested)} · Stress {Math.round(member.stress)}
                       </span>
                       <span className="chips" style={{ justifyContent: 'flex-end' }}>
                         {picked && <Chip tone="amber">Going</Chip>}
@@ -301,6 +357,22 @@ export function MissionPrepScreen() {
               );
             })}
           </div>
+
+          {loadoutWarning && (
+            <div style={{ marginTop: 8 }}>
+              <p className="tiny amber" style={{ marginBottom: 6 }}>
+                {loadoutWarning} Whatever is out there will not wait for you to fetch it.
+              </p>
+              <Btn
+                small
+                block
+                onClick={() => store.equipSelected(selectedIds)}
+                sub="Best weapons and armor in the hold, shared out"
+              >
+                Equip Party From Hold
+              </Btn>
+            </div>
+          )}
 
           {needsLeader && (
             <>
