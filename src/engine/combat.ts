@@ -151,6 +151,7 @@ function makeHostileCharacter(
     backpack: [],
     isPlayer: false,
     aboard: false,
+    specSlots: [],
   };
 
   // Potential is never consulted for hostiles, but the map must exist so any

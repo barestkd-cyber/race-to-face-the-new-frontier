@@ -18,7 +18,9 @@ import {
   slotsUsed,
   type EquipSlot,
 } from '../../engine/inventory';
-import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../engine/progression';
+import { useState } from 'react';
+import { placeableSkills, quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../engine/progression';
+import { POTENTIAL_CAP, SPEC } from '../../engine/tuning';
 import { WOUNDS } from '../../engine/tuning';
 import { conditionLabel, SEVERITY_LABELS } from '../../engine/wounds';
 import {
@@ -129,6 +131,8 @@ export function CharacterScreen() {
     .sort((a, b) => b.rel.familiarity - a.rel.familiarity);
 
   const surfaced = character.traitKnowledge.filter((k) => k.known > 0);
+
+  const [armedMark, setArmedMark] = useState<number | null>(null);
 
   const attrsRaisable = ATTRIBUTE_KEYS.filter(
     (key) => quoteAttributeUpgrade(state, character, key).affordable,
@@ -354,12 +358,78 @@ export function CharacterScreen() {
       </Fold>
 
       {/* -- Skills -------------------------------------------------------- */}
-      <Fold title={skillsRaisable > 0 ? `Skills · ${skillsRaisable} can raise` : 'Skills'}>
+      <Fold
+        title={
+          character.specSlots.length > 0
+            ? `Skills · ${character.specSlots.length} mark${character.specSlots.length === 1 ? '' : 's'} to devote`
+            : skillsRaisable > 0
+              ? `Skills · ${skillsRaisable} can raise`
+              : 'Skills'
+        }
+      >
         <p className="prose prose--dim">
-          Each skill has a potential grade and a hard ceiling. Grade and any knowledge
-          specialisation are fixed for life — training moves the number, not the
-          ceiling.
+          Each skill has a potential grade and a hard ceiling. The grade is fate.
+          Devotion is not: specialization marks are yours to place, one craft each,
+          permanently — the one part of a person that grows by pure will.
         </p>
+
+        {character.specSlots.length > 0 && (
+          <div className="panel panel--inset" style={{ marginTop: 8 }}>
+            <div className="panel__body panel__body--tight">
+              <div className="split">
+                <span className="label">Devotion</span>
+                <span className="tiny dim">
+                  {character.specSlots.length} unplaced · permanent once placed
+                </span>
+              </div>
+              <div className="chips" style={{ marginTop: 6 }}>
+                {character.specSlots.map((mark, index) => (
+                  <button
+                    key={`${mark}-${index}`}
+                    type="button"
+                    className={armedMark === mark ? 'btn btn--sm btn--primary' : 'btn btn--sm'}
+                    onClick={() => setArmedMark((cur) => (cur === mark ? null : mark))}
+                  >
+                    ×{mark.toFixed(2)}
+                  </button>
+                ))}
+              </div>
+              {armedMark === null ? (
+                <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
+                  Pick a mark, then choose the craft it commits to. A skill must have
+                  reached {SPEC.placeMinSkill} first — devotion follows practice.
+                </p>
+              ) : placeableSkills(character).length === 0 ? (
+                <p className="tiny amber" style={{ marginTop: 6, marginBottom: 0 }}>
+                  Nothing has reached {SPEC.placeMinSkill} yet. Practice first; commit
+                  after.
+                </p>
+              ) : (
+                <div className="rows" style={{ marginTop: 6 }}>
+                  {placeableSkills(character)
+                    .sort((a, b) => (character.skills[b] ?? 0) - (character.skills[a] ?? 0))
+                    .map((skill) => {
+                      const grade = character.potential[skill].grade;
+                      const capNow = POTENTIAL_CAP[grade];
+                      const capAfter = Math.round(capNow * armedMark);
+                      return (
+                        <Row
+                          key={skill}
+                          title={`${SKILL_LABELS[skill]} — ${character.skills[skill]}`}
+                          sub={`Ceiling ${capNow} → ${capAfter}, for good`}
+                          onClick={() => {
+                            store.placeSpec(character.id, skill, armedMark);
+                            setArmedMark(null);
+                          }}
+                          right={<Chip tone="amber">Commit</Chip>}
+                        />
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {Object.entries(SKILL_GROUPS).map(([groupKey, group]) => (
           <div key={groupKey} style={{ marginTop: 10 }}>
             <span className="label">{group.label}</span>

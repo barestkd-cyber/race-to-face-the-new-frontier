@@ -992,6 +992,27 @@ export const START = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Knowledge specialization — devotion is placed, not dealt
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything else about a person is rolled. Specialization marks are the one
+ * lever that is pure will: the protagonist starts with the whole budget
+ * unplaced and commits marks during the run. People met along the way arrive
+ * with some or all of their devotion already spent, scaled by seniority.
+ */
+export const SPEC = {
+  /** A mark can only be placed on a craft actually begun. */
+  placeMinSkill: 20,
+  /** Age at which an NPC starts having placed anything. */
+  autoAgeFloor: 18,
+  /** Years from floor to a fully-placed life. */
+  autoAgeSpan: 30,
+  /** Even the youngest recruit has usually committed to something. */
+  autoBaseFraction: 0.2,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Onboarding
 // ---------------------------------------------------------------------------
 

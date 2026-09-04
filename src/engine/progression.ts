@@ -8,8 +8,9 @@
 
 import { skillCap } from './check';
 import { deriveMaxHealth } from './character';
-import { ATTRIBUTE_GEN, XP } from './tuning';
-import type { AttributeKey, Character, GameState, SkillKey } from './types';
+import { ATTRIBUTE_GEN, SPEC, XP } from './tuning';
+import { pushLog } from './log';
+import { SKILL_KEYS, SKILL_LABELS, type AttributeKey, type Character, type GameState, type SkillKey } from './types';
 
 // ---------------------------------------------------------------------------
 // Costs
@@ -169,4 +170,69 @@ export function skillProgress(character: Character, skill: SkillKey): number {
   const cap = skillCap(character, skill);
   if (cap <= 0) return 0;
   return Math.max(0, Math.min(1, character.skills[skill] / cap));
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge specialization — placing devotion
+// ---------------------------------------------------------------------------
+
+export interface PlaceSpecResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Commit one unplaced mark to a skill, permanently. This is the one lever of
+ * growth that is pure will rather than dice: the mark raises the skill's
+ * ceiling for life and can never be moved again.
+ *
+ * The only gate is honesty — you cannot devote yourself to a craft you have
+ * not begun.
+ */
+export function placeSpecialization(
+  state: GameState,
+  character: Character,
+  skill: SkillKey,
+  multiplier: number,
+): PlaceSpecResult {
+  const slotIndex = character.specSlots.indexOf(multiplier);
+  if (slotIndex === -1) {
+    return { ok: false, message: 'No such mark left to place.' };
+  }
+  if (character.potential[skill].specialization > 1) {
+    return { ok: false, message: `${character.name} is already devoted to that craft.` };
+  }
+  if ((character.skills[skill] ?? 0) < SPEC.placeMinSkill) {
+    return {
+      ok: false,
+      message: `Devotion follows practice — ${SKILL_LABELS[skill]} needs to reach ${SPEC.placeMinSkill} first.`,
+    };
+  }
+
+  character.specSlots.splice(slotIndex, 1);
+  character.potential[skill] = {
+    ...character.potential[skill],
+    specialization: multiplier,
+  };
+
+  const cap = skillCap(character, skill);
+  pushLog(
+    state,
+    'milestone',
+    `${character.name} commits to ${SKILL_LABELS[skill]} — ceiling now ${cap}.`,
+  );
+  return {
+    ok: true,
+    message: `${character.name} commits to ${SKILL_LABELS[skill]}. Ceiling raised to ${cap}, for good.`,
+  };
+}
+
+/** Skills a given mark could legally land on right now. */
+export function placeableSkills(character: Character): SkillKey[] {
+  if (character.specSlots.length === 0) return [];
+  return SKILL_KEYS.filter(
+    (skill) =>
+      character.potential[skill].specialization === 1 &&
+      (character.skills[skill] ?? 0) >= SPEC.placeMinSkill,
+  );
 }
