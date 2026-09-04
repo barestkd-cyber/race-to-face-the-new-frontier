@@ -452,6 +452,13 @@ export interface Character {
 
   /** True for the protagonist. */
   isPlayer: boolean;
+
+  /**
+   * Unplaced knowledge-specialization marks (e.g. [1.2, 1.15]), strongest
+   * first. Placing one onto a skill is permanent and raises that skill's
+   * ceiling; the budget never refills. The protagonist starts with all six.
+   */
+  specSlots: number[];
   /** Non-crew characters (family, contacts) live in the roster but are not aboard. */
   aboard: boolean;
   /** Recruitment terms still owed, if any. */

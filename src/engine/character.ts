@@ -10,7 +10,7 @@ import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
 import type { Rng } from './rng';
-import { ATTRIBUTE_GEN, HEALTH, INVENTORY, SKILLS_TUNING, TRAITS_TUNING } from './tuning';
+import { ATTRIBUTE_GEN, HEALTH, INVENTORY, SKILLS_TUNING, SPEC, TRAITS_TUNING } from './tuning';
 import {
   ATTRIBUTE_KEYS,
   FACETS,
@@ -175,32 +175,72 @@ export function generatePotential(rng: Rng, bias: GenerationBias): SkillPotentia
     ]);
   }
 
-  // Knowledge specialization: 2 at x1.20, 2 at x1.15, 2 at x1.10.
-  const specialization = {} as Record<SkillKey, number>;
-  for (const skill of SKILL_KEYS) specialization[skill] = 1;
-
-  // Prefer specialising where the character already has a strong signal.
-  const ranked = [...SKILL_KEYS].sort((a, b) => {
-    const aScore = (bias.skill[a] ?? 0) + (grades[a] === 'A' ? 8 : grades[a] === 'B' ? 4 : 0);
-    const bScore = (bias.skill[b] ?? 0) + (grades[b] === 'A' ? 8 : grades[b] === 'B' ? 4 : 0);
-    return bScore - aScore;
-  });
-
-  // Shuffle the top slice so identical biases do not always produce the same picks.
-  const pool = rng.shuffle(ranked.slice(0, 10)).concat(ranked.slice(10));
-  let cursor = 0;
-  for (const tier of SKILLS_TUNING.specializationAllowance) {
-    for (let i = 0; i < tier.count && cursor < pool.length; i++) {
-      specialization[pool[cursor]!] = tier.multiplier;
-      cursor++;
-    }
-  }
-
+  // Knowledge specialization is NOT dealt here. Grades are fate; devotion is
+  // will. Every character starts at x1.00 and marks are placed separately —
+  // by the life already lived for people you meet, by the player for the
+  // protagonist, one commitment at a time, along the way.
   const map = {} as SkillPotentialMap;
   for (const skill of SKILL_KEYS) {
-    map[skill] = { grade: grades[skill], specialization: specialization[skill] };
+    map[skill] = { grade: grades[skill], specialization: 1 };
   }
   return map;
+}
+
+/** The full budget of unplaced marks, strongest first. */
+export function specializationBudget(): number[] {
+  const budget: number[] = [];
+  for (const tier of SKILLS_TUNING.specializationAllowance) {
+    for (let i = 0; i < tier.count; i++) budget.push(tier.multiplier);
+  }
+  return budget.sort((a, b) => b - a);
+}
+
+/**
+ * Where a life would have pointed its devotion: strong bias and high ceilings
+ * first, lightly shuffled so identical careers do not clone each other.
+ */
+function rankSpecPreference(
+  rng: Rng,
+  bias: GenerationBias,
+  potential: SkillPotentialMap,
+): SkillKey[] {
+  const ranked = [...SKILL_KEYS].sort((a, b) => {
+    const g = (k: SkillKey) =>
+      potential[k].grade === 'A' ? 8 : potential[k].grade === 'B' ? 4 : 0;
+    return (bias.skill[b] ?? 0) + g(b) - ((bias.skill[a] ?? 0) + g(a));
+  });
+  return rng.shuffle(ranked.slice(0, 10)).concat(ranked.slice(10));
+}
+
+/**
+ * Auto-place part of the budget for a character who already lived their
+ * commitments. Seniority decides how much of their devotion is spent: an old
+ * professional arrives fully specialised, a young dockhand arrives with marks
+ * still open — open marks the captain can later direct.
+ */
+export function autoPlaceSpecializations(
+  rng: Rng,
+  potential: SkillPotentialMap,
+  bias: GenerationBias,
+  age: number,
+): { placedInto: SkillPotentialMap; remaining: number[] } {
+  const budget = specializationBudget();
+  const seniority = Math.max(0, Math.min(1, (age - SPEC.autoAgeFloor) / SPEC.autoAgeSpan));
+  const fraction = Math.max(
+    0,
+    Math.min(1, SPEC.autoBaseFraction + seniority * (1 - SPEC.autoBaseFraction) + rng.float(-0.15, 0.15)),
+  );
+  const placeCount = Math.round(budget.length * fraction);
+
+  const preference = rankSpecPreference(rng, bias, potential);
+  let placed = 0;
+  for (const skill of preference) {
+    if (placed >= placeCount) break;
+    if (potential[skill].specialization > 1) continue;
+    potential[skill] = { ...potential[skill], specialization: budget[placed]! };
+    placed += 1;
+  }
+  return { placedInto: potential, remaining: budget.slice(placed) };
 }
 
 // ---------------------------------------------------------------------------
@@ -469,12 +509,24 @@ export function createCharacter(options: CreateCharacterOptions): Character {
 
   const { attributes, playerPoints } = generateAttributes(rng, bias, options.attributeTotal);
   const potential = generatePotential(rng, bias);
-  const { skills } = generateSkills(rng, potential, bias);
-  const traits = generateTraits(rng, bias);
 
   const given = rng.pick(NAME_TABLES.given);
   const surname = options.surname ?? rng.pick(NAME_TABLES.surnames);
   const ageRange = options.ageRange ?? [21, 56];
+  const age = rng.taperedInt(ageRange[0], ageRange[1], 2);
+
+  // Devotion: dealt for the lives already lived, unspent for the one the
+  // player is about to live. Skills roll AFTER placement so an NPC's craft can
+  // sit above the plain grade cap the way a life of practice would put it.
+  let specSlots: number[];
+  if (options.isPlayer) {
+    specSlots = specializationBudget();
+  } else {
+    specSlots = autoPlaceSpecializations(rng, potential, bias, age).remaining;
+  }
+
+  const { skills } = generateSkills(rng, potential, bias);
+  const traits = generateTraits(rng, bias);
 
   const maxHealth = deriveMaxHealth(attributes);
 
@@ -482,7 +534,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     id: seededCharacterId(rng, options.isPlayer ? 'pc' : 'chr'),
     name: given,
     surname,
-    age: rng.taperedInt(ageRange[0], ageRange[1], 2),
+    age,
     pronouns: rng.weighted([
       { value: 'she/her' as const, weight: 44 },
       { value: 'he/him' as const, weight: 44 },
@@ -510,6 +562,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     backpack: [],
     isPlayer: options.isPlayer ?? false,
     aboard: options.aboard ?? true,
+    specSlots,
   };
 
   // The protagonist keeps their allocation pool for the character-gen screen;

@@ -269,8 +269,11 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
 
       <Fold title={`Skills — ${skillRemaining} left`}>
         <p className="tiny faint">
-          Every skill has a ceiling set by potential, shown beside it as grade and cap. Points
-          spent here cannot be taken back below the value the life history produced.
+          Every skill has a ceiling set by potential, shown beside it as grade and cap.
+          Their six devotion marks are deliberately unplaced: everything else about this
+          person was dealt, but what they commit to is decided in play, once a craft has
+          been practised. Points spent here cannot be taken back below the value the
+          life history produced.
         </p>
         <div className="divider" />
         <div className="stack">

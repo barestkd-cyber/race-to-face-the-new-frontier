@@ -21,7 +21,7 @@ import { childPlaces, districtsAt, shipPlace, walkTo } from './places';
 import { endCombat } from './combat';
 import type { GameState } from './types';
 import { offerPassage } from './actions';
-import { skillUpgradeCost, attributeUpgradeCost } from './progression';
+import { skillUpgradeCost, attributeUpgradeCost, placeSpecialization } from './progression';
 import { Rng, streamRng } from './rng';
 import { generateShip, safeCrewCapacity } from './ship';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP } from './tuning';
@@ -154,18 +154,62 @@ describe('character generation', () => {
     }
   });
 
-  it('allocates the specialization budget exactly', () => {
+  it('conserves the devotion budget: placed marks plus open slots always total six', () => {
     for (let seed = 0; seed < 60; seed++) {
       const character = createCharacter({ rng: new Rng(`spec-${seed}`) });
-      const counts = new Map<number, number>();
-      for (const skill of SKILL_KEYS) {
-        const mult = character.potential[skill].specialization;
-        counts.set(mult, (counts.get(mult) ?? 0) + 1);
-      }
-      expect(counts.get(1.2) ?? 0).toBe(2);
-      expect(counts.get(1.15) ?? 0).toBe(2);
-      expect(counts.get(1.1) ?? 0).toBe(2);
+      const placed = SKILL_KEYS.map((k) => character.potential[k].specialization).filter((m) => m > 1);
+      const all = [...placed, ...character.specSlots].sort((a, b) => b - a);
+      expect(all).toEqual([1.2, 1.2, 1.15, 1.15, 1.1, 1.1]);
+      // One craft per mark, never stacked.
+      expect(new Set(placed.map((m, i) => `${m}:${i}`)).size).toBe(placed.length);
     }
+  });
+
+  it('deals no devotion to the protagonist — that lever is the player’s alone', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const draft = generateProtagonistDraft(streamRng(`pspec-${seed}`, 'protagonist'));
+      const placed = SKILL_KEYS.filter((k) => draft.character.potential[k].specialization > 1);
+      expect(placed).toEqual([]);
+      expect([...draft.character.specSlots].sort((a, b) => b - a)).toEqual([
+        1.2, 1.2, 1.15, 1.15, 1.1, 1.1,
+      ]);
+    }
+  });
+
+  it('lets an old professional arrive more devoted than a young recruit, on average', () => {
+    let young = 0;
+    let old = 0;
+    const runs = 80;
+    for (let seed = 0; seed < runs; seed++) {
+      const kid = createCharacter({ rng: new Rng(`young-${seed}`), ageRange: [18, 22] });
+      const vet = createCharacter({ rng: new Rng(`old-${seed}`), ageRange: [48, 56] });
+      young += 6 - kid.specSlots.length;
+      old += 6 - vet.specSlots.length;
+    }
+    expect(old / runs).toBeGreaterThan(young / runs);
+  });
+
+  it('places devotion only where practice has been, permanently', () => {
+    const draft = generateProtagonistDraft(streamRng('place-1', 'protagonist'));
+    const state = createGame('place-1', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= 20)!;
+    const raw = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) < 20)!;
+
+    // A craft not yet begun refuses the mark.
+    expect(placeSpecialization(state, captain, raw, 1.2).ok).toBe(false);
+
+    // A practised one takes it, and the ceiling moves.
+    const capBefore = POTENTIAL_CAP[captain.potential[practised].grade];
+    const result = placeSpecialization(state, captain, practised, 1.2);
+    expect(result.ok).toBe(true);
+    expect(captain.specSlots.filter((m) => m === 1.2)).toHaveLength(1);
+    expect(captain.potential[practised].specialization).toBe(1.2);
+    expect(result.message).toContain(`${Math.round(capBefore * 1.2)}`);
+
+    // Never twice on the same craft, even with marks left.
+    expect(placeSpecialization(state, captain, practised, 1.15).ok).toBe(false);
   });
 
   it('gives every character two or three hidden traits', () => {

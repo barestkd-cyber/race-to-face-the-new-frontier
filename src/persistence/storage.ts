@@ -289,6 +289,12 @@ function migrate(state: GameState): GameState {
   if (patched.onboardingStep === undefined) patched.onboardingStep = 99;
   if (!patched.pendingFarewells) patched.pendingFarewells = [];
 
+  // Saves from before devotion became placeable: their specs were dealt at
+  // generation, so they simply have nothing left to place.
+  for (const person of Object.values(patched.characters as Record<string, { specSlots?: number[] }>)) {
+    if (!person.specSlots) person.specSlots = [];
+  }
+
   // A place id that no longer exists would strand the player outside the ship.
   if (
     patched.currentPlaceId &&

@@ -47,7 +47,7 @@ import { pushLog } from '../engine/log';
 import { boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
 import { beginNewRun, checkRunEnded, createGame, rerollProtagonist, type NewRunDraft } from '../engine/newGame';
-import { upgradeAttribute, upgradeSkill } from '../engine/progression';
+import { placeSpecialization, upgradeAttribute, upgradeSkill } from '../engine/progression';
 import {
   negotiate as negotiateRecruit,
   offerBerth,
@@ -745,6 +745,17 @@ class GameStore {
       autoEquipParty(crewMembers(state), state.ship);
       this.pushToast(['Crew equipped from the hold.']);
     });
+  };
+
+  /** Commit a specialization mark. Permanent, by design. */
+  placeSpec = (characterId: string, skill: SkillKey, multiplier: number): void => {
+    this.mutate((state) => {
+      const person = state.characters[characterId];
+      if (!person) return;
+      const result = placeSpecialization(state, person, skill, multiplier);
+      this.pushToast([result.message], result.ok ? 'Devotion' : undefined);
+    });
+    void this.autosave();
   };
 
   /** Equip just the selected party — used from mission prep. */

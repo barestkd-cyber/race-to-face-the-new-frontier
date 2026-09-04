@@ -264,6 +264,10 @@ export function RecruitCandidateScreen() {
         ))}
         <p className="tiny faint">
           Their five strongest skills. Everything else they have is weaker than these.
+          {candidate.character.specSlots.length > 0 &&
+            ` ${candidate.character.specSlots.length} devotion mark${
+              candidate.character.specSlots.length === 1 ? '' : 's'
+            } still unplaced — room to grow, under your direction.`}
         </p>
       </Panel>
 
