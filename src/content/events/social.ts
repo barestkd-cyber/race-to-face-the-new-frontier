@@ -64,6 +64,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'search-lockers',
         label: 'Search the lockers yourself',
+        tags: ['humiliation'],
         hint: 'You will know the truth. They will know you searched.',
         check: {
           skill: 'scavenging',
@@ -121,6 +122,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'sit-in',
         label: 'Sit in for a few hands',
+        tags: ['humor', 'gamble'],
         hint: 'A captain who plays is a captain who can lose.',
         check: {
           skill: 'negotiation',
@@ -207,6 +209,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'talk-privately',
         label: 'Take {actor} somewhere quiet and ask why',
+        tags: ['privacy'],
         hint: 'Slow. Might actually work.',
         check: {
           skill: 'persuasion',
@@ -250,6 +253,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'cover-the-watch',
         label: 'Cover the missed watches yourself and say nothing',
+        tags: ['deception', 'privacy'],
         hint: 'Costs you sleep, not the crew.',
         effects: { hours: 6 },
         result: {
@@ -260,6 +264,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'set-terms',
         label: 'Set hard terms in front of the crew',
+        tags: ['punishment', 'humiliation', 'authority'],
         hint: 'Make the rule visible.',
         check: {
           skill: 'negotiation',
@@ -521,6 +526,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'say-it-plainly',
         label: 'Talk to both of them, plainly, once',
+        tags: ['honesty'],
         hint: 'One awkward hour, no ambiguity afterwards.',
         check: {
           skill: 'persuasion',
@@ -568,6 +574,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'answer-honestly',
         label: 'Tell them the truth, including the parts you do not know',
+        tags: ['honesty'],
         hint: 'Honesty is a gamble in a small room.',
         check: {
           skill: 'persuasion',
@@ -942,6 +949,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'take-it',
         label: 'Take responsibility without qualifying it',
+        tags: ['accountability', 'honesty'],
         hint: 'No excuses offered.',
         check: {
           skill: 'persuasion',
@@ -1042,6 +1050,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'quiet-search',
         label: 'Look into it quietly yourself',
+        tags: ['privacy'],
         hint: 'Slow, discreet, uncertain.',
         check: {
           skill: 'scavenging',
@@ -1181,6 +1190,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'supervised-bout',
         label: 'Let them settle it with gloves on, supervised',
+        tags: ['confrontation'],
         hint: 'Old-fashioned. Risky.',
         check: { skill: 'brawling', participation: 'duo', criticalRisk: true },
         effects: { hours: 2 },
@@ -1413,6 +1423,7 @@ export const SOCIAL_EVENTS: GameEventDef[] = [
       {
         id: 'screen-first',
         label: 'Screen it yourself before anyone hears it',
+        tags: ['privacy'],
         hint: 'You carry it first.',
         check: {
           skill: 'persuasion',

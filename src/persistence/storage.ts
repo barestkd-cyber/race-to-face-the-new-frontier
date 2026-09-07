@@ -281,7 +281,7 @@ const LEGACY_TRAIT_MAP = new Map<string, string>([
   ['protective', 'protective-of-dependents'],
   ['compassionate', 'compassionate'],
   ['dutiful', 'duty-bound'],
-  ['patient', 'patient'],
+  ['patient', 'strategically-patient'],
   ['generous', 'generous'],
   ['brave', 'brave'],
   ['cooperative', 'cooperative'],
@@ -301,6 +301,19 @@ const LEGACY_TRAIT_MAP = new Map<string, string>([
   ['cautious', 'cautious'],
   ['opportunistic', 'opportunistic'],
   ['stubborn', 'traditionalist'],
+]);
+
+/**
+ * v0.6 gave three re-used words their own names. Saves written before that
+ * carry the old ids; identity is the id, so this is a straight rename.
+ */
+const RENAMED_TRAITS = new Map<string, string>([
+  ['patient', 'strategically-patient'],
+  ['patient-patience-time', 'unhurried'],
+  ['humble', 'unassuming'],
+  ['humble-pride-shame', 'humble'],
+  ['thick-skinned', 'criticism-resistant'],
+  ['thick-skinned-pride-shame', 'thick-skinned'],
 ]);
 
 /** Exported so the migration can be tested without touching IndexedDB. */
@@ -360,7 +373,8 @@ function migrate(state: GameState): GameState {
     delete person.demeanor;
     if (!Array.isArray(person.traits)) continue;
     const migrated = person.traits
-      .map((key) => (LEGACY_TRAIT_MAP.has(key) ? LEGACY_TRAIT_MAP.get(key)! : key))
+      .map((key) => LEGACY_TRAIT_MAP.get(key) ?? key)
+      .map((key) => RENAMED_TRAITS.get(key) ?? key)
       .filter((id, index, all) => all.indexOf(id) === index);
     const knowledge = person.traitKnowledge ?? [];
     person.traitKnowledge = migrated.map((id, index) => ({

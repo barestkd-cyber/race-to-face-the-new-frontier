@@ -508,6 +508,7 @@ export const HOSTILE_EVENTS: GameEventDef[] = [
       {
         id: 'shout-them-off',
         label: 'Show yourself and tell them to move on',
+        tags: ['mercy', 'deescalation'],
         hint: 'Usually enough.',
         check: { skill: 'persuasion', participation: 'individual' },
         effects: { hours: 1 },
@@ -572,6 +573,7 @@ export const HOSTILE_EVENTS: GameEventDef[] = [
       {
         id: 'feed-them',
         label: 'Give them food and let them go',
+        tags: ['mercy'],
         hint: 'Costs stores you need.',
         requires: { minFood: 3 },
         effects: { hours: 2, food: -3 },
@@ -1458,6 +1460,7 @@ export const HOSTILE_EVENTS: GameEventDef[] = [
       {
         id: 'back-away',
         label: 'Back away slowly toward the ravine',
+        tags: ['deescalation', 'nonviolence'],
         hint: 'Territorial animals want you gone, not eaten.',
         check: {
           skill: 'exploration',
@@ -1795,6 +1798,7 @@ export const HOSTILE_EVENTS: GameEventDef[] = [
       {
         id: 'relay-and-continue',
         label: 'Relay the call to anyone else and hold course',
+        tags: ['abandon_others'],
         hint: 'The compromise.',
         effects: { hours: 1 },
         result: {

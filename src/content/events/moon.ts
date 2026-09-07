@@ -420,6 +420,7 @@ export const MOON_EVENTS: GameEventDef[] = [
       {
         id: 'strip-harvester',
         label: 'Write off the crew rescue and strip the near-side plant',
+        tags: ['abandon_others'],
         hint: '5 hours. Cold, practical, and the harvest crew will hear about it.',
         check: {
           skill: 'scavenging',
@@ -476,6 +477,7 @@ export const MOON_EVENTS: GameEventDef[] = [
       {
         id: 'address-them',
         label: 'Stand up and tell them what you can actually offer',
+        tags: ['honesty'],
         hint: '4 hours. Honest, public, and it will not make everyone happy.',
         check: {
           skill: 'persuasion',
@@ -651,6 +653,7 @@ export const MOON_EVENTS: GameEventDef[] = [
       {
         id: 'no-room',
         label: 'Tell them you have no room',
+        tags: ['honesty'],
         effects: { hours: 1 },
         result: {
           text: 'She does not argue, which is somehow harder than if she had. They go back inside and shut the hatch against the cold.',
@@ -1046,6 +1049,7 @@ export const MOON_EVENTS: GameEventDef[] = [
       {
         id: 'not-our-ring',
         label: 'Your own life support needs the parts more',
+        tags: ['honesty'],
         effects: { hours: 1 },
         result: {
           text: 'You tell the chief what you can spare, which is nothing, and he nods like a man who has been told that four times today.',

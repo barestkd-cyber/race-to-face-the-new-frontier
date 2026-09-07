@@ -6,10 +6,7 @@
  * here is a synonym for anything else, and no trait resolves by being
  * translated into a shared behaviour class.
  *
- * Three words are listed twice in two different groups, with different
- * tags and different rules — Patient, Humble and Thick-Skinned. They are two
- * entries each, not one, because the library means two different things by
- * them. The second copy carries its group in its id.
+ * Every visible name is unique, and identity is the id — never the label.
  *
  * `favored` is what this person is drawn to and steadied by.
  * `opposed` is what costs them.
@@ -604,8 +601,8 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'sudden advantageous openings gain weight; passing a low-cost opportunity can mildly reduce morale.',
   },
   {
-    id: 'patient',
-    label: 'Patient',
+    id: 'strategically-patient',
+    label: 'Strategically Patient',
     group: 'Risk & Reward',
     favored: ['patience', 'wait', 'plan'],
     opposed: ['premature_action'],
@@ -977,15 +974,13 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'public status changes strongly affect morale; save-face options gain weight.',
   },
   {
-    id: 'humble',
-    label: 'Humble',
+    id: 'unassuming',
+    label: 'Unassuming',
     group: 'Ambition & Status',
     favored: ['service', 'cooperation'],
     opposed: ['boasting', 'recognition'],
     intensity: 'mild',
     rule: 'recognition has muted effect; giving away credit carries little cost.',
-    attribute: 'charisma',
-    direction: 'low',
   },
   {
     id: 'recognition-seeking',
@@ -1407,15 +1402,13 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     direction: 'low',
   },
   {
-    id: 'thick-skinned',
-    label: 'Thick-Skinned',
+    id: 'criticism-resistant',
+    label: 'Criticism-Resistant',
     group: 'Emotional Regulation',
     favored: ['directness', 'criticism'],
     opposed: ['humiliation'],
     intensity: 'strong',
     rule: 'insults/criticism have reduced morale impact; reputation harm still matters if other traits care.',
-    attribute: 'resilience',
-    direction: 'high',
   },
   {
     id: 'brooding',
@@ -2189,8 +2182,8 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'favors chosen subgroup within larger crew; inter-faction disputes can create relationship bias.',
   },
   {
-    id: 'patient-patience-time',
-    label: 'Patient',
+    id: 'unhurried',
+    label: 'Unhurried',
     group: 'Patience & Time',
     favored: ['patience', 'wait'],
     opposed: ['urgency_without_need'],
@@ -2293,7 +2286,7 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'humiliation causes major morale loss; save-face options gain weight.',
   },
   {
-    id: 'humble-pride-shame',
+    id: 'humble',
     label: 'Humble',
     group: 'Pride & Shame',
     favored: ['service', 'accountability'],
@@ -2316,7 +2309,7 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     direction: 'low',
   },
   {
-    id: 'thick-skinned-pride-shame',
+    id: 'thick-skinned',
     label: 'Thick-Skinned',
     group: 'Pride & Shame',
     favored: ['directness', 'criticism'],

@@ -577,6 +577,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'decline-dive',
         label: 'Decline the job',
+        tags: ['honesty'],
         hint: 'Costs the fee you did not earn',
         result: {
           text: 'You tell them your crew are not divers, which is true. They accept it without comment and go back to the problem.',
@@ -752,6 +753,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'ask-the-host',
         label: 'Ask her, plainly, what is expected',
+        tags: ['honesty', 'humiliation'],
         hint: 'Honest, and it costs standing',
         effects: { hours: 4 },
         result: {
@@ -898,6 +900,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'tell-her-no',
         label: 'Tell her no',
+        tags: ['honesty'],
         hint: 'Free, and clean',
         result: {
           text: 'You give her the honest reason: a ship this size, a leg that long, and stores that do not stretch. She takes it standing very straight and thanks you for not lying about it.',
@@ -1219,6 +1222,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'sponsor-through-a-house',
         label: 'Get a shelf house to sponsor the request',
+        tags: ['promise'],
         hint: 'Eight hours, and you will owe them',
         effects: { hours: 8 },
         check: { skill: 'negotiation', attributes: ['evaluation', 'socialAwareness'], participation: 'individual' },
@@ -1415,6 +1419,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'stay-out-of-fever',
         label: 'Send the messenger away',
+        tags: ['honesty'],
         hint: 'Free, and quarantine discipline is a real argument',
         result: {
           text: 'You give the honest reason: a closed hull, a long leg, and no way to isolate an outbreak aboard. It is a defensible position and the messenger rows back alone.',
@@ -1649,6 +1654,7 @@ export const PLANET_EVENTS: GameEventDef[] = [
       {
         id: 'report-to-houses',
         label: 'Tell the houses what you were told',
+        tags: ['punishment'],
         hint: 'Three hours, and the fisher will be exposed',
         effects: { hours: 3 },
         result: {

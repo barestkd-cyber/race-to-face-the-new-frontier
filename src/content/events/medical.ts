@@ -589,6 +589,7 @@ export const MEDICAL_EVENTS: GameEventDef[] = [
       {
         id: 'ask-why-hidden',
         label: 'Ask why they did not tell you',
+        tags: ['honesty'],
         hint: 'The conversation matters more than the answer.',
         check: {
           skill: 'persuasion',
@@ -1458,6 +1459,7 @@ export const MEDICAL_EVENTS: GameEventDef[] = [
       {
         id: 'quick-triage',
         label: 'Triage quickly and send the minor ones away',
+        tags: ['routine'],
         hint: 'One hour.',
         effects: { hours: 1 },
         result: {

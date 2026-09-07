@@ -99,6 +99,7 @@ export const TECHNICAL_EVENTS: GameEventDef[] = [
       {
         id: 'ignore',
         label: 'Log it and keep flying',
+        tags: ['routine'],
         hint: 'Free.',
         effects: { hours: 1 },
         result: {
@@ -269,6 +270,7 @@ export const TECHNICAL_EVENTS: GameEventDef[] = [
       {
         id: 'ride-it',
         label: 'Ride it out until the next port',
+        tags: ['honesty'],
         hint: 'Free. Everyone stays tired.',
         effects: { hours: 1 },
         result: {
@@ -1209,6 +1211,7 @@ export const TECHNICAL_EVENTS: GameEventDef[] = [
       {
         id: 'watch-it',
         label: 'Leave it and monitor what it does',
+        tags: ['routine'],
         hint: 'Costs nothing now.',
         effects: { hours: 2 },
         result: {
@@ -1335,6 +1338,7 @@ export const TECHNICAL_EVENTS: GameEventDef[] = [
       {
         id: 'log-and-move',
         label: 'Photograph it, log it, move on',
+        tags: ['routine'],
         hint: 'One hour.',
         effects: { hours: 1 },
         result: {

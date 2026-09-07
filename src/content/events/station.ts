@@ -228,6 +228,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'talk-to-supervisor',
         label: 'Make your case to the supervisor',
+        tags: ['honesty'],
         hint: 'Two hours, and you will have to be honest',
         effects: { hours: 2 },
         check: { skill: 'persuasion', attributes: ['charisma', 'socialAwareness'], participation: 'individual' },
@@ -671,6 +672,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'sweep-first',
         label: 'Stall them and sweep the ship yourself first',
+        tags: ['deception'],
         hint: 'Two hours, and they will notice',
         effects: { hours: 2 },
         check: { skill: 'stealth', secondarySkill: 'scavenging', participation: 'group', criticalRisk: true },
@@ -1333,6 +1335,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'report-to-security',
         label: 'Report it to station security',
+        tags: ['honesty', 'institution'],
         hint: 'Two hours of forms',
         effects: { hours: 2 },
         result: {
@@ -1904,6 +1907,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'play-serious',
         label: 'Sit down and play properly',
+        tags: ['gamble'],
         hint: 'Six hours, real money',
         requires: { minCredits: 400 },
         effects: { hours: 6, credits: -400 },
@@ -1939,6 +1943,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'play-for-information',
         label: 'Play small and listen',
+        tags: ['gamble'],
         hint: 'Four hours, cheap seat',
         requires: { minCredits: 100 },
         effects: { hours: 4, credits: -100 },
@@ -2060,6 +2065,7 @@ export const STATION_EVENTS: GameEventDef[] = [
       {
         id: 'send-her-off',
         label: 'Tell her the ship is full',
+        tags: ['honesty'],
         hint: 'Free, and she will not ask twice',
         result: {
           text: 'She takes it well, which makes it worse. She tells you one thing about the engine trim as a parting gift and walks back into the concourse crowd.',

@@ -2166,24 +2166,43 @@ describe('personality is per character, not per ship', () => {
     expect(jumpy.stress).toBeGreaterThan(before.jumpy);
   });
 
-  it('keeps all 250 canonical traits, including the three listed twice', () => {
+  it('keeps all 250 canonical traits, each with a unique name and id', () => {
     expect(PERSONALITY_TRAITS).toHaveLength(250);
     expect(new Set(PERSONALITY_TRAITS.map((t) => t.id)).size).toBe(250);
+    expect(new Set(PERSONALITY_TRAITS.map((t) => t.label)).size).toBe(250);
 
-    // Patient, Humble and Thick-Skinned appear in two groups with different
-    // rules. Both copies survive, and they do not resolve identically.
-    for (const label of ['Patient', 'Humble', 'Thick-Skinned']) {
-      const copies = PERSONALITY_TRAITS.filter((t) => t.label === label);
-      expect(copies).toHaveLength(2);
-      expect(copies[0]!.group).not.toBe(copies[1]!.group);
-      expect(copies[0]!.opposed).not.toEqual(copies[1]!.opposed);
+    // The six the library renamed in v0.6, and the pairs they separate.
+    const named = (label: string) => PERSONALITY_TRAITS.filter((t) => t.label === label);
+    for (const label of [
+      'Strategically Patient',
+      'Unhurried',
+      'Unassuming',
+      'Humble',
+      'Criticism-Resistant',
+      'Thick-Skinned',
+    ]) {
+      expect(named(label)).toHaveLength(1);
     }
+    // The two former Patients are still two different rules.
+    expect(traitById('strategically-patient')!.opposed).not.toEqual(
+      traitById('unhurried')!.opposed,
+    );
 
-    // But one person is never described by the same word twice.
+    // And one person is never described by the same word twice.
     for (let seed = 0; seed < 200; seed += 1) {
       const character = createCharacter({ rng: new Rng(`dup-${seed}`) });
       const labels = character.traits.map((id) => traitById(id)!.label);
       expect(new Set(labels).size).toBe(labels.length);
+    }
+  });
+
+  it('keys identity by id, never by the visible name', () => {
+    // Renaming a trait must not change who has it. The stored value is the id.
+    const character = createCharacter({ rng: new Rng('ID-KEY') });
+    for (const id of character.traits) {
+      expect(traitById(id)).toBeDefined();
+      // Nothing anywhere stores the label.
+      expect(PERSONALITY_TRAITS.some((t) => t.label === id)).toBe(false);
     }
   });
 });

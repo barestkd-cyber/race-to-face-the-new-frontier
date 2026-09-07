@@ -20,7 +20,14 @@
 import type { PersonalityTag } from '../content/personality';
 import type { EventChoice, EventEffect } from './types';
 
-/** The tags the game actually emits today. Everything else is a dormant hook. */
+/**
+ * The tags the game actually emits today. Everything else in the library is a
+ * dormant hook waiting on content that does not exist yet.
+ *
+ * Most are derived. The authored block is the exception: honesty, deception,
+ * mercy and the rest cannot be read off an effects block, so they are written
+ * onto the choices that genuinely are those things and nowhere else.
+ */
 export const EMITTED_TAGS: PersonalityTag[] = [
   // Danger and violence
   'danger',
@@ -65,6 +72,17 @@ export const EMITTED_TAGS: PersonalityTag[] = [
   'save',
   'conserve',
   'loot',
+  // Authored on choices, because no structure implies them
+  'honesty',
+  'deception',
+  'mercy',
+  'punishment',
+  'promise',
+  'humiliation',
+  'privacy',
+  'humor',
+  'accountability',
+  'routine',
   // Work and the world
   'plan',
   'verify',

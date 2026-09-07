@@ -77,6 +77,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'be-ready',
         label: 'Tell them to be at the pad when you call',
+        tags: ['honesty', 'promise'],
         hint: 'Honest. Also a promise you may not be able to keep.',
         effects: { hours: 1 },
         result: {
@@ -87,6 +88,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'refuse',
         label: 'Tell them the truth: there is no berth',
+        tags: ['honesty'],
         hint: 'Saves food, air and weight. Costs everything else.',
         effects: { hours: 1 },
         result: {
@@ -960,6 +962,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'report-and-go',
         label: 'Report it to the district net and keep moving',
+        tags: ['honesty', 'institution'],
         hint: 'Correct. Also the thing you will remember later.',
         effects: { hours: 1 },
         result: {
@@ -1312,6 +1315,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'argue-priority',
         label: 'Argue your way onto the priority list',
+        tags: ['deception'],
         hint: '3 hours and a story the allocation officer has to be able to defend.',
         check: {
           skill: 'persuasion',
@@ -2020,6 +2024,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'leave-institute',
         label: 'Nothing here fits on your ship',
+        tags: ['honesty'],
         effects: { hours: 1 },
         result: {
           text: 'You look at the crates in the corridor and the people standing next to them and you tell her the truth about your capacity. She says she understands. She has heard it eleven times today.',
@@ -2120,6 +2125,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'refuse-ministry',
         label: 'Refuse — cargo space is people space',
+        tags: ['honesty'],
         effects: { hours: 1 },
         result: {
           text: 'You tell her what the volume is worth to you in berths and she does not argue, because she cannot. She marks your hull off her list.',
@@ -2185,6 +2191,7 @@ export const HOMEWORLD_EVENTS: GameEventDef[] = [
       {
         id: 'stash-cargo',
         label: 'Move the sensitive cargo before they get here',
+        tags: ['deception'],
         hint: '20 minutes and a good hiding place. Then act normal.',
         check: {
           skill: 'stealth',

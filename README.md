@@ -119,8 +119,15 @@ The join between personality and the world is semantic tags. `tags.ts` reads
 tags off what a choice actually does — a choice that wounds somebody is
 `danger` and `physical_risk`, one that pays is `wealth` — so every authored
 event reaches personality without a trait name appearing anywhere in content,
-and without an event id appearing anywhere in personality code. Content can add
-its own tags on a choice for the things structure cannot see.
+and without an event id appearing anywhere in personality code.
+
+Ten of them cannot be derived, because no effects block implies honesty,
+deception, mercy, punishment, a promise, humiliation, privacy, humour,
+accountability or routine. Those are written by hand onto the 53 choices that
+genuinely are those things, using the `tags` field on a choice.
+
+Every visible trait name is unique and identity is always the id. A trait can
+be renamed without changing who has it.
 
 Six channels, and no trait uses all of them: morale, stress, autonomous option
 weighting, relationship reactions, player-choice friction, and how long a

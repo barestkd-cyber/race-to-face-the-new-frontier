@@ -39,6 +39,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'log-it',
         label: 'Log it and move on',
+        tags: ['routine'],
         hint: 'Free now, worse later',
         result: {
           text: 'The drip keeps its slow rhythm. Within a day nobody notices it any more, which is the actual problem.',
@@ -958,6 +959,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'divert-and-fix',
         label: 'Divert and put an engineer aboard',
+        tags: ['rescue'],
         hint: 'Twelve hours and a lot of fuel',
         effects: { hours: 12, fuel: -10 },
         check: { skill: 'electricalEngineering', secondarySkill: 'mechanicalEngineering', participation: 'duo' },
@@ -1264,6 +1266,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'cut-channel',
         label: 'Tell him the debt died with the man',
+        tags: ['honesty'],
         hint: 'Free, and he will remember it',
         result: {
           text: 'You say it plainly and close the channel. He does not hail again. Somebody on your crew who knew the previous owner takes it badly.',
@@ -1306,6 +1309,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'tell-them-privately',
         label: 'Take each of them aside',
+        tags: ['privacy'],
         hint: 'Four hours and all of your composure',
         effects: { hours: 4 },
         check: { skill: 'persuasion', attributes: ['socialAwareness', 'composure'], participation: 'individual' },
@@ -1335,6 +1339,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'log-and-bury',
         label: 'Log it and say nothing',
+        tags: ['deception'],
         hint: 'Free until it is not',
         result: {
           text: 'You archive the bulletin and close the channel. It sits in the log for anyone who goes looking, and eventually somebody will.',
@@ -1360,6 +1365,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'lead-them',
         label: 'Take the lead and shepherd them through',
+        tags: ['rescue'],
         hint: 'Sixteen hours at their speed',
         effects: { hours: 16, fuel: -6 },
         check: { skill: 'navigation', secondarySkill: 'piloting', attributes: ['reasoning', 'leadership'], participation: 'group' },
@@ -1418,6 +1424,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'take-the-leak',
         label: 'Take the leaking ship’s people aboard only',
+        tags: ['rescue'],
         hint: 'Four hours, and your stores will feel it',
         effects: { hours: 4 },
         check: { skill: 'firstAid', secondarySkill: 'persuasion', participation: 'duo' },
@@ -1454,6 +1461,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'decline-convoy',
         label: 'Decline and hold your speed',
+        tags: ['honesty'],
         hint: 'You are not built to be a convoy',
         result: {
           text: 'You tell them plainly you cannot hold their speed and you do not have the stores. Nobody argues. They just keep calling for a while.',
@@ -2590,6 +2598,7 @@ export const TRAVEL_EVENTS: GameEventDef[] = [
       {
         id: 'back-navigator',
         label: 'Back your navigator, publicly',
+        tags: ['recognition'],
         hint: 'Fast, and it closes a door',
         effects: { hours: 0.5 },
         result: {
