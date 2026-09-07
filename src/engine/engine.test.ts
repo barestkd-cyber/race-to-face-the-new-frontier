@@ -41,12 +41,19 @@ import {
 import { applyDevelopment, developmentOptions, noteSkillUse, recentSkills } from './development';
 import { recommend } from './advice';
 import { situationReport } from './situation';
-import { temperamentOf } from './temperament';
-import { TRAIT_DEFS } from '../content/traits';
 import { PROFESSIONS } from '../content/professions';
 import { LIFE_EVENTS } from '../content/lifeEvents';
-import { DEMEANOR } from '../content/demeanor';
 import { rollCaptainAge, rollLifeStory, startingCreditsDelta } from './lifeStory';
+import { PERSONALITY_TRAITS } from '../content/personality';
+import {
+  effectsOf,
+  griefMultiplier,
+  recoveryMultiplier,
+  rollPersonality,
+  temperamentOf,
+  traitById,
+} from './personality';
+import { CAPTAIN_GEN } from './tuning';
 import {
   berthSecurity,
   canAssignCrewLead,
@@ -63,7 +70,13 @@ import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tu
 import { generateWorld, rollTerminalDay } from './world';
 import { checkRunEnded, createGame } from './newGame';
 import { simulateRun } from './simulate';
-import { ATTRIBUTE_KEYS, SKILL_KEYS, type AttributeKey, type SkillKey } from './types';
+import {
+  ATTRIBUTE_KEYS,
+  SKILL_KEYS,
+  type AttributeKey,
+  type Attributes,
+  type SkillKey,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Check system
@@ -218,13 +231,18 @@ describe('character generation', () => {
     expect(old / runs).toBeGreaterThan(young / runs);
   });
 
-  it('gives every character two or three hidden traits', () => {
+  it('gives every character one to seven canonical traits, hidden to start', () => {
     for (let seed = 0; seed < 200; seed++) {
       const character = createCharacter({ rng: new Rng(`trait-${seed}`) });
-      expect(character.traits.length).toBeGreaterThanOrEqual(2);
-      expect(character.traits.length).toBeLessThanOrEqual(3);
-      // Traits start hidden.
+      expect(character.traits.length).toBeGreaterThanOrEqual(1);
+      expect(character.traits.length).toBeLessThanOrEqual(7);
+      // Every id is a real entry in the one library.
+      for (const id of character.traits) {
+        expect(PERSONALITY_TRAITS.some((t) => t.id === id)).toBe(true);
+      }
+      // Traits start hidden for anybody who is not the player.
       expect(character.traitKnowledge.every((k) => k.known === 0)).toBe(true);
+      expect(character.traitKnowledge.map((k) => k.trait)).toEqual(character.traits);
     }
   });
 
@@ -1138,55 +1156,438 @@ describe('campaign simulation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Temperament — the captain knows their own baseline
+// Places and physical access
 // ---------------------------------------------------------------------------
 
-describe('temperament', () => {
-  it('describes a person from the traits and attributes they already have', () => {
-    const draft = generateProtagonistDraft(streamRng('TEMP-1', 'protagonist'));
-    const character = draft.character;
-    const temperament = temperamentOf(character);
+describe('places', () => {
+  it('gives the homeworld walkable districts with the ship parked on one', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-1', 'protagonist'));
+    const state = createGame('PLACES-1', draft.character);
 
-    // Every trait they actually carry gets explained by name.
-    expect(temperament.tendencies).toHaveLength(character.traits.length);
-    for (const trait of character.traits) {
-      expect(temperament.tendencies.map((t) => t.label)).toContain(TRAIT_DEFS[trait].label);
-    }
-    // A captain rolled from the library is described in demeanor words, and
-    // every one of those words has to be an expression of something they are.
-    expect(character.demeanor?.length).toBeGreaterThan(0);
-    expect(temperament.descriptors).toEqual(character.demeanor);
-    // Always a sentence, even for somebody with no extreme attribute.
-    expect(temperament.summary.length).toBeGreaterThan(0);
-    expect(temperament.summary.startsWith(character.name)).toBe(true);
+    const districts = districtsAt(state, 'loc_homeworld');
+    expect(districts.length).toBeGreaterThanOrEqual(4);
+
+    const parked = shipPlace(state);
+    expect(parked, 'the ship has to be somewhere').toBeTruthy();
+    expect(parked!.shipHere).toBe(true);
+
+    // You begin aboard, not standing in a district.
+    expect(state.currentPlaceId).toBeNull();
+
+    // Districts hold venues, so actions live two steps in rather than on a menu.
+    const withVenues = districts.filter((d) => childPlaces(state, d.id).length > 0);
+    expect(withVenues.length).toBeGreaterThan(0);
   });
 
-  it('invents no personality of its own for an ordinary character', () => {
-    // Whatever it says has to come from the trait set or the attributes; the
-    // point of this module is wording, not a second personality system.
-    for (let seed = 0; seed < 40; seed += 1) {
-      const character = createCharacter({ rng: new Rng(`temp-${seed}`) });
-      const temperament = temperamentOf(character);
-      const traitLabels = character.traits.map((t) => TRAIT_DEFS[t].label);
-      const fromTraits = temperament.descriptors.filter((d) => traitLabels.includes(d));
-      expect(fromTraits).toHaveLength(character.traits.length);
-      expect(temperament.descriptors.length).toBeLessThanOrEqual(character.traits.length + 2);
+  it('never exposes an action a place does not contain', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-2', 'protagonist'));
+    const state = createGame('PLACES-2', draft.character);
+    const location = state.locations['loc_homeworld']!;
+
+    for (const place of Object.values(state.places)) {
+      for (const action of place.actions) {
+        expect(
+          location.actions.includes(action),
+          `${place.name} offers ${action} which ${location.name} does not support`,
+        ).toBe(true);
+      }
     }
   });
 
-  it('starts the captain knowing their own traits, and nobody else knowing theirs', () => {
-    const draft = generateProtagonistDraft(streamRng('TEMP-2', 'protagonist'));
-    const state = createGame('TEMP-2', draft.character);
-    const captain = state.characters[state.playerId]!;
+  it('puts family somewhere real rather than in a menu', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-3', 'protagonist'));
+    const state = createGame('PLACES-3', draft.character);
 
-    expect(captain.traitKnowledge.length).toBeGreaterThan(0);
-    expect(captain.traitKnowledge.every((k) => k.known === 2)).toBe(true);
+    const family = state.homeworld.familyIds.map((id) => state.characters[id]!);
+    expect(family.length).toBeGreaterThan(0);
+    for (const person of family) {
+      expect(person.placeId, `${person.name} has no location`).toBeTruthy();
+      expect(state.places[person.placeId!], 'their location must exist').toBeTruthy();
+    }
+    // At least one relative is findable from the start, so the opening has
+    // somewhere obvious to go.
+    expect(family.some((p) => p.placeKnown)).toBe(true);
+  });
 
-    // The rule for strangers is untouched: recruits are still read, not looked up.
-    const stranger = createCharacter({ rng: new Rng('TEMP-2:stranger') });
-    expect(stranger.traitKnowledge.every((k) => k.known === 0)).toBe(true);
+  it('refuses passage to anyone you are not standing next to', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-4', 'protagonist'));
+    const state = createGame('PLACES-4', draft.character);
+    const rng = new Rng('PLACES-4:live');
+
+    const relative = state.homeworld.familyIds
+      .map((id) => state.characters[id]!)
+      .find((p) => p.placeKnown && p.availability === 'available');
+    if (!relative) return;
+
+    const crewBefore = state.crewIds.length;
+
+    // Aboard the ship: no access at all.
+    state.currentPlaceId = null;
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'cannot recruit from the cockpit').toBe(crewBefore);
+
+    // Standing somewhere else on the same world: still no.
+    const elsewhere = Object.values(state.places).find((p) => p.id !== relative.placeId);
+    state.currentPlaceId = elsewhere!.id;
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'cannot recruit across the city').toBe(crewBefore);
+
+    // Standing where they are, but without having spoken: still refused. You
+    // do not ask somebody to abandon their world before you have talked to them.
+    state.currentPlaceId = relative.placeId!;
+    const player = state.characters[state.playerId]!;
+    player.relationships[relative.id] = { value: 60, familiarity: 80, kind: 'family' };
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'must talk before asking').toBe(crewBefore);
+
+    // Talk first, settle whatever they raise, and it can work.
+    visitContact(state, relative.id, rng);
+    expect(relative.spokenTo).toBe(true);
+    relative.concernResolved = true;
+    player.relationships[relative.id] = { value: 90, familiarity: 90, kind: 'family' };
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'talked to and willing should work').toBe(crewBefore + 1);
+  });
+
+  it('charges time for walking around', () => {
+    const draft = generateProtagonistDraft(streamRng('PLACES-5', 'protagonist'));
+    const state = createGame('PLACES-5', draft.character);
+    const rng = new Rng('PLACES-5:live');
+
+    const before = state.hours;
+    const target = districtsAt(state, 'loc_homeworld').find((d) => !d.shipHere)!;
+    const result = walkTo(state, target.id, rng);
+
+    expect(result.ok).toBe(true);
+    expect(state.hours, 'crossing a city is not free').toBeGreaterThan(before);
+    expect(state.currentPlaceId).toBe(target.id);
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Combat resolution truthfulness (audit P0-1)
+// ---------------------------------------------------------------------------
+
+describe('combat resolution', () => {
+  function makeCombatFixture(seed: string) {
+    const draft = generateProtagonistDraft(streamRng(seed, 'protagonist'));
+    const state = createGame(seed, draft.character);
+    const rng = new Rng(`${seed}:combat`);
+
+    const combat: NonNullable<GameState['combat']> = {
+      id: 'cmb_test',
+      title: 'Test Fight',
+      combatants: [],
+      hostiles: {},
+      activeId: null,
+      round: 3,
+      log: [],
+      returnTo: 'cockpit',
+      canFlee: true,
+      encounterId: 'enc_scavenger_pair',
+    };
+    state.combat = combat;
+    return { state, combat, rng };
+  }
+
+  const crewCombatant = (state: GameState, fled: boolean) => ({
+    id: 'c1',
+    characterId: state.playerId,
+    name: 'You',
+    hostile: false,
+    meter: 0,
+    range: 'medium' as const,
+    inCover: false,
+    fled,
+    portraitSeed: 1,
+  });
+
+  const hostileCombatant = (fled: boolean, credit: number) => ({
+    id: 'h1',
+    characterId: 'hst_test',
+    name: 'Raider',
+    hostile: true,
+    meter: 0,
+    range: 'medium' as const,
+    inCover: false,
+    fled,
+    portraitSeed: 2,
+    creditDrop: credit,
+    drops: [],
+  });
+
+  it('a fled fight can never be overwritten into a victory', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-1');
+    combat.combatants = [crewCombatant(state, true), hostileCombatant(true, 500)];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'fled', rng);
+    expect(state.combat?.resolution).toBe('fled');
+
+    // The stale double-call the audit caught live: hostiles disperse after the
+    // player already ran, and a second resolution tried to declare victory.
+    endCombat(state, 'victory', rng);
+    expect(state.combat?.resolution, 'first resolution stands').toBe('fled');
+    expect(state.resources.credits, 'no loot for running away').toBe(credits);
+  });
+
+  it('hostiles who got away are not loot', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-2');
+    combat.combatants = [crewCombatant(state, false), hostileCombatant(true, 500)];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'droveOff', rng);
+    expect(state.combat?.resolution).toBe('droveOff');
+    expect(state.resources.credits, 'they left with their pockets').toBe(credits);
+  });
+
+  it('the fallen are lootable and a death is named', () => {
+    const { state, combat, rng } = makeCombatFixture('CBT-3');
+
+    // A dead hostile drops; a dead crew member is recorded by name.
+    const deadHostile = hostileCombatant(false, 300);
+    combat.hostiles[deadHostile.characterId] = {
+      ...state.characters[state.playerId]!,
+      id: deadHostile.characterId,
+      alive: false,
+    };
+
+    const extra = createCharacter({ rng: streamRng('CBT-3', 'extra'), aboard: true });
+    extra.alive = false;
+    extra.departedReason = 'Killed — test';
+    state.characters[extra.id] = extra;
+    state.crewIds.push(extra.id);
+
+    combat.combatants = [crewCombatant(state, false), deadHostile];
+    const credits = state.resources.credits;
+
+    endCombat(state, 'victory', rng);
+    expect(state.resources.credits).toBe(credits + 300);
+    expect(combat.casualties).toEqual([`${extra.name} ${extra.surname}`]);
+    expect(state.crewIds.includes(extra.id), 'dead crew leave the roster').toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Study — specialization is earned, and the rungs above the first are a queue
+// ---------------------------------------------------------------------------
+
+describe('study', () => {
+  it('refuses a craft that has not been practised', () => {
+    const draft = generateProtagonistDraft(streamRng('study-1', 'protagonist'));
+    const state = createGame('study-1', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const raw = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) < SPEC.placeMinSkill);
+    if (!raw) return;
+    const result = beginStudy(captain, raw);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain(String(SPEC.placeMinSkill));
+  });
+
+  it('opens a focus at the first rung and climbs one at a time', () => {
+    const draft = generateProtagonistDraft(streamRng('study-2', 'protagonist'));
+    const state = createGame('study-2', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (!practised) return;
+
+    expect(studyOptions(captain).find((o) => o.skill === practised)?.target).toBe(1.05);
+    expect(beginStudy(captain, practised).ok).toBe(true);
+    expect(captain.study?.skill).toBe(practised);
+
+    // Give them somewhere to work and enough time to finish the first rung.
+    state.ship!.rooms.push({
+      id: 'room_study_test',
+      kind: 'study',
+      quality: 'solid',
+      qualityPotential: 'solid',
+      condition: 90,
+    });
+    tickStudy(state, SPEC.hoursToTier[1.05]! * 20);
+    expect(captain.potential[practised].specialization).toBe(1.05);
+    // Reaching a rung clears the assignment; the next one is a fresh decision.
+    expect(captain.study).toBeUndefined();
+  });
+
+  it('holds the middle rungs to two, so advancement queues', () => {
+    const draft = generateProtagonistDraft(streamRng('study-3', 'protagonist'));
+    const state = createGame('study-3', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const eligible = SKILL_KEYS.filter((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (eligible.length < 3) return;
+
+    for (const skill of eligible.slice(0, 2)) {
+      captain.potential[skill] = { ...captain.potential[skill], specialization: 1.1 };
+    }
+    captain.potential[eligible[2]!] = { ...captain.potential[eligible[2]!], specialization: 1.05 };
+
+    const blocked = studyOptions(captain).find((o) => o.skill === eligible[2]);
+    expect(blocked?.available).toBe(false);
+    expect(blocked?.reason).toContain('promote');
+
+    // Promote one out of the rung and the queue moves.
+    captain.potential[eligible[0]!] = { ...captain.potential[eligible[0]!], specialization: 1.15 };
+    expect(studyOptions(captain).find((o) => o.skill === eligible[2])?.available).toBe(true);
+  });
+
+  it('does not let a deployed party study', () => {
+    const draft = generateProtagonistDraft(streamRng('study-4', 'protagonist'));
+    const state = createGame('study-4', draft.character);
+    const captain = state.characters[state.playerId]!;
+    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (!practised) return;
+
+    state.ship!.rooms.push({
+      id: 'room_study_test2',
+      kind: 'study',
+      quality: 'solid',
+      qualityPotential: 'solid',
+      condition: 90,
+    });
+    beginStudy(captain, practised);
+    state.expedition = {
+      siteId: 'nowhere',
+      partyIds: [captain.id],
+      leaderId: captain.id,
+      currentNodeId: 'x',
+      visited: [],
+      carried: [],
+      carriedCredits: 0,
+      startedAtHours: 0,
+    };
+
+    tickStudy(state, 5000);
+    expect(captain.potential[practised].specialization).toBe(1);
+  });
+});
+
+describe('campaign simulation', () => {
+  it('creates a playable starting state', () => {
+    const draft = generateProtagonistDraft(streamRng('START-1', 'protagonist'));
+    const state = createGame('START-1', draft.character);
+
+    // You begin alone. Every additional crew member is a choice the player
+    // makes, against a safe-capacity cost they can see.
+    expect(state.crewIds.length).toBe(1);
+    expect(state.characters[state.playerId]?.isPlayer).toBe(true);
+    // A solo start must never be in violation of safe capacity on any hull.
+    expect(state.crewIds.length).toBeLessThanOrEqual(safeCrewCapacity(state.ship!));
+    expect(state.ship).toBeTruthy();
+    expect(state.resources.food).toBeGreaterThan(0);
+    expect(state.resources.fuel).toBeGreaterThan(0);
+    expect(state.currentLocationId).toBe('loc_homeworld');
+    expect(state.homeworld.familyIds.length).toBeGreaterThanOrEqual(2);
+    expect(state.ship!.cargo.length).toBeGreaterThan(0);
+  });
+
+  it('runs whole campaigns without throwing', () => {
+    const outcomes: string[] = [];
+
+    for (let seed = 0; seed < 12; seed++) {
+      const result = simulateRun(`SIM-${seed}`, { maxSteps: 3000 });
+      outcomes.push(result.outcome);
+
+      expect(result.errors, `seed SIM-${seed} threw`).toEqual([]);
+      expect(result.hours).toBeGreaterThan(0);
+      // Time must actually move; a stalled run means a broken loop.
+      expect(result.steps).toBeGreaterThan(10);
+    }
+
+    // Across a dozen seeds at least one run should get somewhere.
+    expect(outcomes.some((o) => o !== 'stalled')).toBe(true);
+  });
+
+  it('is winnable at a sensible rate under competent play', () => {
+    // Guards the balance baseline in both directions. Measured at roughly a
+    // third of runs reaching the Travel Center; if a tuning change makes the
+    // game unwinnable or trivial, this is what catches it.
+    let victories = 0;
+    let deaths = 0;
+    const runs = 30;
+
+    for (let seed = 0; seed < runs; seed++) {
+      const result = simulateRun(`WIN-${seed}`, { maxSteps: 9000, strategy: 'balanced' });
+      expect(result.errors, `seed WIN-${seed} threw`).toEqual([]);
+      if (result.outcome === 'victory') victories++;
+      if (result.outcome === 'death') deaths++;
+    }
+
+    const winRate = victories / runs;
+    expect(winRate, 'the route must be completable').toBeGreaterThan(0.1);
+    expect(winRate, 'a survival game should not be a walkover').toBeLessThan(0.75);
+    // Failure has to remain the common outcome for the premise to hold.
+    expect(deaths).toBeGreaterThan(0);
+  });
+
+  it('makes crew a real requirement — you cannot beeline alone', () => {
+    // The player starts solo, so recruiting is not optional. A run that never
+    // hires anyone should do markedly worse than one that builds a crew.
+    // Compared against the "rush" bot, which never recruits at all, the gap is
+    // large and stable; comparing two similar strategies is mostly noise.
+    const withCrew = countVictories('CREWED', 'balanced');
+    const alone = countVictories('SOLO', 'rush');
+    expect(withCrew).toBeGreaterThan(alone);
+  });
+
+  it('continues the campaign when the ship is lost but crew survive', () => {
+    // Across seeds, at least one forced ship loss must leave survivors who are
+    // still playing rather than ending the run outright.
+    let sawLoss = false;
+    let sawSurvivingLoss = false;
+
+    for (let seed = 0; seed < 10; seed++) {
+      const result = simulateRun(`SHIPLESS-${seed}`, { maxSteps: 1500, forceShipLoss: true });
+      expect(result.errors, `seed SHIPLESS-${seed} threw`).toEqual([]);
+      if (!result.shipLost) continue;
+      sawLoss = true;
+      if (result.survivingCrew > 0) {
+        sawSurvivingLoss = true;
+        expect(result.finalState.ship?.destroyed).toBe(true);
+        expect(result.outcome).not.toBe('death');
+      }
+    }
+
+    expect(sawLoss).toBe(true);
+    expect(sawSurvivingLoss).toBe(true);
+  });
+
+  it('never leaves a dead character on the active crew roster', () => {
+    for (let seed = 0; seed < 10; seed++) {
+      const result = simulateRun(`ROSTER-${seed}`, { maxSteps: 2500, strategy: 'balanced' });
+      for (const id of result.finalState.crewIds) {
+        expect(result.finalState.characters[id]?.alive, `${id} is dead but still crew`).toBe(true);
+      }
+    }
+  });
+
+  it('lets untreated wounds close on their own so a medic-less crew can recover', () => {
+    // Regression guard: untreated wounds used to never heal and infection
+    // re-armed bleeding forever, which made every scratch eventually fatal.
+    const draft = generateProtagonistDraft(streamRng('HEAL-1', 'protagonist'));
+    const state = createGame('HEAL-1', draft.character);
+    const rng = new Rng('HEAL-1:wounds');
+    const victim = state.characters[state.crewIds[0]!]!;
+
+    applyRawWound(victim, 45, 'slash', rng, 'leftArm');
+    expect(victim.wounds.length).toBe(1);
+
+    // Two weeks of fed, rested time with no treatment at all.
+    for (let i = 0; i < 14 * 24; i++) {
+      tickWounds(victim, { hours: 1, fed: true, resting: true }, rng);
+    }
+
+    expect(victim.alive).toBe(true);
+    expect(victim.wounds.length).toBe(0);
+    expect(victim.health).toBeGreaterThan(victim.maxHealth * 0.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Temperament — the captain knows their own baseline
 
 // ---------------------------------------------------------------------------
 // Captain generation library
@@ -1261,21 +1662,19 @@ describe('the captain generation library', () => {
     expect(seen.has('negative:minor')).toBe(true);
   });
 
-  it('gives the captain one to seven words, drawn from what they actually are', () => {
+  it('gives the captain one to seven canonical traits, and the whole range is reachable', () => {
     const counts = new Set<number>();
     for (let seed = 0; seed < 300; seed += 1) {
       const draft = generateProtagonistDraft(streamRng(`CAP-${seed}`, 'protagonist'));
-      const words = draft.character.demeanor ?? [];
-      expect(words.length).toBeGreaterThanOrEqual(1);
-      expect(words.length).toBeLessThanOrEqual(7);
-      counts.add(words.length);
-      // No word appears twice, and every one is in the library.
-      expect(new Set(words).size).toBe(words.length);
-      for (const word of words) {
-        expect(DEMEANOR.some((d) => d.label === word)).toBe(true);
+      const traits = draft.character.traits;
+      expect(traits.length).toBeGreaterThanOrEqual(1);
+      expect(traits.length).toBeLessThanOrEqual(7);
+      counts.add(traits.length);
+      expect(new Set(traits).size).toBe(traits.length);
+      for (const id of traits) {
+        expect(PERSONALITY_TRAITS.some((t) => t.id === id)).toBe(true);
       }
     }
-    // The whole 1..7 range is reachable, not just the middle.
     expect(counts.has(1)).toBe(true);
     expect(counts.has(7)).toBe(true);
   });
@@ -1298,7 +1697,7 @@ describe('the captain generation library', () => {
     expect(a.character.age).toBe(b.character.age);
     expect(a.character.profession).toBe(b.character.profession);
     expect(a.character.lifeEvents).toEqual(b.character.lifeEvents);
-    expect(a.character.demeanor).toEqual(b.character.demeanor);
+    expect(a.character.traits).toEqual(b.character.traits);
   });
 
   it('lets a history with money in it move the starting credits, and only that', () => {
@@ -1454,5 +1853,104 @@ describe('command', () => {
     captain.personalXp = 40;
     expect(autoDevelop(state, captain)).toEqual([]);
     expect(captain.personalXp).toBe(40);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Personality — one system, one roll, one source of truth
+// ---------------------------------------------------------------------------
+
+function firstTraitWith(effect: string): string[] {
+  const trait = PERSONALITY_TRAITS.find((t) => t.effect === effect);
+  return trait ? [trait.id] : [];
+}
+
+describe('personality', () => {
+  it('is the only thing rolled, and every character has it', () => {
+    for (let seed = 0; seed < 120; seed += 1) {
+      const character = createCharacter({ rng: new Rng(`pers-${seed}`) });
+      expect(character.traits.length).toBeGreaterThanOrEqual(1);
+      expect(character.traits.length).toBeLessThanOrEqual(7);
+      // No second list anywhere on the character.
+      expect((character as unknown as { demeanor?: unknown }).demeanor).toBeUndefined();
+      // No duplicate word, and no two words from the same corner of a person.
+      expect(new Set(character.traits).size).toBe(character.traits.length);
+      const groups = character.traits.map((id) => traitById(id)!.group);
+      expect(new Set(groups).size).toBe(groups.length);
+    }
+  });
+
+  it('never describes somebody in words their attributes contradict', () => {
+    for (let seed = 0; seed < 200; seed += 1) {
+      const character = createCharacter({ rng: new Rng(`fit-${seed}`) });
+      for (const id of character.traits) {
+        const trait = traitById(id)!;
+        if (!trait.attribute || !trait.direction) continue;
+        const value = character.attributes[trait.attribute];
+        if (trait.direction === 'high') {
+          expect(value).toBeGreaterThanOrEqual(CAPTAIN_GEN.personalityHigh);
+        } else {
+          expect(value).toBeLessThanOrEqual(CAPTAIN_GEN.personalityLow);
+        }
+      }
+    }
+  });
+
+  it('lets a life history pull the personality without deciding it', () => {
+    const flat = ATTRIBUTE_KEYS.reduce(
+      (acc, key) => ({ ...acc, [key]: 7 }),
+      {} as Attributes,
+    );
+    let leaned = 0;
+    for (let seed = 0; seed < 200; seed += 1) {
+      const traits = rollPersonality(new Rng(`bias-${seed}`), flat, {
+        patient: 3,
+        stubborn: 2,
+      });
+      const effects = traits.map((id) => traitById(id)?.effect);
+      if (effects.includes('patient') || effects.includes('stubborn')) leaned += 1;
+    }
+    // It shows, and it is never a guarantee.
+    expect(leaned).toBeGreaterThan(40);
+    expect(leaned).toBeLessThan(200);
+  });
+
+  it('drives the one decision mechanic from the same traits the player reads', () => {
+    const draft = generateProtagonistDraft(streamRng('PERS-DEC', 'protagonist'));
+    const character = draft.character;
+    for (const effect of effectsOf(character)) {
+      expect(character.traits.some((id) => traitById(id)?.effect === effect)).toBe(true);
+    }
+  });
+
+  it('makes personality change what a loss costs and how fast it fades', () => {
+    const base = createCharacter({ rng: new Rng('PERS-GRIEF') });
+    const attached = { ...base, traits: firstTraitWith('loyal') };
+    const apart = { ...base, traits: firstTraitWith('selfPreserving') };
+    expect(griefMultiplier(attached)).toBeGreaterThan(griefMultiplier(apart));
+
+    const steady = { ...base, traits: firstTraitWith('patient') };
+    const gnawed = { ...base, traits: firstTraitWith('suspicious') };
+    expect(recoveryMultiplier(steady)).toBeGreaterThan(recoveryMultiplier(gnawed));
+  });
+
+  it('shows the captain everything and a stranger only what has been learned', () => {
+    const draft = generateProtagonistDraft(streamRng('PERS-VIS', 'protagonist'));
+    const state = createGame('PERS-VIS', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const own = temperamentOf(captain, { full: true });
+    expect(own.descriptors).toHaveLength(captain.traits.length);
+    expect(own.partial).toBe(false);
+
+    const stranger = createCharacter({ rng: new Rng('PERS-VIS:stranger') });
+    expect(temperamentOf(stranger).descriptors).toHaveLength(0);
+    expect(temperamentOf(stranger).partial).toBe(true);
+
+    // Learning one changes what can be said, not who they are.
+    const before = stranger.traits.length;
+    stranger.traitKnowledge[0]!.known = 2;
+    expect(temperamentOf(stranger).descriptors).toHaveLength(1);
+    expect(stranger.traits).toHaveLength(before);
   });
 });

@@ -106,8 +106,8 @@ export function createGame(seed: string, protagonist: Character): GameState {
   protagonist.isPlayer = true;
   protagonist.aboard = true;
   protagonist.role = 'captain';
-  // You know your own temperament. Everyone else's has to be watched for —
-  // that rule is about strangers, and the captain is not one.
+  // You know your own personality. Everyone else's has to be watched for —
+  // that rule is about visibility, not about a different set of traits.
   for (const knowledge of protagonist.traitKnowledge) {
     knowledge.known = 2;
     knowledge.evidence = TRAITS_TUNING.evidenceForKnown;

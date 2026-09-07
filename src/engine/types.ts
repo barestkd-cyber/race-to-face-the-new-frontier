@@ -267,10 +267,19 @@ export type SkillPotentialMap = Record<SkillKey, SkillPotential>;
 export type ExposureBand = 'none' | 'familiar' | 'trained' | 'professional' | 'exceptional';
 
 // ---------------------------------------------------------------------------
-// Personality traits — hidden tendencies, not moral alignment
+// Personality
+//
+// One system. A character rolls one to seven traits from the canonical library
+// in content/personality.ts, and nothing else. `TraitEffect` is not a second
+// personality — it is the closed vocabulary of behaviours those traits produce,
+// so the simulation has something finite to switch on. Several words share an
+// effect because several words describe the same tendency.
 // ---------------------------------------------------------------------------
 
-export const TRAIT_KEYS = [
+/** The id of a canonical personality trait. */
+export type PersonalityTraitId = string;
+
+export const TRAIT_EFFECTS = [
   'loyal',
   'protective',
   'compassionate',
@@ -297,10 +306,11 @@ export const TRAIT_KEYS = [
   'stubborn',
 ] as const;
 
-export type TraitKey = (typeof TRAIT_KEYS)[number];
+export type TraitEffect = (typeof TRAIT_EFFECTS)[number];
 
-export interface TraitDef {
-  key: TraitKey;
+/** What one behavioural effect means, and what it does to somebody's choices. */
+export interface TraitEffectDef {
+  key: TraitEffect;
   label: string;
   /** Loose valence used only for generation weighting, never shown as morality. */
   valence: 'positive' | 'negative';
@@ -309,9 +319,9 @@ export interface TraitDef {
   behaviour: string;
 }
 
-/** What the player currently knows about a hidden trait. */
+/** What the player currently knows about one of somebody's traits. */
 export interface TraitKnowledge {
-  trait: TraitKey;
+  trait: PersonalityTraitId;
   /** 0 = unknown, 1 = suspected, 2 = known */
   known: 0 | 1 | 2;
   /** Accumulated observation weight toward the next knowledge step. */
@@ -427,7 +437,8 @@ export interface Character {
   potential: SkillPotentialMap;
 
   /** Hidden until discovered. */
-  traits: TraitKey[];
+  /** The canonical personality. One to seven ids from the trait library. */
+  traits: PersonalityTraitId[];
   traitKnowledge: TraitKnowledge[];
 
   health: number;
@@ -478,8 +489,6 @@ export interface Character {
   profession?: string;
   professionId?: string;
   lifeEvents?: RolledLifeEvent[];
-  /** The words this person is described with, from the demeanor library. */
-  demeanor?: string[];
 
   /**
    * What this person has actually been doing, newest last, capped at a couple

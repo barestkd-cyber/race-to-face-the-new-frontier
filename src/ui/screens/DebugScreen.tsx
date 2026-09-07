@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { contentSummary } from '../../content';
 import { stardayLabel } from '../../engine/log';
+import { traitLabel } from '../../engine/personality';
 import { simulateBatch, type BatchSummary } from '../../engine/simulate';
 import { TUNING } from '../../engine/tuning';
 import {
@@ -230,7 +231,7 @@ export function DebugScreen() {
                     </span>
                   </div>
                   <p className="tiny">
-                    {character.traits.length > 0 ? character.traits.join(', ') : 'no traits'}
+                    {character.traits.length > 0 ? character.traits.map(traitLabel).join(', ') : 'no traits'}
                   </p>
                   <p className="tiny faint">
                     {character.traitKnowledge

@@ -17,7 +17,6 @@
  *    a grandchild at twenty-two.
  */
 
-import { DEMEANOR, type DemeanorEntry } from '../content/demeanor';
 import {
   LIFE_EVENTS,
   type EventPolarity,
@@ -26,7 +25,7 @@ import {
 import { PROFESSIONS, PROFESSION_TEXT, type ProfessionEntry } from '../content/professions';
 import type { Rng } from './rng';
 import { CAPTAIN_GEN } from './tuning';
-import type { AttributeKey, Character, SkillKey, TraitKey } from './types';
+import type { AttributeKey, Character, SkillKey } from './types';
 
 export type EventSeverity =
   | 'minor'
@@ -148,94 +147,6 @@ export function rollLifeStory(rng: Rng, age: number): LifeStory {
 function articled(name: string): string {
   const lower = name.toLowerCase();
   return /^[aeiou]/.test(lower) ? `an ${lower}` : `a ${lower}`;
-}
-
-// ---------------------------------------------------------------------------
-// Demeanor — the words a person is described with
-// ---------------------------------------------------------------------------
-
-/**
- * Pick the words that describe this person.
- *
- * These are not a second personality system. Almost every word is an
- * expression of a hidden trait the character already carries, or of an
- * attribute sitting unusually high or low. The trait engine still decides
- * behaviour; this decides what the player reads.
- */
-export function rollDemeanor(
-  rng: Rng,
-  traits: TraitKey[],
-  attributes: Record<AttributeKey, number>,
-): string[] {
-  const wanted = rng.weighted(
-    CAPTAIN_GEN.demeanorCountWeights.map((c) => ({ value: c.value, weight: c.weight })),
-  );
-
-  const traitSet = new Set<TraitKey>(traits);
-  const fromTraits = DEMEANOR.filter((d) => d.expresses && traitSet.has(d.expresses));
-  const fromAttributes = DEMEANOR.filter((d) => matchesAttribute(d, attributes));
-
-  const chosen: DemeanorEntry[] = [];
-  const taken = new Set<string>();
-  const take = (entry: DemeanorEntry | undefined): void => {
-    if (!entry || taken.has(entry.id)) return;
-    // One word per group, so a temperament does not read as a thesaurus entry.
-    if (chosen.some((c) => c.group === entry.group)) return;
-    taken.add(entry.id);
-    chosen.push(entry);
-  };
-
-  // The traits they actually have come first, each contributing at most one
-  // word, so every hidden trait is visible in the description somewhere.
-  for (const trait of traits) {
-    const candidates = fromTraits.filter((d) => d.expresses === trait && !taken.has(d.id));
-    if (candidates.length > 0) take(rng.pick(candidates));
-    if (chosen.length >= wanted) break;
-  }
-
-  // Then the attributes that stand out, strongest leaning first.
-  const leanings = [...fromAttributes].sort(
-    (a, b) => leanStrength(b, attributes) - leanStrength(a, attributes),
-  );
-  for (const entry of leanings) {
-    if (chosen.length >= wanted) break;
-    take(entry);
-  }
-
-  // If the person is unremarkable enough that neither produced enough words,
-  // fill from the groups already in play so the result still reads as one
-  // person rather than a scatter.
-  while (chosen.length < wanted) {
-    const rest = DEMEANOR.filter(
-      (d) => !taken.has(d.id) && !chosen.some((c) => c.group === d.group),
-    );
-    if (rest.length === 0) break;
-    take(rng.pick(rest));
-  }
-
-  return chosen.slice(0, wanted).map((d) => d.label);
-}
-
-function matchesAttribute(
-  entry: DemeanorEntry,
-  attributes: Record<AttributeKey, number>,
-): boolean {
-  if (!entry.attribute || !entry.direction) return false;
-  const value = attributes[entry.attribute];
-  return entry.direction === 'high'
-    ? value >= CAPTAIN_GEN.demeanorHigh
-    : value <= CAPTAIN_GEN.demeanorLow;
-}
-
-function leanStrength(
-  entry: DemeanorEntry,
-  attributes: Record<AttributeKey, number>,
-): number {
-  if (!entry.attribute || !entry.direction) return -1;
-  const value = attributes[entry.attribute];
-  return entry.direction === 'high'
-    ? value - CAPTAIN_GEN.demeanorHigh
-    : CAPTAIN_GEN.demeanorLow - value;
 }
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,8 @@ import { OUTER_SITE_ARCHETYPES } from './siteArchetypes.outer';
 const SITE_ARCHETYPES: SiteArchetype[] = [...HOME_SITE_ARCHETYPES, ...OUTER_SITE_ARCHETYPES];
 
 export { ITEM_DEFS } from './items';
-export { TRAIT_DEFS } from './traits';
+export { TRAIT_EFFECT_DEFS } from './traits';
+export { PERSONALITY_TRAITS } from './personality';
 export { NAME_TABLES, LIFE_PATHS } from './lifepaths';
 export { ENCOUNTER_TEMPLATES, SITE_ARCHETYPES };
 

@@ -38,7 +38,8 @@ src/
     places.ts     The walkable world inside a location
     access.ts     What you may physically do from where you stand
     situation.ts  What matters right now, said in sentences
-    lifeStory.ts  The captain's generated life: age, trade, two events, words
+    lifeStory.ts  The captain's generated life: age, trade, two events
+    personality.ts  The one personality system: roll, effects, visibility
     command.ts    Captain, crew lead, who holds the ship, and succession
     advice.ts     Who is best at a job, and what is wrong with them
     development.ts  One development decision instead of twenty +1 taps
@@ -56,7 +57,8 @@ src/
     names.ts      3,600 names, split by sex, plus alien pools
     professions.ts  250 working lives, for the captain
     lifeEvents.ts   500 influential events, 175/175/150 good/bad/mixed
-    demeanor.ts     247 words a person is described with
+    personality.ts  247 canonical traits — the only personality in the game
+    traits.ts       what each trait effect does, in prose
     siteArchetypes*.ts, encounters.ts, lifepaths.ts, traits.ts
   state/       The store the UI talks to
   persistence/ Save layer (IndexedDB → localStorage → memory)
@@ -103,6 +105,22 @@ And one rule about what reaches the player:
    the game says the sentence rather than making them watch the number.
    `situation.ts` is the shape of that: it reads the simulation and speaks.
    None of it removes agency, and none of it plays a turn for the player.
+
+## One personality system
+
+Every character rolls one to seven traits from `content/personality.ts` and
+nothing else. There is no second temperament roll, no parallel hidden set, and
+no separate list of words for display. What differs between people is only
+visibility: the captain knows all of theirs, family are mostly known, strangers
+are learned by spending time with them.
+
+`TraitEffect` is not a second personality. It is the closed vocabulary of
+behaviours those traits produce, so the simulation has something finite to
+switch on, and several words share one because several words describe the same
+tendency. Personality reaches the simulation in exactly three places: what a
+choice pulls somebody toward when the ship runs itself (`captain.ts`), what a
+death costs them, and how fast they come back from it (`sim.ts`). Roughly a
+third of the library carries no effect at all — outlook and humour are tone.
 
 ## One answer per question
 

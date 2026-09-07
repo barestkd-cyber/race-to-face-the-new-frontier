@@ -15,6 +15,7 @@ import { pushLog } from './log';
 import type { Rng } from './rng';
 import { isFlyable } from './ship';
 import { applyStress, clampMorale, shipboardCrew } from './sim';
+import { effectsOf, traitLabel } from './personality';
 import { AUTONOMY, EVENTS, MORALE } from './tuning';
 import type {
   Character,
@@ -22,7 +23,7 @@ import type {
   EventChoice,
   EventEffect,
   GameState,
-  TraitKey,
+  TraitEffect,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -52,11 +53,13 @@ export function actingCaptain(state: GameState): Character | null {
 // ---------------------------------------------------------------------------
 
 /**
- * How strongly a character's traits pull them toward a given choice. Traits
- * bias behaviour; they do not define morality, and a "negative" trait can point
- * at the right answer.
+ * How strongly somebody's personality pulls them toward a given choice.
+ *
+ * This reads the behaviours the character's canonical traits produce. It is the
+ * one place personality changes an outcome, and it consumes the same rolled
+ * traits the player reads on the character sheet — there is no second set.
  */
-function traitAffinity(choice: EventChoice, traits: TraitKey[]): number {
+function traitAffinity(choice: EventChoice, traitEffects: TraitEffect[]): number {
   let score = 0;
   const effects = collectEffects(choice);
 
@@ -67,8 +70,8 @@ function traitAffinity(choice: EventChoice, traits: TraitKey[]): number {
   const helpsCrew = effects.some((e) => (e.morale ?? 0) > 0 || (e.medicine ?? 0) > 0);
   const risksCrew = effects.some((e) => e.loseCrew === true);
 
-  for (const trait of traits) {
-    switch (trait) {
+  for (const effect of traitEffects) {
+    switch (effect) {
       case 'aggressive':
       case 'brave':
         if (risksHarm) score += 1;
@@ -220,7 +223,7 @@ export function decideAutonomously(
   const scores = choices.map((choice) => {
     const competence = competenceScore(choice, crew);
     const outcome = outcomeScore(state, choice);
-    const trait = traitAffinity(choice, decider.traits);
+    const trait = traitAffinity(choice, effectsOf(decider));
     return {
       choiceId: choice.id,
       competence,
@@ -309,7 +312,7 @@ export function runAutonomousShip(
         detail: {
           decider: decider.name,
           decisionMaking: decider.attributes.decisionMaking,
-          traits: decider.traits,
+          traits: decider.traits.map(traitLabel),
           ...decision,
         },
       });

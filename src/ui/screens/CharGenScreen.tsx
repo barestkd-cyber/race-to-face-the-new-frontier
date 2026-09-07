@@ -22,7 +22,7 @@ import { ATTRIBUTE_INFO, SKILL_INFO } from '../../engine/glossary';
 import type { NewRunDraft } from '../../engine/newGame';
 import { Rng } from '../../engine/rng';
 import { skillCapLabel } from '../../engine/progression';
-import { temperamentOf } from '../../engine/temperament';
+import { temperamentOf } from '../../engine/personality';
 import {
   lifeEventsOf,
   POLARITY_LABELS,
@@ -351,7 +351,8 @@ function CaptainIntro({
   onContinue: () => void;
   onReroll: () => void;
 }) {
-  const temperament = temperamentOf(character);
+  // The captain is you: every trait they rolled is known from the start.
+  const temperament = temperamentOf(character, { full: true });
   const events = lifeEventsOf(character);
 
   return (
@@ -425,7 +426,7 @@ function CaptainIntro({
       */}
       <Panel title="Temperament">
         <div className="chips">
-          {temperament.descriptors.map((word) => (
+          {temperament.descriptors.map((word: string) => (
             <Chip key={word} tone="cyan">
               {word}
             </Chip>
@@ -436,7 +437,7 @@ function CaptainIntro({
         </p>
         <div className="divider" />
         <div className="stack stack--tight">
-          {temperament.tendencies.map((tendency) => (
+          {temperament.tendencies.map((tendency: { label: string; behaviour: string }) => (
             <p key={tendency.label} className="tiny">
               <span className="amber">{tendency.label}.</span>{' '}
               <span className="dim">{tendency.behaviour}</span>
@@ -444,7 +445,8 @@ function CaptainIntro({
           ))}
         </div>
         <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
-          Habits deeper than these still show themselves in play.
+          This is all of it. Everybody else you meet has a personality of exactly this
+          kind, and you learn theirs by watching them work.
         </p>
       </Panel>
 

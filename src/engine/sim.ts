@@ -12,6 +12,7 @@ import { hasRoom, overcrowding, quartersQuality, roomsOfKind } from './ship';
 import { COMMAND, FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
 import { tickStudy } from './study';
 import { autoDevelop } from './development';
+import { griefMultiplier, recoveryMultiplier } from './personality';
 import { isFlyable } from './ship';
 import { tickWounds } from './wounds';
 import { advanceHomeworldClock } from './world';
@@ -198,12 +199,16 @@ export function advanceTime(
   for (const member of crew) {
     if (resting) {
       member.rested = Math.min(100, member.rested + REST.restedPerHour * hours);
+      // Some people come back from a bad week faster than others.
       member.stress = clampStress(
-        member.stress - (STRESS.restRecoveryPerHour + facilityRecovery) * hours,
+        member.stress -
+          (STRESS.restRecoveryPerHour + facilityRecovery) * hours * recoveryMultiplier(member),
       );
     } else {
       member.rested = Math.max(0, member.rested - REST.restedLossPerHour * hours);
-      member.stress = clampStress(member.stress - STRESS.passiveRecoveryPerHour * hours);
+      member.stress = clampStress(
+        member.stress - STRESS.passiveRecoveryPerHour * hours * recoveryMultiplier(member),
+      );
     }
   }
 
@@ -250,7 +255,9 @@ export function advanceTime(
     state.morale = clampMorale(state.morale - MORALE.crewDeathPenalty);
     for (const survivor of crewMembers(state)) {
       const rel = survivor.relationships[dead.id];
-      const grief = rel ? STRESS.fromCrewDeath * (0.5 + rel.value / 200) : STRESS.fromCrewDeath * 0.5;
+      const closeness = rel ? 0.5 + rel.value / 200 : 0.5;
+      // How hard somebody takes a loss is part of who they are.
+      const grief = STRESS.fromCrewDeath * closeness * griefMultiplier(survivor);
       survivor.stress = clampStress(survivor.stress + grief);
     }
     lines.push(`${dead.name} ${dead.surname} is dead. ${dead.departedReason ?? ''}`.trim());

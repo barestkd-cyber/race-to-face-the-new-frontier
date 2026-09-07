@@ -11,7 +11,7 @@ import { Btn, Chip, Duration, Empty, Fold, KV, Meter, Panel, Pips, Row } from '.
 import { Portrait } from '../Portrait';
 import { sexLabel } from '../../engine/character';
 import { store, useGame } from '../useStore';
-import { TRAIT_DEFS } from '../../content/traits';
+import { temperamentOf, traitLabel } from '../../engine/personality';
 import {
   conditionLabel as itemConditionLabel,
   equippedStack,
@@ -138,6 +138,8 @@ export function CharacterScreen() {
     .sort((a, b) => b.rel.familiarity - a.rel.familiarity);
 
   const surfaced = character.traitKnowledge.filter((k) => k.known > 0);
+  // The captain is the person you are; everyone else is read, not looked up.
+  const temperament = temperamentOf(character, { full: character.isPlayer });
 
   const venue = studyVenue(state);
 
@@ -548,6 +550,51 @@ export function CharacterScreen() {
         ))}
       </Fold>
 
+      {/* -- Temperament --------------------------------------------------- */}
+      {/*
+        One personality, described from the traits this person actually rolled.
+        The captain sees all of theirs; anybody else is described only by what
+        the player has learned. Same engine, different visibility.
+      */}
+      <Panel title="Temperament" aside={temperament.partial ? 'partly known' : undefined}>
+        {temperament.descriptors.length === 0 ? (
+          <p className="prose prose--dim" style={{ marginTop: 0 }}>
+            {temperament.summary}
+          </p>
+        ) : (
+          <>
+            <div className="chips">
+              {temperament.descriptors.map((word) => (
+                <Chip key={word} tone="cyan">
+                  {word}
+                </Chip>
+              ))}
+            </div>
+            <p className="prose" style={{ marginTop: 8 }}>
+              {temperament.summary}
+            </p>
+            {temperament.tendencies.length > 0 && (
+              <>
+                <div className="divider" />
+                <div className="stack stack--tight">
+                  {temperament.tendencies.map((tendency) => (
+                    <p key={tendency.label} className="tiny">
+                      <span className="amber">{tendency.label}.</span>{' '}
+                      <span className="dim">{tendency.behaviour}</span>
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
+            {temperament.partial && (
+              <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+                There is more to {character.name} than you have seen yet.
+              </p>
+            )}
+          </>
+        )}
+      </Panel>
+
       {/* -- Traits -------------------------------------------------------- */}
       <Fold title="Traits">
         <p className="prose prose--dim">
@@ -576,17 +623,10 @@ export function CharacterScreen() {
                   </div>
                 );
               }
-              const def = TRAIT_DEFS[knowledge.trait];
               return (
                 <div key={knowledge.trait} className="panel panel--inset panel--flush">
                   <div className="panel__body panel__body--tight">
-                    <span className="row__title">{def.label}</span>
-                    <p className="prose" style={{ marginTop: 4 }}>
-                      {def.description}
-                    </p>
-                    <p className="tiny" style={{ marginTop: 4 }}>
-                      {def.behaviour}
-                    </p>
+                    <span className="row__title">{traitLabel(knowledge.trait)}</span>
                   </div>
                 </div>
               );
@@ -603,7 +643,7 @@ export function CharacterScreen() {
                 ) : (
                   character.traits.map((key) => (
                     <Chip key={key} tone="cyan">
-                      {TRAIT_DEFS[key].label}
+                      {traitLabel(key)}
                     </Chip>
                   ))
                 )}

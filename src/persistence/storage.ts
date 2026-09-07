@@ -7,6 +7,7 @@
  */
 
 import { SAVE } from '../engine/tuning';
+import { PERSONALITY_TRAITS } from '../content/personality';
 import type { GameState } from '../engine/types';
 
 export interface SaveMeta {
@@ -268,6 +269,23 @@ export async function hasAutosave(): Promise<boolean> {
  * Bring an older save forward. V1 only needs to backfill fields added after a
  * save was written, so a run in progress survives a patch.
  */
+/**
+ * Old behaviour keys, translated into the canonical trait that expresses each
+ * one. Built from the library itself rather than written out by hand, so it
+ * cannot drift away from the words that actually exist.
+ */
+const LEGACY_TRAIT_MAP = new Map<string, string>(
+  (() => {
+    const pairs: [string, string][] = [];
+    for (const trait of PERSONALITY_TRAITS) {
+      if (trait.effect && !pairs.some(([key]) => key === trait.effect)) {
+        pairs.push([trait.effect, trait.id]);
+      }
+    }
+    return pairs;
+  })(),
+);
+
 function migrate(state: GameState): GameState {
   const patched = state as GameState & Record<string, unknown>;
 
@@ -300,6 +318,35 @@ function migrate(state: GameState): GameState {
   )) {
     delete person.specSlots;
     if (person.study === null) delete person.study;
+  }
+
+  // Saves from before personality was one system. Those characters carry a
+  // handful of old behaviour keys where their traits should be, and the
+  // captain carries a second list of words on top. Translate the keys into the
+  // canonical traits that express them and drop the duplicate list, so no
+  // stale value is left anywhere the simulation can read it.
+  for (const person of Object.values(
+    patched.characters as Record<
+      string,
+      {
+        traits?: string[];
+        traitKnowledge?: { trait: string; known: number; evidence: number }[];
+        demeanor?: string[];
+      }
+    >,
+  )) {
+    delete person.demeanor;
+    if (!Array.isArray(person.traits)) continue;
+    const migrated = person.traits
+      .map((key) => (LEGACY_TRAIT_MAP.has(key) ? LEGACY_TRAIT_MAP.get(key)! : key))
+      .filter((id, index, all) => all.indexOf(id) === index);
+    const knowledge = person.traitKnowledge ?? [];
+    person.traitKnowledge = migrated.map((id, index) => ({
+      trait: id,
+      known: knowledge[index]?.known ?? 0,
+      evidence: knowledge[index]?.evidence ?? 0,
+    }));
+    person.traits = migrated;
   }
 
   // Data cores stopped being a resource axis and became ordinary items. Any

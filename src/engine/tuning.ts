@@ -1153,8 +1153,8 @@ export const CAPTAIN_GEN = {
    */
   eventCredits: 240,
 
-  /** How many words the temperament reads as. */
-  demeanorCountWeights: [
+  /** How many personality traits a character carries. One system, one roll. */
+  personalityCountWeights: [
     { value: 1, weight: 5 },
     { value: 2, weight: 12 },
     { value: 3, weight: 22 },
@@ -1164,9 +1164,9 @@ export const CAPTAIN_GEN = {
     { value: 7, weight: 5 },
   ],
 
-  /** Attribute scores that count as unusually high or low, for demeanor. */
-  demeanorHigh: 10,
-  demeanorLow: 4,
+  /** Attribute scores that count as unusually high or low, for trait fit. */
+  personalityHigh: 10,
+  personalityLow: 4,
 } as const;
 
 // ---------------------------------------------------------------------------

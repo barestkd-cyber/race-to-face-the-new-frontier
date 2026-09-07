@@ -1,0 +1,307 @@
+/**
+ * PERSONALITY — the canonical trait library. Pure authored data, no logic.
+ *
+ * Every character in the game rolls one to seven of these and nothing else.
+ * There is no second personality roll anywhere; what differs between the
+ * captain and a stranger is how much of this list the player can see.
+ *
+ * `effect` is how the simulation consumes a word — the behaviour it produces
+ * in event decisions, in what a death costs somebody, and in how quickly they
+ * come back from it. Several words share an effect because several words
+ * describe the same underlying tendency; the word is what a person IS, the
+ * effect is how the engine reads it. Words with no effect are tone, mostly
+ * outlook and humour, and change nothing.
+ *
+ * `attribute` marks a word that only fits somebody whose score in that
+ * attribute is unusually high or low, so the description matches the person.
+ */
+
+import type { AttributeKey, TraitEffect } from '../engine/types';
+
+export type PersonalityGroup =
+  | 'Courage & Fear'
+  | 'Honesty & Secrecy'
+  | 'Loyalty & Attachment'
+  | 'Authority & Control'
+  | 'Compassion & Hardness'
+  | 'Risk & Reward'
+  | 'Social Style'
+  | 'Conflict Style'
+  | 'Discipline & Routine'
+  | 'Ambition & Status'
+  | 'Money & Possessions'
+  | 'Curiosity & Knowledge'
+  | 'Planning & Decision Making'
+  | 'Emotional Regulation'
+  | 'Trust & Suspicion'
+  | 'Responsibility & Guilt'
+  | 'Ideals & Principles'
+  | 'Work & Competence'
+  | 'Exploration & Novelty'
+  | 'Violence & Combat Attitude'
+  | 'Hope & Outlook'
+  | 'Independence & Cooperation'
+  | 'Patience & Time'
+  | 'Pride & Shame'
+  | 'Humor & Demeanor';
+
+export interface PersonalityTrait {
+  id: string;
+  label: string;
+  group: PersonalityGroup;
+  /** The behaviour this word produces, where it produces one. */
+  effect?: TraitEffect;
+  /** Only rolled onto somebody whose attribute actually leans this way. */
+  attribute?: AttributeKey;
+  direction?: 'high' | 'low';
+}
+
+export const PERSONALITY_TRAITS: PersonalityTrait[] = [
+  { id: 'brave', label: 'Brave', group: 'Courage & Fear', effect: 'brave' },
+  { id: 'cautious', label: 'Cautious', group: 'Courage & Fear', effect: 'cautious' },
+  { id: 'fearless', label: 'Fearless', group: 'Courage & Fear', effect: 'brave' },
+  { id: 'anxious', label: 'Anxious', group: 'Courage & Fear', effect: 'cowardly' },
+  { id: 'timid', label: 'Timid', group: 'Courage & Fear', effect: 'cowardly' },
+  { id: 'adrenaline-seeking', label: 'Adrenaline-Seeking', group: 'Courage & Fear', effect: 'reckless' },
+  { id: 'trauma-wary', label: 'Trauma-Wary', group: 'Courage & Fear', effect: 'cautious' },
+  { id: 'steady-under-fire', label: 'Steady Under Fire', group: 'Courage & Fear', effect: 'brave' },
+  { id: 'panic-prone', label: 'Panic-Prone', group: 'Courage & Fear', effect: 'cowardly' },
+  { id: 'protective-courage', label: 'Protective Courage', group: 'Courage & Fear', effect: 'protective' },
+  { id: 'honest', label: 'Honest', group: 'Honesty & Secrecy', effect: 'honest' },
+  { id: 'blunt', label: 'Blunt', group: 'Honesty & Secrecy', effect: 'honest' },
+  { id: 'diplomatic', label: 'Diplomatic', group: 'Honesty & Secrecy', effect: 'cooperative' },
+  { id: 'secretive', label: 'Secretive', group: 'Honesty & Secrecy', effect: 'suspicious' },
+  { id: 'deceptive', label: 'Deceptive', group: 'Honesty & Secrecy', effect: 'opportunistic' },
+  { id: 'confessional', label: 'Confessional', group: 'Honesty & Secrecy', effect: 'honest' },
+  { id: 'guarded', label: 'Guarded', group: 'Honesty & Secrecy', effect: 'suspicious' },
+  { id: 'transparent', label: 'Transparent', group: 'Honesty & Secrecy', effect: 'honest' },
+  { id: 'manipulative', label: 'Manipulative', group: 'Honesty & Secrecy', effect: 'opportunistic' },
+  { id: 'principled-honesty', label: 'Principled Honesty', group: 'Honesty & Secrecy', effect: 'honest' },
+  { id: 'loyal', label: 'Loyal', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'fiercely-loyal', label: 'Fiercely Loyal', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'detached', label: 'Detached', group: 'Loyalty & Attachment', effect: 'selfPreserving' },
+  { id: 'family-oriented', label: 'Family-Oriented', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'crew-oriented', label: 'Crew-Oriented', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'possessive', label: 'Possessive', group: 'Loyalty & Attachment', effect: 'protective' },
+  { id: 'independent', label: 'Independent', group: 'Loyalty & Attachment', effect: 'selfPreserving' },
+  { id: 'devoted', label: 'Devoted', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'slow-to-attach', label: 'Slow to Attach', group: 'Loyalty & Attachment', effect: 'selfPreserving' },
+  { id: 'easily-attached', label: 'Easily Attached', group: 'Loyalty & Attachment', effect: 'loyal' },
+  { id: 'authoritarian', label: 'Authoritarian', group: 'Authority & Control', effect: 'controlling' },
+  { id: 'democratic', label: 'Democratic', group: 'Authority & Control', effect: 'cooperative' },
+  { id: 'controlling', label: 'Controlling', group: 'Authority & Control', effect: 'controlling' },
+  { id: 'delegating', label: 'Delegating', group: 'Authority & Control', effect: 'cooperative' },
+  { id: 'rebellious', label: 'Rebellious', group: 'Authority & Control', effect: 'stubborn' },
+  { id: 'rule-following', label: 'Rule-Following', group: 'Authority & Control', effect: 'dutiful' },
+  { id: 'pragmatic-about-rules', label: 'Pragmatic About Rules', group: 'Authority & Control', effect: 'opportunistic' },
+  { id: 'commanding', label: 'Commanding', group: 'Authority & Control', effect: 'controlling' },
+  { id: 'conflict-avoidant-leader', label: 'Conflict-Avoidant Leader', group: 'Authority & Control', attribute: 'leadership', direction: 'low' },
+  { id: 'hands-off', label: 'Hands-Off', group: 'Authority & Control', attribute: 'leadership', direction: 'low' },
+  { id: 'compassionate', label: 'Compassionate', group: 'Compassion & Hardness', effect: 'compassionate' },
+  { id: 'merciful', label: 'Merciful', group: 'Compassion & Hardness', effect: 'compassionate' },
+  { id: 'hard-hearted', label: 'Hard-Hearted', group: 'Compassion & Hardness', effect: 'greedy' },
+  { id: 'empathetic', label: 'Empathetic', group: 'Compassion & Hardness', effect: 'compassionate' },
+  { id: 'unsympathetic', label: 'Unsympathetic', group: 'Compassion & Hardness', effect: 'greedy' },
+  { id: 'protective-of-the-weak', label: 'Protective of the Weak', group: 'Compassion & Hardness', effect: 'protective' },
+  { id: 'utilitarian', label: 'Utilitarian', group: 'Compassion & Hardness', effect: 'dutiful' },
+  { id: 'forgiving', label: 'Forgiving', group: 'Compassion & Hardness', effect: 'compassionate' },
+  { id: 'vindictive', label: 'Vindictive', group: 'Compassion & Hardness', effect: 'vindictive' },
+  { id: 'gentle', label: 'Gentle', group: 'Compassion & Hardness', effect: 'compassionate' },
+  { id: 'risk-taker', label: 'Risk-Taker', group: 'Risk & Reward', effect: 'reckless' },
+  { id: 'risk-averse', label: 'Risk-Averse', group: 'Risk & Reward', effect: 'cautious' },
+  { id: 'calculated', label: 'Calculated', group: 'Risk & Reward', attribute: 'evaluation', direction: 'high' },
+  { id: 'gambler', label: 'Gambler', group: 'Risk & Reward', effect: 'reckless' },
+  { id: 'conservative', label: 'Conservative', group: 'Risk & Reward', effect: 'cautious' },
+  { id: 'opportunistic', label: 'Opportunistic', group: 'Risk & Reward', effect: 'opportunistic' },
+  { id: 'patient', label: 'Patient', group: 'Risk & Reward', effect: 'patient' },
+  { id: 'impulsive', label: 'Impulsive', group: 'Risk & Reward', effect: 'impulsive' },
+  { id: 'all-in', label: 'All-In', group: 'Risk & Reward', effect: 'reckless' },
+  { id: 'hedging', label: 'Hedging', group: 'Risk & Reward', effect: 'cautious' },
+  { id: 'charismatic', label: 'Charismatic', group: 'Social Style', attribute: 'charisma', direction: 'high' },
+  { id: 'reserved', label: 'Reserved', group: 'Social Style', attribute: 'charisma', direction: 'low' },
+  { id: 'outgoing', label: 'Outgoing', group: 'Social Style', attribute: 'charisma', direction: 'high' },
+  { id: 'introverted', label: 'Introverted', group: 'Social Style', attribute: 'charisma', direction: 'low' },
+  { id: 'warm', label: 'Warm', group: 'Social Style', attribute: 'charisma', direction: 'high' },
+  { id: 'aloof', label: 'Aloof', group: 'Social Style', attribute: 'charisma', direction: 'low' },
+  { id: 'charming', label: 'Charming', group: 'Social Style', attribute: 'charisma', direction: 'high' },
+  { id: 'awkward', label: 'Awkward', group: 'Social Style', attribute: 'socialAwareness', direction: 'low' },
+  { id: 'formal', label: 'Formal', group: 'Social Style', attribute: 'discipline', direction: 'high' },
+  { id: 'casual', label: 'Casual', group: 'Social Style', attribute: 'discipline', direction: 'low' },
+  { id: 'confrontational', label: 'Confrontational', group: 'Conflict Style', effect: 'aggressive' },
+  { id: 'avoidant', label: 'Avoidant', group: 'Conflict Style', attribute: 'leadership', direction: 'low' },
+  { id: 'mediator', label: 'Mediator', group: 'Conflict Style', effect: 'cooperative' },
+  { id: 'argumentative', label: 'Argumentative', group: 'Conflict Style', effect: 'stubborn' },
+  { id: 'peacemaker', label: 'Peacemaker', group: 'Conflict Style', effect: 'cooperative' },
+  { id: 'intimidating', label: 'Intimidating', group: 'Conflict Style', effect: 'aggressive' },
+  { id: 'passive-aggressive', label: 'Passive-Aggressive', group: 'Conflict Style', effect: 'vindictive' },
+  { id: 'stoic-in-conflict', label: 'Stoic in Conflict', group: 'Conflict Style', attribute: 'composure', direction: 'high' },
+  { id: 'hot-tempered', label: 'Hot-Tempered', group: 'Conflict Style', effect: 'aggressive' },
+  { id: 'grudge-holding', label: 'Grudge-Holding', group: 'Conflict Style', effect: 'vindictive' },
+  { id: 'disciplined', label: 'Disciplined', group: 'Discipline & Routine', effect: 'dutiful' },
+  { id: 'chaotic', label: 'Chaotic', group: 'Discipline & Routine', effect: 'impulsive' },
+  { id: 'methodical', label: 'Methodical', group: 'Discipline & Routine', effect: 'patient' },
+  { id: 'procrastinating', label: 'Procrastinating', group: 'Discipline & Routine', attribute: 'discipline', direction: 'low' },
+  { id: 'habitual', label: 'Habitual', group: 'Discipline & Routine', effect: 'dutiful' },
+  { id: 'flexible', label: 'Flexible', group: 'Discipline & Routine', attribute: 'discipline', direction: 'low' },
+  { id: 'perfectionist', label: 'Perfectionist', group: 'Discipline & Routine', effect: 'controlling' },
+  { id: 'good-enough-pragmatist', label: 'Good-Enough Pragmatist', group: 'Discipline & Routine', effect: 'impulsive' },
+  { id: 'workaholic', label: 'Workaholic', group: 'Discipline & Routine', effect: 'dutiful' },
+  { id: 'rest-protective', label: 'Rest-Protective', group: 'Discipline & Routine', effect: 'cautious' },
+  { id: 'ambitious', label: 'Ambitious', group: 'Ambition & Status', effect: 'greedy' },
+  { id: 'content', label: 'Content', group: 'Ambition & Status', effect: 'patient' },
+  { id: 'competitive', label: 'Competitive', group: 'Ambition & Status', effect: 'aggressive' },
+  { id: 'status-conscious', label: 'Status-Conscious', group: 'Ambition & Status', effect: 'greedy' },
+  { id: 'humble', label: 'Humble', group: 'Ambition & Status', attribute: 'charisma', direction: 'low' },
+  { id: 'recognition-seeking', label: 'Recognition-Seeking', group: 'Ambition & Status', effect: 'greedy' },
+  { id: 'legacy-minded', label: 'Legacy-Minded', group: 'Ambition & Status', effect: 'dutiful' },
+  { id: 'power-seeking', label: 'Power-Seeking', group: 'Ambition & Status', effect: 'greedy' },
+  { id: 'service-minded', label: 'Service-Minded', group: 'Ambition & Status', effect: 'dutiful' },
+  { id: 'achievement-oriented', label: 'Achievement-Oriented', group: 'Ambition & Status', effect: 'greedy' },
+  { id: 'frugal', label: 'Frugal', group: 'Money & Possessions', effect: 'greedy' },
+  { id: 'generous', label: 'Generous', group: 'Money & Possessions', effect: 'generous' },
+  { id: 'materialistic', label: 'Materialistic', group: 'Money & Possessions', effect: 'greedy' },
+  { id: 'ascetic', label: 'Ascetic', group: 'Money & Possessions', effect: 'generous' },
+  { id: 'hoarding', label: 'Hoarding', group: 'Money & Possessions', effect: 'greedy' },
+  { id: 'spendthrift', label: 'Spendthrift', group: 'Money & Possessions', effect: 'generous' },
+  { id: 'debt-averse', label: 'Debt-Averse', group: 'Money & Possessions', effect: 'cautious' },
+  { id: 'speculative', label: 'Speculative', group: 'Money & Possessions', effect: 'opportunistic' },
+  { id: 'security-seeking', label: 'Security-Seeking', group: 'Money & Possessions', effect: 'cautious' },
+  { id: 'possession-light', label: 'Possession-Light', group: 'Money & Possessions', effect: 'generous' },
+  { id: 'curious', label: 'Curious', group: 'Curiosity & Knowledge', effect: 'curious' },
+  { id: 'inquisitive', label: 'Inquisitive', group: 'Curiosity & Knowledge', effect: 'curious' },
+  { id: 'skeptical', label: 'Skeptical', group: 'Curiosity & Knowledge', effect: 'suspicious' },
+  { id: 'credulous', label: 'Credulous', group: 'Curiosity & Knowledge', effect: 'cooperative' },
+  { id: 'scholarly', label: 'Scholarly', group: 'Curiosity & Knowledge', effect: 'curious' },
+  { id: 'hands-on-learner', label: 'Hands-On Learner', group: 'Curiosity & Knowledge', attribute: 'learning', direction: 'low' },
+  { id: 'mystery-seeking', label: 'Mystery-Seeking', group: 'Curiosity & Knowledge', effect: 'curious' },
+  { id: 'knowledge-hoarding', label: 'Knowledge-Hoarding', group: 'Curiosity & Knowledge', effect: 'greedy' },
+  { id: 'teacherly', label: 'Teacherly', group: 'Curiosity & Knowledge', attribute: 'socialAwareness', direction: 'high' },
+  { id: 'anti-intellectual', label: 'Anti-Intellectual', group: 'Curiosity & Knowledge', attribute: 'learning', direction: 'low' },
+  { id: 'planner', label: 'Planner', group: 'Planning & Decision Making', attribute: 'reasoning', direction: 'high' },
+  { id: 'improviser', label: 'Improviser', group: 'Planning & Decision Making', effect: 'impulsive' },
+  { id: 'decisive', label: 'Decisive', group: 'Planning & Decision Making', attribute: 'decisionMaking', direction: 'high' },
+  { id: 'indecisive', label: 'Indecisive', group: 'Planning & Decision Making', attribute: 'decisionMaking', direction: 'low' },
+  { id: 'analytical', label: 'Analytical', group: 'Planning & Decision Making', attribute: 'reasoning', direction: 'high' },
+  { id: 'intuitive', label: 'Intuitive', group: 'Planning & Decision Making', attribute: 'reasoning', direction: 'low' },
+  { id: 'second-guesser', label: 'Second-Guesser', group: 'Planning & Decision Making', attribute: 'decisionMaking', direction: 'low' },
+  { id: 'contingency-minded', label: 'Contingency-Minded', group: 'Planning & Decision Making', effect: 'cautious' },
+  { id: 'simplifier', label: 'Simplifier', group: 'Planning & Decision Making', attribute: 'reasoning', direction: 'low' },
+  { id: 'overthinker', label: 'Overthinker', group: 'Planning & Decision Making', attribute: 'reasoning', direction: 'high' },
+  { id: 'calm', label: 'Calm', group: 'Emotional Regulation', attribute: 'composure', direction: 'high' },
+  { id: 'volatile', label: 'Volatile', group: 'Emotional Regulation', attribute: 'composure', direction: 'low' },
+  { id: 'stoic', label: 'Stoic', group: 'Emotional Regulation', attribute: 'composure', direction: 'high' },
+  { id: 'expressive', label: 'Expressive', group: 'Emotional Regulation', attribute: 'composure', direction: 'low' },
+  { id: 'resentful', label: 'Resentful', group: 'Emotional Regulation', effect: 'vindictive' },
+  { id: 'quick-to-recover', label: 'Quick to Recover', group: 'Emotional Regulation', attribute: 'resilience', direction: 'high' },
+  { id: 'sensitive', label: 'Sensitive', group: 'Emotional Regulation', attribute: 'composure', direction: 'low' },
+  { id: 'thick-skinned', label: 'Thick-Skinned', group: 'Emotional Regulation', attribute: 'resilience', direction: 'high' },
+  { id: 'brooding', label: 'Brooding', group: 'Emotional Regulation', attribute: 'composure', direction: 'low' },
+  { id: 'emotionally-compartmentalized', label: 'Emotionally Compartmentalized', group: 'Emotional Regulation', attribute: 'discipline', direction: 'high' },
+  { id: 'trusting', label: 'Trusting', group: 'Trust & Suspicion', effect: 'cooperative' },
+  { id: 'suspicious', label: 'Suspicious', group: 'Trust & Suspicion', effect: 'suspicious' },
+  { id: 'paranoid', label: 'Paranoid', group: 'Trust & Suspicion', effect: 'suspicious' },
+  { id: 'open-minded', label: 'Open-Minded', group: 'Trust & Suspicion', effect: 'cooperative' },
+  { id: 'cynical', label: 'Cynical', group: 'Trust & Suspicion', effect: 'suspicious' },
+  { id: 'benefit-of-the-doubt', label: 'Benefit-of-the-Doubt', group: 'Trust & Suspicion', effect: 'cooperative' },
+  { id: 'evidence-driven-trust', label: 'Evidence-Driven Trust', group: 'Trust & Suspicion', attribute: 'evaluation', direction: 'high' },
+  { id: 'clan-minded', label: 'Clan-Minded', group: 'Trust & Suspicion', effect: 'loyal' },
+  { id: 'institution-trusting', label: 'Institution-Trusting', group: 'Trust & Suspicion', effect: 'cooperative' },
+  { id: 'institution-skeptical', label: 'Institution-Skeptical', group: 'Trust & Suspicion', effect: 'suspicious' },
+  { id: 'responsible', label: 'Responsible', group: 'Responsibility & Guilt', effect: 'dutiful' },
+  { id: 'duty-bound', label: 'Duty-Bound', group: 'Responsibility & Guilt', effect: 'dutiful' },
+  { id: 'guilt-prone', label: 'Guilt-Prone', group: 'Responsibility & Guilt', attribute: 'composure', direction: 'low' },
+  { id: 'blame-shifting', label: 'Blame-Shifting', group: 'Responsibility & Guilt', effect: 'selfPreserving' },
+  { id: 'accountable', label: 'Accountable', group: 'Responsibility & Guilt', effect: 'dutiful' },
+  { id: 'martyring', label: 'Martyring', group: 'Responsibility & Guilt', effect: 'protective' },
+  { id: 'boundary-conscious', label: 'Boundary-Conscious', group: 'Responsibility & Guilt', effect: 'cautious' },
+  { id: 'promise-keeping', label: 'Promise-Keeping', group: 'Responsibility & Guilt', effect: 'dutiful' },
+  { id: 'outcome-focused', label: 'Outcome-Focused', group: 'Responsibility & Guilt', effect: 'opportunistic' },
+  { id: 'protective-of-dependents', label: 'Protective of Dependents', group: 'Responsibility & Guilt', effect: 'protective' },
+  { id: 'principled', label: 'Principled', group: 'Ideals & Principles', effect: 'honest' },
+  { id: 'pragmatic', label: 'Pragmatic', group: 'Ideals & Principles', effect: 'opportunistic' },
+  { id: 'idealistic', label: 'Idealistic', group: 'Ideals & Principles', effect: 'compassionate' },
+  { id: 'fatalistic', label: 'Fatalistic', group: 'Ideals & Principles' },
+  { id: 'humanistic', label: 'Humanistic', group: 'Ideals & Principles', effect: 'compassionate' },
+  { id: 'traditionalist', label: 'Traditionalist', group: 'Ideals & Principles', effect: 'stubborn' },
+  { id: 'iconoclastic', label: 'Iconoclastic', group: 'Ideals & Principles', effect: 'stubborn' },
+  { id: 'pacifistic', label: 'Pacifistic', group: 'Ideals & Principles', effect: 'cautious' },
+  { id: 'retributive', label: 'Retributive', group: 'Ideals & Principles', effect: 'vindictive' },
+  { id: 'consequentialist', label: 'Consequentialist', group: 'Ideals & Principles', effect: 'opportunistic' },
+  { id: 'proud-craftsperson', label: 'Proud Craftsperson', group: 'Work & Competence', attribute: 'discipline', direction: 'high' },
+  { id: 'efficiency-minded', label: 'Efficiency-Minded', group: 'Work & Competence', attribute: 'reasoning', direction: 'high' },
+  { id: 'thorough', label: 'Thorough', group: 'Work & Competence', effect: 'patient' },
+  { id: 'sloppy', label: 'Sloppy', group: 'Work & Competence', attribute: 'discipline', direction: 'low' },
+  { id: 'mentor', label: 'Mentor', group: 'Work & Competence', attribute: 'leadership', direction: 'high' },
+  { id: 'self-reliant', label: 'Self-Reliant', group: 'Work & Competence', effect: 'selfPreserving' },
+  { id: 'help-seeking', label: 'Help-Seeking', group: 'Work & Competence', effect: 'cooperative' },
+  { id: 'competence-insecure', label: 'Competence-Insecure', group: 'Work & Competence', attribute: 'composure', direction: 'low' },
+  { id: 'prideful', label: 'Prideful', group: 'Work & Competence', effect: 'greedy' },
+  { id: 'professional', label: 'Professional', group: 'Work & Competence', effect: 'dutiful' },
+  { id: 'adventurous', label: 'Adventurous', group: 'Exploration & Novelty', effect: 'curious' },
+  { id: 'homebody', label: 'Homebody', group: 'Exploration & Novelty', effect: 'selfPreserving' },
+  { id: 'wanderlust', label: 'Wanderlust', group: 'Exploration & Novelty', effect: 'curious' },
+  { id: 'routine-seeking', label: 'Routine-Seeking', group: 'Exploration & Novelty', effect: 'stubborn' },
+  { id: 'frontier-minded', label: 'Frontier-Minded', group: 'Exploration & Novelty', effect: 'curious' },
+  { id: 'comfort-seeking', label: 'Comfort-Seeking', group: 'Exploration & Novelty', effect: 'selfPreserving' },
+  { id: 'collector', label: 'Collector', group: 'Exploration & Novelty', effect: 'greedy' },
+  { id: 'naturalist', label: 'Naturalist', group: 'Exploration & Novelty', effect: 'curious' },
+  { id: 'ruin-obsessed', label: 'Ruin-Obsessed', group: 'Exploration & Novelty', effect: 'curious' },
+  { id: 'cautious-explorer', label: 'Cautious Explorer', group: 'Exploration & Novelty', effect: 'cautious' },
+  { id: 'aggressive', label: 'Aggressive', group: 'Violence & Combat Attitude', effect: 'aggressive' },
+  { id: 'defensive', label: 'Defensive', group: 'Violence & Combat Attitude', effect: 'cautious' },
+  { id: 'combat-confident', label: 'Combat-Confident', group: 'Violence & Combat Attitude', effect: 'aggressive' },
+  { id: 'combat-averse', label: 'Combat-Averse', group: 'Violence & Combat Attitude', effect: 'cowardly' },
+  { id: 'predatory', label: 'Predatory', group: 'Violence & Combat Attitude', effect: 'reckless' },
+  { id: 'protective-fighter', label: 'Protective Fighter', group: 'Violence & Combat Attitude', effect: 'protective' },
+  { id: 'mercenary', label: 'Mercenary', group: 'Violence & Combat Attitude', effect: 'opportunistic' },
+  { id: 'honor-bound-fighter', label: 'Honor-Bound Fighter', group: 'Violence & Combat Attitude', effect: 'dutiful' },
+  { id: 'dirty-fighter', label: 'Dirty Fighter', group: 'Violence & Combat Attitude', effect: 'aggressive' },
+  { id: 'weapon-shy', label: 'Weapon-Shy', group: 'Violence & Combat Attitude', effect: 'cowardly' },
+  { id: 'optimistic', label: 'Optimistic', group: 'Hope & Outlook' },
+  { id: 'pessimistic', label: 'Pessimistic', group: 'Hope & Outlook' },
+  { id: 'hopeful', label: 'Hopeful', group: 'Hope & Outlook' },
+  { id: 'doomer', label: 'Doomer', group: 'Hope & Outlook' },
+  { id: 'realistic', label: 'Realistic', group: 'Hope & Outlook', attribute: 'evaluation', direction: 'high' },
+  { id: 'romantic', label: 'Romantic', group: 'Hope & Outlook' },
+  { id: 'world-weary', label: 'World-Weary', group: 'Hope & Outlook' },
+  { id: 'future-oriented', label: 'Future-Oriented', group: 'Hope & Outlook' },
+  { id: 'present-oriented', label: 'Present-Oriented', group: 'Hope & Outlook' },
+  { id: 'nostalgic', label: 'Nostalgic', group: 'Hope & Outlook' },
+  { id: 'cooperative', label: 'Cooperative', group: 'Independence & Cooperation', effect: 'cooperative' },
+  { id: 'solo-minded', label: 'Solo-Minded', group: 'Independence & Cooperation', effect: 'selfPreserving' },
+  { id: 'consensus-seeking', label: 'Consensus-Seeking', group: 'Independence & Cooperation', effect: 'cooperative' },
+  { id: 'self-directed', label: 'Self-Directed', group: 'Independence & Cooperation', attribute: 'discipline', direction: 'high' },
+  { id: 'mutual-aid-oriented', label: 'Mutual-Aid Oriented', group: 'Independence & Cooperation', effect: 'compassionate' },
+  { id: 'transactional', label: 'Transactional', group: 'Independence & Cooperation', effect: 'opportunistic' },
+  { id: 'dependent', label: 'Dependent', group: 'Independence & Cooperation', attribute: 'leadership', direction: 'low' },
+  { id: 'autonomous', label: 'Autonomous', group: 'Independence & Cooperation', effect: 'selfPreserving' },
+  { id: 'team-builder', label: 'Team-Builder', group: 'Independence & Cooperation', effect: 'cooperative' },
+  { id: 'factional', label: 'Factional', group: 'Independence & Cooperation', effect: 'loyal' },
+  { id: 'impatient', label: 'Impatient', group: 'Patience & Time', effect: 'impulsive' },
+  { id: 'deadline-driven', label: 'Deadline-Driven', group: 'Patience & Time', attribute: 'discipline', direction: 'high' },
+  { id: 'leisurely', label: 'Leisurely', group: 'Patience & Time', effect: 'patient' },
+  { id: 'time-anxious', label: 'Time-Anxious', group: 'Patience & Time', attribute: 'composure', direction: 'low' },
+  { id: 'long-horizon-thinker', label: 'Long-Horizon Thinker', group: 'Patience & Time', effect: 'patient' },
+  { id: 'short-horizon-thinker', label: 'Short-Horizon Thinker', group: 'Patience & Time', effect: 'impulsive' },
+  { id: 'waiting-averse', label: 'Waiting-Averse', group: 'Patience & Time', effect: 'impulsive' },
+  { id: 'deliberate', label: 'Deliberate', group: 'Patience & Time', effect: 'patient' },
+  { id: 'snap-decider', label: 'Snap-Decider', group: 'Patience & Time', effect: 'impulsive' },
+  { id: 'proud', label: 'Proud', group: 'Pride & Shame', effect: 'greedy' },
+  { id: 'shame-prone', label: 'Shame-Prone', group: 'Pride & Shame', attribute: 'composure', direction: 'low' },
+  { id: 'boastful', label: 'Boastful', group: 'Pride & Shame', effect: 'greedy' },
+  { id: 'modest', label: 'Modest', group: 'Pride & Shame', attribute: 'charisma', direction: 'low' },
+  { id: 'honor-conscious', label: 'Honor-Conscious', group: 'Pride & Shame', effect: 'dutiful' },
+  { id: 'reputation-indifferent', label: 'Reputation-Indifferent', group: 'Pride & Shame' },
+  { id: 'face-saving', label: 'Face-Saving', group: 'Pride & Shame', effect: 'controlling' },
+  { id: 'self-deprecating', label: 'Self-Deprecating', group: 'Pride & Shame', attribute: 'charisma', direction: 'low' },
+  { id: 'dry-humored', label: 'Dry-Humored', group: 'Humor & Demeanor' },
+  { id: 'playful', label: 'Playful', group: 'Humor & Demeanor', attribute: 'charisma', direction: 'high' },
+  { id: 'serious', label: 'Serious', group: 'Humor & Demeanor' },
+  { id: 'sarcastic', label: 'Sarcastic', group: 'Humor & Demeanor' },
+  { id: 'earnest', label: 'Earnest', group: 'Humor & Demeanor' },
+  { id: 'morbidly-funny', label: 'Morbidly Funny', group: 'Humor & Demeanor' },
+  { id: 'cheerful', label: 'Cheerful', group: 'Humor & Demeanor', attribute: 'charisma', direction: 'high' },
+  { id: 'grim', label: 'Grim', group: 'Humor & Demeanor' },
+  { id: 'deadpan', label: 'Deadpan', group: 'Humor & Demeanor' },
+  { id: 'theatrical', label: 'Theatrical', group: 'Humor & Demeanor', attribute: 'charisma', direction: 'high' },
+];

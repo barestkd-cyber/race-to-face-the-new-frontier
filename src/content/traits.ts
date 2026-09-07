@@ -1,16 +1,21 @@
 /**
- * PERSONALITY TRAITS — pure authored data, no logic.
+ * TRAIT EFFECTS — what a personality trait actually does. Authored data, no logic.
  *
- * Traits are hidden tendencies, not moral alignment. `valence` exists only so the
- * generator can weight a set (see TRAITS_TUNING.uniformValenceChance); it is never
- * shown to the player as good or bad. Whether a tendency helps or hurts depends on
+ * This is not a personality system and nothing rolls it. Characters roll words
+ * from the canonical library in personality.ts; each of those words names one
+ * of these, and this is where the behaviour behind the word is written down.
+ * Several words share an effect because several words describe the same
+ * tendency — Brave, Fearless and Steady Under Fire all come out as `brave`.
+ *
+ * `valence` weights a generated set toward all-good or all-bad; it is never
+ * shown to the player as morality. Whether a tendency helps or hurts depends on
  * Discipline, Composure, Decision Making, stress, relationships, and opportunity —
  * so every `behaviour` line names both the cost and the situation where it pays.
  */
 
-import type { TraitDef, TraitKey } from '../engine/types';
+import type { TraitEffect, TraitEffectDef } from '../engine/types';
 
-export const TRAIT_DEFS: Record<TraitKey, TraitDef> = {
+export const TRAIT_EFFECT_DEFS: Record<TraitEffect, TraitEffectDef> = {
   loyal: {
     key: 'loyal',
     label: 'Loyal',

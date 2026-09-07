@@ -14,7 +14,7 @@ import type {
   RecruitVenue,
   SiteNodeKind,
   SkillKey,
-  TraitKey,
+  TraitEffect,
 } from '../engine/types';
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ export interface LifePathEntry {
   text: string;
   skillBias?: Partial<Record<SkillKey, number>>;
   attributeBias?: Partial<Record<AttributeKey, number>>;
-  traitBias?: Partial<Record<TraitKey, number>>;
+  traitBias?: Partial<Record<TraitEffect, number>>;
   weight?: number;
 }
 

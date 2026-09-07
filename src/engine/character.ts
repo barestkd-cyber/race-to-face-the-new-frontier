@@ -10,7 +10,8 @@ import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
 import { EARTH_FEMALE_GIVEN, EARTH_MALE_GIVEN, EARTH_SURNAMES } from '../content/names';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
-import { rollCaptainAge, rollDemeanor, rollLifeStory } from './lifeStory';
+import { rollCaptainAge, rollLifeStory } from './lifeStory';
+import { rollPersonality } from './personality';
 import type { Rng } from './rng';
 import {
   ATTRIBUTE_GEN,
@@ -26,7 +27,6 @@ import {
   ATTRIBUTE_KEYS,
   FACETS,
   SKILL_KEYS,
-  TRAIT_KEYS,
   type AttributeKey,
   type Attributes,
   type Character,
@@ -41,7 +41,7 @@ import {
   type SkillKey,
   type SkillMap,
   type SkillPotentialMap,
-  type TraitKey,
+  type TraitEffect,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ import {
 export interface GenerationBias {
   skill: Partial<Record<SkillKey, number>>;
   attribute: Partial<Record<AttributeKey, number>>;
-  trait: Partial<Record<TraitKey, number>>;
+  trait: Partial<Record<TraitEffect, number>>;
 }
 
 function emptyBias(): GenerationBias {
@@ -68,7 +68,7 @@ function mergeBias(target: GenerationBias, entry: LifePathEntry): void {
     target.attribute[key] = (target.attribute[key] ?? 0) + (v as number);
   }
   for (const [k, v] of Object.entries(entry.traitBias ?? {})) {
-    const key = k as TraitKey;
+    const key = k as TraitEffect;
     target.trait[key] = (target.trait[key] ?? 0) + (v as number);
   }
 }
@@ -350,93 +350,13 @@ export function autoAllocateSkillPoints(
 
 // ---------------------------------------------------------------------------
 // Traits
+//
+// There is nothing here any more. Personality is rolled once, from the
+// canonical library, by engine/personality.ts. The `traitBias` the life paths
+// carry still steers it — it names behaviours now rather than a second set of
+// trait keys, so a machinist's life still produces patient, stubborn people.
 // ---------------------------------------------------------------------------
 
-const POSITIVE_TRAITS: TraitKey[] = [
-  'loyal',
-  'protective',
-  'compassionate',
-  'dutiful',
-  'patient',
-  'generous',
-  'brave',
-  'cooperative',
-  'curious',
-  'honest',
-];
-
-const NEGATIVE_TRAITS: TraitKey[] = [
-  'vindictive',
-  'reckless',
-  'selfPreserving',
-  'greedy',
-  'jealous',
-  'cowardly',
-  'impulsive',
-  'controlling',
-  'suspicious',
-  'alcoholic',
-  'aggressive',
-];
-
-/** Traits that read either way depending on circumstance. */
-const NEUTRAL_TRAITS: TraitKey[] = ['cautious', 'opportunistic', 'stubborn'];
-
-export function generateTraits(rng: Rng, bias: GenerationBias): TraitKey[] {
-  const count = rng.weighted(
-    TRAITS_TUNING.countWeights.map((c) => ({ value: c.count, weight: c.weight })),
-  );
-
-  // An all-positive or all-negative set is possible but rare.
-  const uniform = rng.chance(TRAITS_TUNING.uniformValenceChance);
-  let pool: TraitKey[];
-  if (uniform) {
-    pool = rng.chance(0.5)
-      ? [...POSITIVE_TRAITS, ...NEUTRAL_TRAITS]
-      : [...NEGATIVE_TRAITS, ...NEUTRAL_TRAITS];
-  } else {
-    pool = [...TRAIT_KEYS];
-  }
-
-  const chosen: TraitKey[] = [];
-  let guard = 0;
-  while (chosen.length < count && guard < 200) {
-    guard++;
-    const candidates = pool.filter((t) => !chosen.includes(t) && !conflicts(t, chosen));
-    if (candidates.length === 0) break;
-    const pick = rng.weighted(
-      candidates.map((t) => ({ value: t, weight: 1 + (bias.trait[t] ?? 0) * 1.5 })),
-    );
-    chosen.push(pick);
-  }
-
-  return chosen;
-}
-
-/** Keep obviously contradictory pairs off the same person. */
-const TRAIT_CONFLICTS: [TraitKey, TraitKey][] = [
-  ['brave', 'cowardly'],
-  ['generous', 'greedy'],
-  ['honest', 'opportunistic'],
-  ['cautious', 'reckless'],
-  ['cautious', 'impulsive'],
-  ['patient', 'impulsive'],
-  ['cooperative', 'controlling'],
-  ['compassionate', 'vindictive'],
-  ['loyal', 'selfPreserving'],
-];
-
-function conflicts(trait: TraitKey, chosen: TraitKey[]): boolean {
-  return TRAIT_CONFLICTS.some(
-    ([a, b]) => (a === trait && chosen.includes(b)) || (b === trait && chosen.includes(a)),
-  );
-}
-
-export function traitValence(trait: TraitKey): 'positive' | 'negative' | 'neutral' {
-  if (POSITIVE_TRAITS.includes(trait)) return 'positive';
-  if (NEGATIVE_TRAITS.includes(trait)) return 'negative';
-  return 'neutral';
-}
 
 // ---------------------------------------------------------------------------
 // Derived values
@@ -584,7 +504,6 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   }
 
   const { skills } = generateSkills(rng, potential, bias);
-  const traits = generateTraits(rng, bias);
 
   const maxHealth = deriveMaxHealth(attributes);
 
@@ -599,8 +518,8 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     attributes,
     skills,
     potential,
-    traits,
-    traitKnowledge: traits.map((t) => ({ trait: t, known: 0 as const, evidence: 0 })),
+    traits: [],
+    traitKnowledge: [],
     health: maxHealth,
     maxHealth,
     wounds: [],
@@ -625,10 +544,6 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     aboard: options.aboard ?? true,
   };
 
-  if (story) {
-    character.demeanor = rollDemeanor(rng, character.traits, character.attributes);
-  }
-
   // The protagonist keeps their allocation pool for the character-gen screen;
   // everyone else has it spent for them so they arrive fully formed.
   if (!options.isPlayer) {
@@ -640,6 +555,16 @@ export function createCharacter(options: CreateCharacterOptions): Character {
       rng,
     );
   }
+
+  // Personality last, so it is rolled against the attributes this person
+  // actually ends up with. A word like Hesitant should never sit on a sheet
+  // that says otherwise.
+  character.traits = rollPersonality(rng, character.attributes, bias.trait);
+  character.traitKnowledge = character.traits.map((trait) => ({
+    trait,
+    known: 0 as const,
+    evidence: 0,
+  }));
 
   return character;
 }
