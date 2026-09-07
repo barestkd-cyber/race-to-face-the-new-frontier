@@ -8,8 +8,10 @@
 import { useEffect, useMemo } from 'react';
 import { assessDanger, bestAssessor } from '../../engine/assess';
 import { problemsFor, recommend } from '../../engine/advice';
+import { canPayShipWatch, commandRuleFor, whoHasTheShip } from '../../engine/command';
+import { COMMAND, MISSIONS } from '../../engine/tuning';
 import { availableAttacks } from '../../engine/inventory';
-import { MISSIONS } from '../../engine/tuning';
+
 import {
   canRunMission,
   missionPrimarySkill,
@@ -129,6 +131,11 @@ export function MissionPrepScreen() {
   const missionBlock: { ok: boolean; reason?: string } = selectedMission
     ? canRunMission(state, selectedMission)
     : { ok: true };
+
+  // Somebody has to be left holding the ship. The captain or the crew lead —
+  // not both out, unless the berth is genuinely covered.
+  const command = commandRuleFor(state, selectedIds);
+  const holding = whoHasTheShip(state, selectedIds);
   const deployed = Boolean(state.expedition);
   const needsLeader = selectedIds.length >= 2;
 
@@ -309,6 +316,28 @@ export function MissionPrepScreen() {
           )}
 
           <div className="divider" />
+          {holding && command.ok && (
+            <p className="tiny green" style={{ marginBottom: 6 }}>
+              {holding}
+            </p>
+          )}
+          {!command.ok && (
+            <>
+              <p className="prose amber" style={{ marginBottom: 6 }}>
+                {command.reason}
+              </p>
+              {canPayShipWatch(state).ok && (
+                <Btn
+                  small
+                  block
+                  onClick={() => store.payShipWatch()}
+                  sub={`${COMMAND.shipWatchCredits} cr — somebody sits with her for a day`}
+                >
+                  Pay Somebody To Watch Her
+                </Btn>
+              )}
+            </>
+          )}
           {!validation.ok && <p className="prose amber">{validation.reason}</p>}
           {!missionBlock.ok && <p className="prose red">{missionBlock.reason}</p>}
 
@@ -316,7 +345,7 @@ export function MissionPrepScreen() {
             <Btn
               block
               tone="go"
-              disabled={deployed || !validation.ok || !missionBlock.ok}
+              disabled={deployed || !validation.ok || !missionBlock.ok || !command.ok}
               onClick={() => store.runMission(selectedMission, selectedIds, leaderId)}
               sub="Runs the whole job in one go. You find out how it went afterwards."
             >
@@ -326,7 +355,7 @@ export function MissionPrepScreen() {
             <Btn
               block
               tone="go"
-              disabled={deployed || !validation.ok || selectedSite.exhausted}
+              disabled={deployed || !validation.ok || !command.ok || selectedSite.exhausted}
               onClick={() =>
                 store.startExpedition(selectedSite.id, selectedIds, leaderId ?? selectedIds[0])
               }

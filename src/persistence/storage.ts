@@ -288,6 +288,9 @@ function migrate(state: GameState): GameState {
   if (patched.currentPlaceId === undefined) patched.currentPlaceId = null;
   if (patched.onboardingStep === undefined) patched.onboardingStep = 99;
   if (!patched.pendingFarewells) patched.pendingFarewells = [];
+  // Saves from before the ship had a second command post. The engine fills the
+  // post itself on the next tick if there is anybody to fill it.
+  if (patched.crewLeadId === undefined) patched.crewLeadId = null;
 
   // Saves from before study existed carry an obsolete pool of unplaced marks
   // and no study assignment. Their placed specialisations are already on the

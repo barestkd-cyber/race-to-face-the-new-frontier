@@ -175,6 +175,8 @@ export function createGame(seed: string, protagonist: Character): GameState {
 
     playerId: protagonist.id,
     captainId: protagonist.id,
+    // You start alone, so there is nobody to hold the second post yet.
+    crewLeadId: null,
     characters,
     crewIds,
 

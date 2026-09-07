@@ -47,6 +47,13 @@ import {
 } from '../engine/inventory';
 import { pushLog } from '../engine/log';
 import { applyDevelopment } from '../engine/development';
+import {
+  assignCrewLead,
+  confirmSuccession,
+  ensureCrewLead,
+  noteSuccession,
+  payShipWatch,
+} from '../engine/command';
 import { bindSitesToPlaces, boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
 import { canAccessHold, canEquipFromHold, canUseRepairYard, canWorkOnShip } from '../engine/access';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
@@ -145,6 +152,12 @@ class GameStore {
 
     // A death gets one beat, whatever code path caused it.
     this.queueFarewells(crewBefore);
+
+    // If that death emptied the chair, somebody has to take it. The engine
+    // installs a provisional successor so nothing dereferences a dead captain,
+    // and the choice is then put to the player.
+    noteSuccession(this.state);
+    ensureCrewLead(this.state);
 
     // When a fight or an event takes the screen, yesterday's news gets off it.
     if (
@@ -981,15 +994,37 @@ class GameStore {
     });
   };
 
-  setCaptain = (characterId: string): void => {
+  /**
+   * The one reassignable command post. Between jobs, never mid-expedition.
+   */
+  assignCrewLead = (characterId: string): void => {
     this.mutate((state) => {
-      if (!state.characters[characterId]) return;
-      const previous = state.characters[state.captainId];
-      if (previous) previous.role = 'crew';
-      state.captainId = characterId;
-      state.characters[characterId]!.role = 'captain';
-      pushLog(state, 'crew', `${state.characters[characterId]!.name} takes command.`);
+      const result = assignCrewLead(state, characterId);
+      if (!result.ok) this.pushToast([result.reason ?? 'Not now.']);
     });
+    void this.autosave();
+  };
+
+  /**
+   * A survivor takes the chair after the captain has died. This is the only
+   * way captaincy ever moves — it is not a role the player hands to whoever
+   * rolled better numbers.
+   */
+  chooseSuccessor = (characterId: string): void => {
+    this.mutate((state) => {
+      if (!state.pendingSuccession) return;
+      const result = confirmSuccession(state, characterId);
+      if (!result.ok) this.pushToast([result.reason ?? 'They cannot take it.']);
+    });
+    void this.autosave();
+  };
+
+  /** Pay somebody local to sit with the ship, so both commanders can leave. */
+  payShipWatch = (): void => {
+    this.mutate((state) => {
+      this.pushToast(payShipWatch(state), 'The berth');
+    });
+    void this.autosave();
   };
 
   // -- Persistence --------------------------------------------------------

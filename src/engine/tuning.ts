@@ -1170,6 +1170,43 @@ export const CAPTAIN_GEN = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Command — captain, crew lead, and what command costs
+// ---------------------------------------------------------------------------
+
+/**
+ * The captain is the protagonist and stays captain until they die. The crew
+ * lead is the one reassignable command post, and the reason the ship is not
+ * left to run itself every time somebody goes outside.
+ */
+export const COMMAND = {
+  /**
+   * A berth this quiet counts as covered: the captain and the crew lead may
+   * both leave at once. Your own home property sits well under it; a salvage
+   * pad in a bad district does not.
+   */
+  securePlaceDanger: 20,
+
+  /** Paying somebody local to watch the ship: cost, and how long it holds. */
+  shipWatchCredits: 140,
+  shipWatchHours: 24,
+
+  /**
+   * Command pressure the captain carries and nobody else does. Losing people
+   * is the heaviest of it, and a ship that cannot fly or feed itself grinds.
+   */
+  stressOnCrewDeath: 9,
+  stressOnMissionFailed: 5,
+  stressPerDayGrounded: 1.6,
+  stressPerDayStarving: 2.4,
+
+  /**
+   * Crew spend their own experience on themselves, in the direction their work
+   * has been taking them. The shared pool stays the player's, for the captain.
+   */
+  crewAutoDevelopMinXp: 6,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Onboarding
 // ---------------------------------------------------------------------------
 

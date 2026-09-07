@@ -9,8 +9,10 @@
 import { bestAt } from './check';
 import type { Rng } from './rng';
 import { hasRoom, overcrowding, quartersQuality, roomsOfKind } from './ship';
-import { FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
+import { COMMAND, FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
 import { tickStudy } from './study';
+import { autoDevelop } from './development';
+import { isFlyable } from './ship';
 import { tickWounds } from './wounds';
 import { advanceHomeworldClock } from './world';
 import type { Character, GameState, ShipQuality } from './types';
@@ -252,6 +254,24 @@ export function advanceTime(
       survivor.stress = clampStress(survivor.stress + grief);
     }
     lines.push(`${dead.name} ${dead.surname} is dead. ${dead.departedReason ?? ''}`.trim());
+    // Everybody grieves. The captain also signed for them.
+    commandStress(state, COMMAND.stressOnCrewDeath);
+  }
+
+  // --- What command costs -------------------------------------------------
+  // Pressure the person in the chair carries and nobody else does: a ship that
+  // cannot fly, and people who are not being fed.
+  if (!isFlyable(state.ship) && !state.travel) {
+    commandStress(state, COMMAND.stressPerDayGrounded * days);
+  }
+  if (isStarving(state)) {
+    commandStress(state, COMMAND.stressPerDayStarving * days);
+  }
+
+  // --- The crew get better at what they have been doing -------------------
+  // The player develops the protagonist; the simulation develops the crew.
+  for (const member of crewMembers(state)) {
+    lines.push(...autoDevelop(state, member));
   }
 
   // --- Morale drift ------------------------------------------------------
@@ -288,6 +308,19 @@ function computeFacilityRecovery(state: GameState): number {
 // ---------------------------------------------------------------------------
 // Clamps
 // ---------------------------------------------------------------------------
+
+/**
+ * Stress that belongs to the chair.
+ *
+ * Command pressure lands on whoever is holding the ship, and on nobody else.
+ * A crew lead carries the ordinary weight of being crew; they only carry this
+ * if they end up captain.
+ */
+export function commandStress(state: GameState, amount: number): void {
+  const captain = state.characters[state.captainId];
+  if (!captain || !captain.alive || amount <= 0) return;
+  captain.stress = clampStress(captain.stress + amount);
+}
 
 export function clampMorale(value: number): number {
   return Math.max(MORALE.min, Math.min(MORALE.max, value));

@@ -1573,6 +1573,18 @@ export interface GameState {
 
   playerId: CharacterId;
   captainId: CharacterId;
+  /**
+   * The one secondary command assignment. Reassignable between jobs, never
+   * mid-expedition. Null while there is nobody but the captain aboard.
+   */
+  crewLeadId: CharacterId | null;
+  /** The captain has died and a survivor has to take the chair. */
+  pendingSuccession?: boolean;
+  /**
+   * Somebody local is being paid to watch the ship, until this hour. While the
+   * berth is covered, the captain and the crew lead may both go out.
+   */
+  shipWatchUntilHours?: number;
   characters: Record<CharacterId, Character>;
   /** Ordered crew roster (aboard the ship). */
   crewIds: CharacterId[];

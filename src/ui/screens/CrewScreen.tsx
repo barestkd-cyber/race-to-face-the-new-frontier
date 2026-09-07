@@ -10,6 +10,14 @@ import { useState } from 'react';
 import { Btn, Chip, CrewRow, Empty, Meter, Panel, Row, Sheet } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useGame } from '../useStore';
+import {
+  berthSecurity,
+  canPayShipWatch,
+  captainOf,
+  crewLeadCandidates,
+  crewLeadOf,
+} from '../../engine/command';
+import { COMMAND } from '../../engine/tuning';
 import { safeCrewCapacity } from '../../engine/ship';
 import { crewMembers, moraleBand } from '../../engine/sim';
 import { conditionLabel } from '../../engine/wounds';
@@ -17,7 +25,7 @@ import type { Character } from '../../engine/types';
 
 export function CrewScreen() {
   const state = useGame();
-  const [pickingCaptain, setPickingCaptain] = useState(false);
+  const [pickingLead, setPickingLead] = useState(false);
 
   if (!state) {
     return <Empty>No run is loaded, captain. Start or load a game first.</Empty>;
@@ -45,7 +53,11 @@ export function CrewScreen() {
         ? 'amber'
         : 'red';
 
-  const captain: Character | undefined = state.characters[state.captainId];
+  const captain: Character | undefined = captainOf(state);
+  const crewLead: Character | undefined = crewLeadOf(state);
+  const leadCandidates = crewLeadCandidates(state);
+  const berth = berthSecurity(state);
+  const watchAllowed = canPayShipWatch(state);
   const familyIds = new Set(state.homeworld.familyIds);
   const rescuedIds = new Set(state.homeworld.rescuedFamilyIds);
 
@@ -122,24 +134,61 @@ export function CrewScreen() {
         </p>
       </Panel>
 
+      {/*
+        Two posts, and only two. The chair is not a promotion the player hands
+        out — it moves once, when the person in it dies.
+      */}
       <Panel title="Command" aside={captain ? `${captain.name} ${captain.surname}` : 'Vacant'}>
-        <p className="prose">
-          {captain
-            ? `${captain.name} ${captain.surname} has the ship.`
-            : 'Nobody currently holds command.'}{' '}
-          When you take a party off the ship, the captain runs everything left behind
-          and answers whatever happens without you. Their Decision Making, Leadership
-          and their own tendencies decide how that goes, so this is not a title.
+        <div className="rows">
+          <Row
+            title={captain ? `${captain.name} ${captain.surname}` : 'Vacant'}
+            sub="Captain — holds the chair until they die"
+            right={<Chip tone="amber">Captain</Chip>}
+          />
+          <Row
+            title={crewLead ? `${crewLead.name} ${crewLead.surname}` : 'Nobody yet'}
+            sub={
+              crewLead
+                ? `Crew lead — Leadership ${crewLead.attributes.leadership}`
+                : 'Crew lead — the ship has nobody but the captain'
+            }
+            right={crewLead ? <Chip tone="cyan">Crew Lead</Chip> : <Chip>Vacant</Chip>}
+          />
+        </div>
+        <p className="prose prose--dim" style={{ marginTop: 8 }}>
+          One of them stays with the ship whenever a party goes out. If you lead it, the
+          crew lead runs everything left behind; if they lead it, you do. They only both
+          leave where the berth is genuinely covered.
         </p>
+        <p className={berth.secured ? 'tiny green' : 'tiny amber'} style={{ marginBottom: 0 }}>
+          {berth.reason}
+        </p>
+        {!berth.secured && (
+          <Btn
+            small
+            block
+            onClick={() => store.payShipWatch()}
+            disabled={!watchAllowed.ok}
+            sub={watchAllowed.ok ? `${COMMAND.shipWatchCredits} cr, holds for a day` : watchAllowed.reason}
+          >
+            Pay Somebody To Watch Her
+          </Btn>
+        )}
         <div className="btn-row" style={{ marginTop: 8 }}>
           <Btn
             tone="primary"
             wide
-            onClick={() => setPickingCaptain(true)}
-            disabled={crew.length === 0 || deployed}
-            sub={deployed ? 'Party away — no changes of command' : undefined}
+            onClick={() => setPickingLead(true)}
+            disabled={leadCandidates.length === 0 || deployed}
+            sub={
+              deployed
+                ? 'Party away — the post waits until they are back'
+                : leadCandidates.length === 0
+                  ? 'Nobody aboard but you'
+                  : undefined
+            }
           >
-            Set Captain
+            Set Crew Lead
           </Btn>
           <Btn
             wide
@@ -211,29 +260,30 @@ export function CrewScreen() {
       </Panel>
 
       <Sheet
-        open={pickingCaptain}
-        onClose={() => setPickingCaptain(false)}
-        title="Who has the ship"
+        open={pickingLead}
+        onClose={() => setPickingLead(false)}
+        title="Who has the ship when you are out"
       >
         <p className="prose prose--dim">
-          Pick the person who acts on your behalf when you are away. Choose for
-          judgement and steadiness, not for skill with a wrench.
+          The crew lead acts on your behalf when you are away, and is the person you can
+          send out instead of going yourself. Choose for judgement and steadiness, not
+          for skill with a wrench.
         </p>
         <div className="rows" style={{ marginTop: 8 }}>
-          {crew.map((member) => (
+          {leadCandidates.map((member) => (
             <CrewRow
               key={member.id}
               character={member}
-              selected={member.id === state.captainId}
+              selected={member.id === state.crewLeadId}
               onClick={() => {
-                store.setCaptain(member.id);
-                setPickingCaptain(false);
+                store.assignCrewLead(member.id);
+                setPickingLead(false);
               }}
               right={
-                member.id === state.captainId ? (
-                  <Chip tone="amber">Captain</Chip>
+                member.id === state.crewLeadId ? (
+                  <Chip tone="cyan">Crew Lead</Chip>
                 ) : (
-                  <Chip>Promote</Chip>
+                  <Chip>Leadership {member.attributes.leadership}</Chip>
                 )
               }
             />

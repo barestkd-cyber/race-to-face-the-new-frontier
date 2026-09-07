@@ -15,6 +15,7 @@
 
 import { skillCap } from './check';
 import { quoteSkillUpgrade, upgradeSkill, spendableXp } from './progression';
+import { COMMAND } from './tuning';
 import { focuses } from './study';
 import {
   SKILL_LABELS,
@@ -251,4 +252,46 @@ export function hasDevelopmentToSpend(state: GameState, character: Character): b
   return developmentOptions(character).some((option) =>
     option.skills.some((skill) => quoteSkillUpgrade(state, character, skill).affordable),
   );
+}
+
+// ---------------------------------------------------------------------------
+// The simulation's half
+// ---------------------------------------------------------------------------
+
+/**
+ * Crew develop themselves.
+ *
+ * The player develops the protagonist; the simulation develops the crew. This
+ * spends a crew member's OWN experience, in the direction their work has
+ * actually been taking them — it never touches the shared pool, which stays
+ * the player's to spend on the captain.
+ *
+ * The player still steers this, by deciding who works, who studies and who
+ * goes out. They just do not have to keep twenty-five skill sheets by hand.
+ */
+export function autoDevelop(state: GameState, character: Character): string[] {
+  if (character.id === state.captainId) return [];
+  if (character.personalXp < COMMAND.crewAutoDevelopMinXp) return [];
+
+  const option = developmentOptions(character)[0];
+  if (!option) return [];
+
+  const lines: string[] = [];
+  for (let guard = 0; guard < 40; guard += 1) {
+    const affordable = option.skills
+      .map((skill) => ({ skill, quote: quoteSkillUpgrade(state, character, skill) }))
+      // Their own experience only. The crew pool belongs to the captain.
+      .filter((entry) => entry.quote.affordable && entry.quote.source === 'personal')
+      .sort((a, b) => a.quote.cost - b.quote.cost);
+    if (affordable.length === 0) break;
+
+    const pick = affordable[0]!;
+    const before = character.skills[pick.skill] ?? 0;
+    const result = upgradeSkill(state, character, pick.skill);
+    if (!result.ok) break;
+    lines.push(
+      `${character.name} is getting better at ${SKILL_LABELS[pick.skill]} — ${before} to ${character.skills[pick.skill]}.`,
+    );
+  }
+  return lines;
 }

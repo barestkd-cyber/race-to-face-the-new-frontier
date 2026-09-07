@@ -39,6 +39,7 @@ src/
     access.ts     What you may physically do from where you stand
     situation.ts  What matters right now, said in sentences
     lifeStory.ts  The captain's generated life: age, trade, two events, words
+    command.ts    Captain, crew lead, who holds the ship, and succession
     advice.ts     Who is best at a job, and what is wrong with them
     development.ts  One development decision instead of twenty +1 taps
     study.ts      Knowledge specialization, earned in hours
@@ -82,7 +83,20 @@ about design, and breaking either pair shows up immediately in play.
 
 And one rule about what reaches the player:
 
-5. **Remove chores, preserve decisions.** If the game already knows the answer,
+5. **The captain is the protagonist, and stays captain until they die.** The
+   chair is not a role you hand to whichever recruit rolled better numbers —
+   everything the captain is and has done has to keep mattering. It moves once,
+   when the person in it dies, and the successor keeps the character they
+   already are. The crew lead is the one reassignable command post, and the
+   reason an away party never leaves the ship to run itself: captain out, crew
+   lead aboard; crew lead out, captain aboard; both out only where the berth is
+   covered. See `command.ts`.
+6. **The player develops the protagonist. The simulation develops the crew.**
+   Directed advancement belongs to the captain. Everyone else spends their own
+   experience on themselves, in whatever direction their work has taken them.
+   The player still steers it by deciding who studies, who goes out, and what
+   they do when they get there.
+7. **Remove chores, preserve decisions.** If the game already knows the answer,
    it does not ask — a party with only one possible composition fills itself, a
    forced leader is the captain, and gear the crew obviously wants is one
    button. If a number has a threshold that changes what a player should do,

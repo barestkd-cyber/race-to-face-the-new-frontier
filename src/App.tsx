@@ -13,7 +13,8 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { stardayLabel } from './engine/log';
 import { currentPlace } from './engine/places';
 import type { ScreenId } from './engine/types';
-import { Btn, Panel, Row, Sheet } from './ui/components';
+import { Btn, Chip, Panel, Row, Sheet } from './ui/components';
+import { crewLeadOf, successionCandidates } from './engine/command';
 import { Intro } from './ui/Intro';
 import { Portrait } from './ui/Portrait';
 import { store, useGame, useDraft, useToasts } from './ui/useStore';
@@ -207,6 +208,18 @@ export function App() {
         !state.activeEvent &&
         screen !== 'gameOver' && <Farewell entry={state.pendingFarewells[0]!} />}
 
+      {/*
+        The chair is empty. This comes after the farewell, because the death is
+        acknowledged before the consequence, and it is a real choice — the crew
+        lead is the obvious answer, not the automatic one.
+      */}
+      {state &&
+        state.pendingSuccession &&
+        state.pendingFarewells.length === 0 &&
+        !state.combat &&
+        !state.activeEvent &&
+        screen !== 'gameOver' && <Succession state={state} />}
+
       {toasts.length > 0 && (
         <div className="toasts">
           {toasts.map((toast) => (
@@ -230,6 +243,46 @@ export function App() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Somebody has to take the chair.
+ *
+ * Not a game over and not a role swap. The successor keeps everything they
+ * already are — their age, their history, their skills, their wounds and their
+ * relationships — and holds the chair from here until they die.
+ */
+function Succession({ state }: { state: import('./engine/types').GameState }) {
+  const candidates = successionCandidates(state);
+  const lead = crewLeadOf(state);
+
+  return (
+    <div className="farewell" role="alertdialog" aria-label="Somebody has to take command">
+      <div className="farewell__card">
+        <div className="farewell__name">The chair is empty</div>
+        <p className="farewell__line">
+          Somebody has to take her. Whoever does keeps everything they already are, and
+          holds it until they die.
+        </p>
+        <div className="rows" style={{ marginTop: 8, textAlign: 'left' }}>
+          {candidates.map((person) => (
+            <Row
+              key={person.id}
+              left={<Portrait seed={person.portraitSeed} />}
+              title={`${person.name} ${person.surname}`}
+              sub={
+                person.id === lead?.id
+                  ? `Crew lead · Leadership ${person.attributes.leadership}`
+                  : `${person.profession ?? person.lifeHistory.career} · Leadership ${person.attributes.leadership}`
+              }
+              right={person.id === lead?.id ? <Chip tone="cyan">Crew lead</Chip> : undefined}
+              onClick={() => store.chooseSuccessor(person.id)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

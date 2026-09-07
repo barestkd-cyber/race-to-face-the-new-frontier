@@ -47,10 +47,21 @@ import { PROFESSIONS } from '../content/professions';
 import { LIFE_EVENTS } from '../content/lifeEvents';
 import { DEMEANOR } from '../content/demeanor';
 import { rollCaptainAge, rollLifeStory, startingCreditsDelta } from './lifeStory';
+import {
+  berthSecurity,
+  canAssignCrewLead,
+  commandRuleFor,
+  confirmSuccession,
+  ensureCrewLead,
+  noteSuccession,
+  payShipWatch,
+} from './command';
+import { autoDevelop } from './development';
+import { commandStress, pruneDeadCrew } from './sim';
 import { treatmentFacility } from './actions';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
-import { createGame } from './newGame';
+import { checkRunEnded, createGame } from './newGame';
 import { simulateRun } from './simulate';
 import { ATTRIBUTE_KEYS, SKILL_KEYS, type AttributeKey, type SkillKey } from './types';
 
@@ -1298,5 +1309,150 @@ describe('the captain generation library', () => {
 
     const plain = createCharacter({ rng: new Rng('CAP-MONEY') });
     expect(startingCreditsDelta(plain)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Captain and crew lead
+// ---------------------------------------------------------------------------
+
+function twoCrewGame(seed: string): GameState {
+  const draft = generateProtagonistDraft(streamRng(seed, 'protagonist'));
+  const state = createGame(seed, draft.character);
+  const second = createCharacter({ rng: new Rng(`${seed}:second`), aboard: true });
+  second.age = 34;
+  state.characters[second.id] = second;
+  state.crewIds.push(second.id);
+  ensureCrewLead(state);
+  return state;
+}
+
+describe('command', () => {
+  it('starts with a captain and nobody else to hold the ship', () => {
+    const draft = generateProtagonistDraft(streamRng('CMD-1', 'protagonist'));
+    const state = createGame('CMD-1', draft.character);
+    expect(state.captainId).toBe(draft.character.id);
+    expect(state.crewLeadId).toBeNull();
+    // Alone, the rule cannot bind — there is nobody to leave behind.
+    expect(commandRuleFor(state, [state.captainId]).ok).toBe(true);
+  });
+
+  it('fills the second post itself when there is only one candidate', () => {
+    const state = twoCrewGame('CMD-2');
+    expect(state.crewLeadId).toBeTruthy();
+    expect(state.crewLeadId).not.toBe(state.captainId);
+  });
+
+  it('keeps one of the two commanders aboard at an exposed berth', () => {
+    const state = twoCrewGame('CMD-3');
+    // Put the ship somewhere nobody would leave it standing.
+    for (const place of Object.values(state.places)) {
+      if (place.shipHere) place.danger = 70;
+    }
+    expect(berthSecurity(state).secured).toBe(false);
+
+    // Either one alone is fine.
+    expect(commandRuleFor(state, [state.captainId]).ok).toBe(true);
+    expect(commandRuleFor(state, [state.crewLeadId!]).ok).toBe(true);
+    // Both is not.
+    expect(commandRuleFor(state, [state.captainId, state.crewLeadId!]).ok).toBe(false);
+  });
+
+  it('lets them both leave where the berth is genuinely covered', () => {
+    const state = twoCrewGame('CMD-4');
+    for (const place of Object.values(state.places)) {
+      if (place.shipHere) place.danger = 70;
+    }
+    state.resources.credits = 5000;
+    payShipWatch(state);
+    expect(berthSecurity(state).secured).toBe(true);
+    expect(commandRuleFor(state, [state.captainId, state.crewLeadId!]).ok).toBe(true);
+  });
+
+  it('will not move the second post while a party is out', () => {
+    const state = twoCrewGame('CMD-5');
+    const other = state.crewIds.find((id) => id !== state.captainId)!;
+    state.expedition = {
+      siteId: 'x',
+      partyIds: [other],
+      leaderId: other,
+      currentNodeId: null,
+      carried: [],
+      carriedCredits: 0,
+      startedAtHours: 0,
+      log: [],
+    } as unknown as GameState['expedition'];
+    expect(canAssignCrewLead(state, other).ok).toBe(false);
+  });
+
+  it('hands the chair to a survivor when the captain dies, keeping who they are', () => {
+    const state = twoCrewGame('CMD-6');
+    const successorId = state.crewIds.find((id) => id !== state.captainId)!;
+    const successor = state.characters[successorId]!;
+    const skillsBefore = { ...successor.skills };
+    const ageBefore = successor.age;
+
+    const captain = state.characters[state.captainId]!;
+    captain.alive = false;
+    captain.departedReason = 'Killed';
+    pruneDeadCrew(state);
+    noteSuccession(state);
+
+    // A provisional captain is installed so nothing dereferences a corpse,
+    // and the player is still asked.
+    expect(state.pendingSuccession).toBe(true);
+    expect(state.characters[state.captainId]!.alive).toBe(true);
+
+    confirmSuccession(state, successorId);
+    expect(state.captainId).toBe(successorId);
+    expect(state.pendingSuccession).toBe(false);
+    expect(state.characters[successorId]!.role).toBe('captain');
+    // Not regenerated: the same person, with everything they had.
+    expect(state.characters[successorId]!.age).toBe(ageBefore);
+    expect(state.characters[successorId]!.skills).toEqual(skillsBefore);
+    // And the run is not over.
+    expect(checkRunEnded(state)).toBe(false);
+  });
+
+  it('never leaves the chair and the second post with the same person', () => {
+    const state = twoCrewGame('CMD-7');
+    const lead = state.crewLeadId!;
+    confirmSuccession(state, lead);
+    expect(state.captainId).toBe(lead);
+    expect(state.crewLeadId).not.toBe(lead);
+  });
+
+  it('puts command pressure on the captain and nobody else', () => {
+    const state = twoCrewGame('CMD-8');
+    const other = state.crewIds.find((id) => id !== state.captainId)!;
+    const captainBefore = state.characters[state.captainId]!.stress;
+    const otherBefore = state.characters[other]!.stress;
+
+    commandStress(state, 10);
+    expect(state.characters[state.captainId]!.stress).toBeGreaterThan(captainBefore);
+    expect(state.characters[other]!.stress).toBe(otherBefore);
+  });
+
+  it('develops crew from their own experience and never from the shared pool', () => {
+    const state = twoCrewGame('CMD-9');
+    const other = state.characters[state.crewIds.find((id) => id !== state.captainId)!]!;
+    noteSkillUse(other, 'scavenging');
+    other.personalXp = 40;
+    state.crewXp = 500;
+    const before = other.skills.scavenging;
+
+    const lines = autoDevelop(state, other);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(other.skills.scavenging).toBeGreaterThan(before);
+    // The shared pool is the player's, for the captain.
+    expect(state.crewXp).toBe(500);
+    expect(other.personalXp).toBeLessThan(40);
+
+    // And it never touches the captain — that development is player-directed.
+    const captain = state.characters[state.captainId]!;
+    noteSkillUse(captain, 'scavenging');
+    captain.personalXp = 40;
+    expect(autoDevelop(state, captain)).toEqual([]);
+    expect(captain.personalXp).toBe(40);
   });
 });

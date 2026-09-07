@@ -200,7 +200,7 @@ export function CharacterScreen() {
         respecting the same potential caps. They just stop making somebody tap
         +1 twenty times to express one intention.
       */}
-      {canDevelop && development.length > 0 && (
+      {isCaptain && canDevelop && development.length > 0 && (
         <Panel title={`${character.name} has improved`} aside={`${spendableXp(state, character)} XP`}>
           <p className="prose">How should their development continue?</p>
           {doing.length > 0 && (
@@ -221,6 +221,17 @@ export function CharacterScreen() {
           <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
             Every point is spent under the usual rules and stops at their potential.
             Prefer to place them yourself? Skills and Attributes are below.
+          </p>
+        </Panel>
+      )}
+
+      {!isCaptain && canDevelop && (
+        <Panel title="Experience" aside={`${spendableXp(state, character)} XP`}>
+          <p className="prose prose--dim" style={{ marginTop: 0 }}>
+            {character.name} develops on their own, in whatever direction the work has
+            been taking them. You steer that by deciding who studies, who goes out, and
+            what they do when they get there. Directed development belongs to the
+            captain.
           </p>
         </Panel>
       )}
