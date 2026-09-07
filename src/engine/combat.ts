@@ -128,7 +128,7 @@ function makeHostileCharacter(
     name: spec.count[1] > 1 ? `${spec.name} ${index + 1}` : spec.name,
     surname: '',
     age: rng.int(19, 52),
-    pronouns: 'they/them',
+    sex: rng.chance(0.5) ? 'male' : 'female',
     portraitSeed: rng.int(0, 0xffffff),
     role: 'crew',
     attributes,

@@ -1199,8 +1199,9 @@ textarea {
 .intro__video {
   width: 100%;
   height: 100%;
-  /* Fill the frame on a phone in portrait without letterboxing to nothing. */
-  object-fit: cover;
+  /* Show the whole frame. The shot is a wide landscape and cropping it to
+     fill a portrait phone cuts off most of what is worth seeing. */
+  object-fit: contain;
 }
 
 .intro__vignette {

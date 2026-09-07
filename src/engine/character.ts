@@ -562,11 +562,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     name: given,
     surname,
     age,
-    pronouns: rng.weighted([
-      { value: 'she/her' as const, weight: 44 },
-      { value: 'he/him' as const, weight: 44 },
-      { value: 'they/them' as const, weight: 12 },
-    ]),
+    sex: rng.chance(0.5) ? ('male' as const) : ('female' as const),
     portraitSeed: rng.int(0, 0xffffff),
     role: options.role ?? career.role,
     attributes,
@@ -821,32 +817,25 @@ export function shortName(character: Character): string {
 }
 
 export function subjectPronoun(character: Character): string {
-  return character.pronouns === 'she/her'
-    ? 'she'
-    : character.pronouns === 'he/him'
-      ? 'he'
-      : 'they';
+  return character.sex === 'female' ? 'she' : 'he';
 }
 
 export function objectPronoun(character: Character): string {
-  return character.pronouns === 'she/her'
-    ? 'her'
-    : character.pronouns === 'he/him'
-      ? 'him'
-      : 'them';
+  return character.sex === 'female' ? 'her' : 'him';
 }
 
 export function possessivePronoun(character: Character): string {
-  return character.pronouns === 'she/her'
-    ? 'her'
-    : character.pronouns === 'he/him'
-      ? 'his'
-      : 'their';
+  return character.sex === 'female' ? 'her' : 'his';
 }
 
-/** Third-person verb agreement — "they are" vs "she is". */
-export function isAre(character: Character): string {
-  return character.pronouns === 'they/them' ? 'are' : 'is';
+/** Third-person verb agreement. Kept so call sites need not care. */
+export function isAre(_character: Character): string {
+  return 'is';
+}
+
+/** How a character's sex reads on a sheet. */
+export function sexLabel(character: Character): string {
+  return character.sex === 'female' ? 'Female' : 'Male';
 }
 
 export function generateShipName(rng: Rng): string {

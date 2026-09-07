@@ -408,7 +408,8 @@ export interface Character {
   name: string;
   surname: string;
   age: number;
-  pronouns: 'they/them' | 'she/her' | 'he/him';
+  /** Characters are male or female. Drives pronouns in generated prose. */
+  sex: 'male' | 'female';
   portraitSeed: number;
   role: CharacterRole;
 

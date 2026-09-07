@@ -27,6 +27,7 @@ import { Btn, Chip, Empty, Fold, KV, Panel, Row } from '../components';
 import { Portrait } from '../Portrait';
 import { focuses } from '../../engine/study';
 import { SPEC } from '../../engine/tuning';
+import { sexLabel } from '../../engine/character';
 import { store, useGame } from '../useStore';
 
 const OUTCOME_ORDER: CheckOutcome[] = [
@@ -186,7 +187,7 @@ export function RecruitCandidateScreen() {
               items={[
                 ['Age', person.age],
                 ['Role', <span style={{ textTransform: 'capitalize' }}>{person.role}</span>],
-                ['Pronouns', person.pronouns],
+                ['Sex', sexLabel(person)],
               ]}
             />
           </div>

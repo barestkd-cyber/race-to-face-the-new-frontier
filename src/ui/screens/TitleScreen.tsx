@@ -115,17 +115,23 @@ export function TitleScreen() {
       </div>
 
       <Panel title="The Situation" aside="Briefing">
+        <p className="prose" style={{ fontSize: 15, color: 'var(--amber)' }}>
+          Your world is dying.
+        </p>
         <p className="prose">
-          The homeworld is failing on two separate schedules. The air processing that made the
-          place liveable is losing ground faster than replacements can be built, and the crust
-          underneath has started to move. Nobody knows which one finishes first, and the forecasts
-          that claim otherwise are guessing.
+          It may not happen today, or even tomorrow. The lights still come on, stores still open,
+          and from your backyard, everything can almost look normal. But two clocks are running
+          down, and nobody knows which one will reach zero first. The forecasts that claim
+          otherwise are guessing.
+        </p>
+        <p className="prose">
+          You inherit a worn ship and leave alone. Anyone who flies with you — family, friends, or
+          strangers — has to be found and convinced to come. Beyond the moons and stations ahead
+          is the Travel Center, your way into the wider frontier.
         </p>
         <p className="prose prose--dim">
-          You inherit a ship you did not choose, and you leave alone. Everyone who flies with you
-          is somebody you found and talked into it. The route ends at the Travel Center on the far
-          frontier, and every leg costs fuel, food, and people. Get there before the clocks run out,
-          captain.
+          Every day you stay is another chance to prepare — and another day you might have needed
+          to leave.
         </p>
       </Panel>
 

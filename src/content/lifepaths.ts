@@ -1,8 +1,9 @@
 /**
  * NAMES AND LIFE PATHS — pure authored data, no logic.
  *
- * Names are a single undifferentiated pool. The generator assigns pronouns
- * independently, so nothing here is tagged or grouped by gender.
+ * Names are a single undifferentiated pool, drawn from many real-world naming
+ * traditions. The generator assigns sex separately and does not consult this
+ * list, so a given name may land on either.
  *
  * Life paths do not set stats. They nudge generation:
  * - `skillBias` (+4..+18) shifts exposure bands. Careers are the strongest signal.

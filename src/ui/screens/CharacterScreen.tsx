@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react';
 import { Btn, Chip, Duration, Empty, Fold, KV, Meter, Panel, Pips, Row } from '../components';
 import { Portrait } from '../Portrait';
+import { sexLabel } from '../../engine/character';
 import { store, useGame } from '../useStore';
 import { TRAIT_DEFS } from '../../content/traits';
 import {
@@ -153,7 +154,7 @@ export function CharacterScreen() {
               {character.name} {character.surname}
             </span>
             <span className="tiny">
-              Age {character.age} · {character.pronouns} · {titleCase(character.role)}
+              Age {character.age} · {sexLabel(character)} · {titleCase(character.role)}
             </span>
             <span className="chips" style={{ marginTop: 6 }}>
               {character.isPlayer && <Chip tone="amber">You</Chip>}

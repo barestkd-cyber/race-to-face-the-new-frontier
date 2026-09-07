@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Btn, Chip, Empty, Fold, KV, Panel, StatLine } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useDraft } from '../useStore';
-import { autoSpendDraft, deriveMaxHealth } from '../../engine/character';
+import { autoSpendDraft, deriveMaxHealth, sexLabel } from '../../engine/character';
 import { skillCap } from '../../engine/check';
 import { ATTRIBUTE_INFO, SKILL_INFO } from '../../engine/glossary';
 import type { NewRunDraft } from '../../engine/newGame';
@@ -158,7 +158,7 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
               {character.name} {character.surname}
             </div>
             <div className="tiny">
-              {character.age} · {character.pronouns} ·{' '}
+              {character.age} · {sexLabel(character)} ·{' '}
               <span style={{ textTransform: 'capitalize' }}>{character.role}</span>
             </div>
             <div className="chips">
