@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { Btn, Empty, Panel } from '../components';
 import { Portrait } from '../Portrait';
+import { sexLabel } from '../../engine/character';
 import { store, useDraft } from '../useStore';
 import { CharGenScreen } from './CharGenScreen';
 
@@ -65,7 +66,7 @@ export function NewGameScreen() {
               {character.name} {character.surname}
             </span>
             <span className="tiny dim" style={{ display: 'block' }}>
-              Age {character.age}
+              Age {character.age} · {sexLabel(character)}
             </span>
             <span className="label" style={{ marginTop: 6 }}>
               Background
