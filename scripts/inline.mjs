@@ -2,6 +2,13 @@
  * Fold the single-file build into one HTML document suitable for hosting as an
  * artifact: no <html>/<head>/<body> wrapper, title and styles first, then the
  * mount point and the whole bundle inline.
+ *
+ * The opening video is deliberately NOT carried here. Embedding it would mean
+ * encoding it as text, which inflates it by a third and turns a 1.3 MB file
+ * into nearly 4 MB for fifteen seconds of atmosphere. The single file is for
+ * handing around and reading; the intro belongs to the hosted version, where
+ * it can sit beside the page and stream. With no video present the opening
+ * simply steps aside and the title screen loads.
  */
 
 import fs from 'node:fs';

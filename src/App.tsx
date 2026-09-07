@@ -15,6 +15,7 @@ import { currentPlace } from './engine/places';
 import { ONBOARDING } from './engine/tuning';
 import type { ScreenId } from './engine/types';
 import { Btn, Panel, Row, Sheet } from './ui/components';
+import { Intro } from './ui/Intro';
 import { Portrait } from './ui/Portrait';
 import { store, useGame, useDraft, useToasts } from './ui/useStore';
 
@@ -89,6 +90,10 @@ export function App() {
   const draft = useDraft();
   const toasts = useToasts();
   const [menuOpen, setMenuOpen] = useState(false);
+  // The opening plays when the game is opened, and never blocks anything: it
+  // is skippable on the first touch and gets out of the way by itself if the
+  // browser refuses to play it.
+  const [introDone, setIntroDone] = useState(false);
 
   const screen: ScreenId = state ? state.screen : draft ? 'newGame' : 'title';
   const Screen = SCREENS[screen] ?? CockpitScreen;
@@ -109,6 +114,8 @@ export function App() {
 
   return (
     <div className="app">
+      {!introDone && <Intro onDone={() => setIntroDone(true)} />}
+
       <main className="app__body">
         <Screen />
       </main>
