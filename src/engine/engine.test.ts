@@ -45,15 +45,21 @@ import { PROFESSIONS } from '../content/professions';
 import { LIFE_EVENTS } from '../content/lifeEvents';
 import { rollCaptainAge, rollLifeStory, startingCreditsDelta } from './lifeStory';
 import { PERSONALITY_TRAITS } from '../content/personality';
+import { LIFE_PATHS } from '../content/lifepaths';
 import {
-  effectsOf,
-  griefMultiplier,
-  recoveryMultiplier,
+  frictionFor,
   rollPersonality,
+  knownTraits,
+  optionWeight,
+  reactTo,
+  refusalFor,
+  refusalTraits,
+  relationshipDelta,
   temperamentOf,
   traitById,
 } from './personality';
-import { CAPTAIN_GEN } from './tuning';
+import { tagsForChoice } from './tags';
+import { migrateSavedState } from '../persistence/storage';
 import {
   berthSecurity,
   canAssignCrewLead,
@@ -74,7 +80,6 @@ import {
   ATTRIBUTE_KEYS,
   SKILL_KEYS,
   type AttributeKey,
-  type Attributes,
   type SkillKey,
 } from './types';
 
@@ -1856,101 +1861,262 @@ describe('command', () => {
   });
 });
 
+
 // ---------------------------------------------------------------------------
-// Personality — one system, one roll, one source of truth
+// Personality — the 247 canonical traits ARE the mechanics
 // ---------------------------------------------------------------------------
 
-function firstTraitWith(effect: string): string[] {
-  const trait = PERSONALITY_TRAITS.find((t) => t.effect === effect);
-  return trait ? [trait.id] : [];
+/** A throwaway character wearing exactly the traits a test cares about. */
+function withTraits(seed: string, ...ids: string[]) {
+  const character = createCharacter({ rng: new Rng(seed) });
+  character.traits = ids;
+  character.traitKnowledge = ids.map((trait) => ({ trait, known: 0 as const, evidence: 0 }));
+  return character;
 }
 
 describe('personality', () => {
-  it('is the only thing rolled, and every character has it', () => {
+  it('is the only active personality state on a character', () => {
     for (let seed = 0; seed < 120; seed += 1) {
       const character = createCharacter({ rng: new Rng(`pers-${seed}`) });
       expect(character.traits.length).toBeGreaterThanOrEqual(1);
       expect(character.traits.length).toBeLessThanOrEqual(7);
-      // No second list anywhere on the character.
-      expect((character as unknown as { demeanor?: unknown }).demeanor).toBeUndefined();
-      // No duplicate word, and no two words from the same corner of a person.
-      expect(new Set(character.traits).size).toBe(character.traits.length);
-      const groups = character.traits.map((id) => traitById(id)!.group);
-      expect(new Set(groups).size).toBe(groups.length);
-    }
-  });
-
-  it('never describes somebody in words their attributes contradict', () => {
-    for (let seed = 0; seed < 200; seed += 1) {
-      const character = createCharacter({ rng: new Rng(`fit-${seed}`) });
       for (const id of character.traits) {
-        const trait = traitById(id)!;
-        if (!trait.attribute || !trait.direction) continue;
-        const value = character.attributes[trait.attribute];
-        if (trait.direction === 'high') {
-          expect(value).toBeGreaterThanOrEqual(CAPTAIN_GEN.personalityHigh);
-        } else {
-          expect(value).toBeLessThanOrEqual(CAPTAIN_GEN.personalityLow);
-        }
+        expect(PERSONALITY_TRAITS.some((t) => t.id === id)).toBe(true);
       }
+      // No legacy list, no second roll, no behaviour class.
+      const loose = character as unknown as Record<string, unknown>;
+      expect(loose.demeanor).toBeUndefined();
+      expect(loose.temperament).toBeUndefined();
+      expect(loose.behaviour).toBeUndefined();
+      expect(new Set(character.traits).size).toBe(character.traits.length);
     }
   });
 
-  it('lets a life history pull the personality without deciding it', () => {
+  it('resolves from the trait itself, never through a shared behaviour class', () => {
+    // Every canonical trait carries its own tags, intensity and rule. If any of
+    // them were still collapsing into a small shared vocabulary, this would
+    // fail: 247 traits produce far more distinct rule sets than 24.
+    const shapes = new Set(
+      PERSONALITY_TRAITS.map((t) =>
+        [t.favored.join('|'), t.opposed.join('|'), t.intensity].join('//'),
+      ),
+    );
+    expect(shapes.size).toBeGreaterThan(200);
+    for (const trait of PERSONALITY_TRAITS) {
+      expect(trait.favored.length + trait.opposed.length).toBeGreaterThan(0);
+      expect(trait.rule.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('makes four danger traits behave four different ways', () => {
+    const danger = ['danger', 'physical_risk'];
+    const rescue = ['danger', 'physical_risk', 'protect_others', 'rescue'];
+
+    const brave = withTraits('D1', 'brave');
+    const fearless = withTraits('D2', 'fearless');
+    const steady = withTraits('D3', 'steady-under-fire');
+    const guardian = withTraits('D4', 'protective-courage');
+
+    // Ordinary danger: Brave steadies, Fearless steadies harder.
+    const braveCalm = -reactTo(brave, danger).stress;
+    const fearlessCalm = -reactTo(fearless, danger).stress;
+    expect(braveCalm).toBeGreaterThan(0);
+    expect(fearlessCalm).toBeGreaterThan(braveCalm);
+
+    // Steady Under Fire does nothing until it is an actual crisis.
+    expect(reactTo(steady, ['combat']).stress).toBe(0);
+    expect(reactTo(steady, ['combat'], { crisis: true }).stress).toBeLessThan(0);
+
+    // Protective Courage does nothing until somebody is being protected.
+    expect(optionWeight(guardian, danger)).toBe(0);
+    expect(optionWeight(guardian, rescue, { protecting: true })).toBeGreaterThan(0);
+
+    // And none of the four resolve identically on the same input.
+    const all = [brave, fearless, steady, guardian].map((c) =>
+      JSON.stringify(reactTo(c, rescue, { crisis: true, protecting: true })),
+    );
+    expect(new Set(all).size).toBe(4);
+  });
+
+  it('lets personality cost the player without choosing for them', () => {
+    const pacifist = withTraits('P1', 'pacifistic');
+    const violence = ['violence', 'combat', 'aggression'];
+
+    const friction = frictionFor(pacifist, violence);
+    expect(friction.material).toBe(true);
+    expect(friction.aligned).toBe(false);
+    expect(friction.reaction.stress).toBeGreaterThan(0);
+    // Ordinary violence is a cost, not a wall.
+    expect(refusalFor(pacifist, violence).refused).toBe(false);
+  });
+
+  it('refuses only in the extreme cases, and only for the four named traits', () => {
+    expect(refusalTraits()).toHaveLength(4);
+
+    const pacifist = withTraits('R1', 'pacifistic');
+    expect(refusalFor(pacifist, ['execution']).refused).toBe(true);
+    // And even then, an overriding situation is allowed to break the rule.
+    expect(refusalFor(pacifist, ['execution'], { override: true }).refused).toBe(false);
+
+    const ordinary = withTraits('R2', 'brave', 'curious');
+    expect(refusalFor(ordinary, ['execution', 'torture']).refused).toBe(false);
+  });
+
+  it('weights autonomous options, and lets two traits pull opposite ways', () => {
+    const gambler = withTraits('A1', 'risk-taker');
+    const guardian = withTraits('A2', 'protective-of-dependents');
+    const both = withTraits('A3', 'risk-taker', 'protective-of-dependents');
+
+    const pointless = ['gamble', 'danger'];
+    const rescue = ['rescue', 'protect_others', 'danger', 'physical_risk'];
+
+    // The gambler wants the gamble; the guardian does not care for it.
+    expect(optionWeight(gambler, pointless)).toBeGreaterThan(0);
+    // The same person is pulled both ways, and the sum is what moves.
+    expect(optionWeight(both, rescue)).not.toBe(optionWeight(gambler, rescue));
+    expect(optionWeight(guardian, rescue)).toBeGreaterThan(0);
+  });
+
+  it('reacts to other people through the same traits, not a separate system', () => {
+    const loyal = withTraits('REL1', 'loyal');
+    const suspicious = withTraits('REL2', 'suspicious');
+    const rescue = ['crew', 'protect_others', 'promise'];
+
+    expect(relationshipDelta(loyal, rescue).delta).toBeGreaterThan(0);
+    expect(relationshipDelta(loyal, ['betrayal']).delta).toBeLessThan(0);
+    // A suspicious onlooker does not warm to the same act as readily.
+    expect(relationshipDelta(suspicious, rescue).delta).toBeLessThan(
+      relationshipDelta(loyal, rescue).delta,
+    );
+
+    // Grudges keep hold of a bad one, and let go of it more slowly than most.
+    // Grudge-Holding's own opposed tag is `forgiveness` — the trait does not
+    // react to the betrayal, it changes how long the reaction lasts.
+    const grudge = withTraits('REL3', 'grudge-holding');
+    const held = relationshipDelta(grudge, ['forgiveness']);
+    expect(held.delta).toBeLessThan(0);
+    expect(held.lingers).toBe(true);
+
+    const lets_go = withTraits('REL4', 'forgiving');
+    expect(relationshipDelta(lets_go, ['ongoing_revenge']).lingers).toBe(false);
+  });
+
+  it('keeps hidden traits working while the player cannot see them', () => {
+    const stranger = createCharacter({ rng: new Rng('HIDE-1') });
+    stranger.traits = ['fearless'];
+    stranger.traitKnowledge = [{ trait: 'fearless', known: 0, evidence: 0 }];
+
+    // Nothing is visible.
+    expect(knownTraits(stranger)).toHaveLength(0);
+    expect(temperamentOf(stranger).descriptors).toHaveLength(0);
+    // And it still works.
+    expect(reactTo(stranger, ['danger']).stress).toBeLessThan(0);
+    expect(optionWeight(stranger, ['danger'])).toBeGreaterThan(0);
+  });
+
+  it('builds the temperament summary from canonical traits only', () => {
+    const draft = generateProtagonistDraft(streamRng('TEMP-V5', 'protagonist'));
+    const captain = draft.character;
+    const temperament = temperamentOf(captain, { full: true });
+
+    expect(temperament.descriptors).toEqual(
+      captain.traits.map((id) => traitById(id)!.label),
+    );
+    // Shown as sentences, but every one is that trait's own authored rule.
+    expect(temperament.tendencies.map((t) => t.rule.toLowerCase())).toEqual(
+      captain.traits.map((id) => traitById(id)!.rule.toLowerCase()),
+    );
+    expect(temperament.partial).toBe(false);
+  });
+
+  it('reads meaningful tags off the events the game already has', () => {
+    const tagged = ALL_EVENTS.filter((def) =>
+      def.choices.some((choice) => tagsForChoice(choice).length > 0),
+    );
+    // Every authored event reaches personality without naming a trait.
+    expect(tagged.length).toBe(ALL_EVENTS.length);
+
+    const wounding = tagsForChoice({
+      id: 'x',
+      label: 'x',
+      result: { text: '', effects: { wound: { severityScore: 40, damageType: 'blunt' } } },
+    });
+    expect(wounding).toContain('danger');
+    expect(wounding).toContain('physical_risk');
+  });
+});
+
+describe('personality in saves', () => {
+  it('translates legacy behaviour keys and never reactivates them', async () => {
+    const draft = generateProtagonistDraft(streamRng('SAVE-P', 'protagonist'));
+    const state = createGame('SAVE-P', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    // A save written before the library became the mechanics.
+    const legacy = JSON.parse(JSON.stringify(state)) as Record<string, never>;
+    const person = (legacy as unknown as { characters: Record<string, Record<string, unknown>> })
+      .characters[captain.id]!;
+    person.traits = ['brave', 'stubborn'];
+    person.traitKnowledge = [
+      { trait: 'brave', known: 2, evidence: 7 },
+      { trait: 'stubborn', known: 0, evidence: 0 },
+    ];
+    person.demeanor = ['Brave', 'Stubborn'];
+
+    const restored = migrateSavedState(legacy as never);
+    const migrated = (restored as unknown as { characters: Record<string, import('./types').Character> })
+      .characters[captain.id]!;
+
+    expect((migrated as unknown as { demeanor?: unknown }).demeanor).toBeUndefined();
+    for (const id of migrated.traits) {
+      expect(PERSONALITY_TRAITS.some((t) => t.id === id)).toBe(true);
+    }
+    expect(migrated.traitKnowledge.map((k: { trait: string }) => k.trait)).toEqual(
+      migrated.traits,
+    );
+  });
+});
+
+describe('personality and the life a character lived', () => {
+  it('lets a life history lean the roll through the same tags traits use', () => {
     const flat = ATTRIBUTE_KEYS.reduce(
       (acc, key) => ({ ...acc, [key]: 7 }),
-      {} as Attributes,
+      {} as Record<AttributeKey, number>,
     );
     let leaned = 0;
     for (let seed = 0; seed < 200; seed += 1) {
-      const traits = rollPersonality(new Rng(`bias-${seed}`), flat, {
-        patient: 3,
-        stubborn: 2,
+      const traits = rollPersonality(new Rng(`lean-${seed}`), flat, {
+        danger: 4,
+        physical_risk: 4,
       });
-      const effects = traits.map((id) => traitById(id)?.effect);
-      if (effects.includes('patient') || effects.includes('stubborn')) leaned += 1;
+      const drawn = traits.flatMap((id) => traitById(id)!.favored);
+      if (drawn.includes('danger') || drawn.includes('physical_risk')) leaned += 1;
     }
-    // It shows, and it is never a guarantee.
-    expect(leaned).toBeGreaterThan(40);
+    // It shows across many rolls, and it is never a guarantee.
+    expect(leaned).toBeGreaterThan(30);
     expect(leaned).toBeLessThan(200);
   });
 
-  it('drives the one decision mechanic from the same traits the player reads', () => {
-    const draft = generateProtagonistDraft(streamRng('PERS-DEC', 'protagonist'));
-    const character = draft.character;
-    for (const effect of effectsOf(character)) {
-      expect(character.traits.some((id) => traitById(id)?.effect === effect)).toBe(true);
+  it('carries no old behaviour keys in the life-path bias tables', () => {
+    const legacy = [
+      'selfPreserving',
+      'dutiful',
+      'cowardly',
+      'vindictive',
+      'opportunistic',
+      'compassionate',
+    ];
+    for (const table of [
+      LIFE_PATHS.origins,
+      LIFE_PATHS.upbringings,
+      LIFE_PATHS.careers,
+      LIFE_PATHS.formativeEvents,
+    ]) {
+      for (const entry of table) {
+        for (const key of Object.keys(entry.traitBias ?? {})) {
+          expect(legacy).not.toContain(key);
+        }
+      }
     }
-  });
-
-  it('makes personality change what a loss costs and how fast it fades', () => {
-    const base = createCharacter({ rng: new Rng('PERS-GRIEF') });
-    const attached = { ...base, traits: firstTraitWith('loyal') };
-    const apart = { ...base, traits: firstTraitWith('selfPreserving') };
-    expect(griefMultiplier(attached)).toBeGreaterThan(griefMultiplier(apart));
-
-    const steady = { ...base, traits: firstTraitWith('patient') };
-    const gnawed = { ...base, traits: firstTraitWith('suspicious') };
-    expect(recoveryMultiplier(steady)).toBeGreaterThan(recoveryMultiplier(gnawed));
-  });
-
-  it('shows the captain everything and a stranger only what has been learned', () => {
-    const draft = generateProtagonistDraft(streamRng('PERS-VIS', 'protagonist'));
-    const state = createGame('PERS-VIS', draft.character);
-    const captain = state.characters[state.playerId]!;
-
-    const own = temperamentOf(captain, { full: true });
-    expect(own.descriptors).toHaveLength(captain.traits.length);
-    expect(own.partial).toBe(false);
-
-    const stranger = createCharacter({ rng: new Rng('PERS-VIS:stranger') });
-    expect(temperamentOf(stranger).descriptors).toHaveLength(0);
-    expect(temperamentOf(stranger).partial).toBe(true);
-
-    // Learning one changes what can be said, not who they are.
-    const before = stranger.traits.length;
-    stranger.traitKnowledge[0]!.known = 2;
-    expect(temperamentOf(stranger).descriptors).toHaveLength(1);
-    expect(stranger.traits).toHaveLength(before);
   });
 });

@@ -8,7 +8,8 @@
  * Life paths do not set stats. They nudge generation:
  * - `skillBias` (+4..+18) shifts exposure bands. Careers are the strongest signal.
  * - `attributeBias` (-2..+3) is carried mostly by origins and upbringings.
- * - `traitBias` (+1..+4) is carried mostly by formative events.
+ * - `traitBias` (+1..+4) names semantic tags, and leans the canonical
+ *   personality roll toward traits that subscribe to them.
  * - `weight` defaults to 10; 4-8 marks an unusual path, 12-16 a common one.
  *
  * Biases are tendencies, not verdicts. A hard path is allowed to leave someone
@@ -90,7 +91,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised in an orbital creche where the lights never fully went down and forty children shared one corridor',
       skillBias: { computers: 6, persuasion: 5, stealth: 4 },
       attributeBias: { socialAwareness: 2, composure: 1, strength: -1 },
-      traitBias: { cooperative: 2 },
+      traitBias: { cooperation: 2 },
       weight: 10,
     },
     {
@@ -99,7 +100,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up on a moon rotation, three months on and one month home',
       skillBias: { mechanicalEngineering: 6, scavenging: 5, exploration: 4 },
       attributeBias: { endurance: 2, discipline: 1, socialAwareness: -1 },
-      traitBias: { patient: 2, dutiful: 1 },
+      traitBias: { patience: 2, duty: 1 },
       weight: 14,
     },
     {
@@ -108,7 +109,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'from the homeworld agricultural belt, where the season decided everything and nobody argued with it',
       skillBias: { cooking: 7, exploration: 5, mechanicalEngineering: 4 },
       attributeBias: { endurance: 2, strength: 1, reasoning: -1 },
-      traitBias: { patient: 3, stubborn: 1 },
+      traitBias: { patience: 3, tradition: 1 },
       weight: 14,
     },
     {
@@ -117,7 +118,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised in a dense arcology district, eleven thousand people to a floor and every one of them known by sight',
       skillBias: { persuasion: 6, stealth: 5, negotiation: 4 },
       attributeBias: { socialAwareness: 2, perception: 1, endurance: -1 },
-      traitBias: { cooperative: 1, opportunistic: 1 },
+      traitBias: { cooperation: 1, opportunity: 1 },
       weight: 14,
     },
     {
@@ -126,7 +127,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'born into a freight family, schooled between ports and never in one classroom twice',
       skillBias: { piloting: 7, navigation: 6, negotiation: 5 },
       attributeBias: { handEye: 1, evaluation: 1, discipline: -1 },
-      traitBias: { curious: 1, loyal: 1 },
+      traitBias: { mystery: 1, crew: 1 },
       weight: 12,
     },
     {
@@ -135,7 +136,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'out of a coastal fishing town that read weather better than it read anything else',
       skillBias: { exploration: 6, cooking: 5, mechanicalEngineering: 4 },
       attributeBias: { endurance: 2, perception: 2, learning: -1 },
-      traitBias: { stubborn: 2, patient: 1 },
+      traitBias: { tradition: 2, patience: 1 },
       weight: 10,
     },
     {
@@ -144,7 +145,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'from a research enclave where the adults spoke in citations and the children were expected to keep up',
       skillBias: { medicalResearch: 7, computers: 6, medicalDiagnostics: 4 },
       attributeBias: { learning: 3, reasoning: 2, strength: -2 },
-      traitBias: { curious: 3 },
+      traitBias: { mystery: 3 },
       weight: 6,
     },
     {
@@ -153,7 +154,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up in a mining settlement built around a shaft head and abandoned when the seam ran out',
       skillBias: { explosives: 6, scavenging: 6, mechanicalEngineering: 5 },
       attributeBias: { strength: 2, endurance: 2, charisma: -1 },
-      traitBias: { stubborn: 2, loyal: 1 },
+      traitBias: { tradition: 2, crew: 1 },
       weight: 12,
     },
     {
@@ -162,7 +163,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'spent childhood in a refugee resettlement block, on a list, waiting for a number to be called',
       skillBias: { scavenging: 6, persuasion: 5, cooking: 4 },
       attributeBias: { resilience: 2, perception: 1, charisma: -1 },
-      traitBias: { suspicious: 2, selfPreserving: 1, cooperative: 1 },
+      traitBias: { suspicion: 2, self_reliance: 1, cooperation: 1 },
       weight: 10,
     },
     {
@@ -171,7 +172,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'born on a transit station between two places, belonging properly to neither',
       skillBias: { negotiation: 6, navigation: 5, persuasion: 4 },
       attributeBias: { socialAwareness: 2, evaluation: 1, strength: -1 },
-      traitBias: { opportunistic: 2, curious: 1 },
+      traitBias: { opportunity: 2, mystery: 1 },
       weight: 10,
     },
     {
@@ -180,7 +181,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'from an isolated homestead where the nearest neighbour was four hours out and help was a theory',
       skillBias: { firstAid: 6, mechanicalEngineering: 5, exploration: 5 },
       attributeBias: { endurance: 2, resilience: 2, socialAwareness: -2 },
-      traitBias: { stubborn: 2, suspicious: 1, brave: 1 },
+      traitBias: { tradition: 2, suspicion: 1, danger: 1 },
       weight: 8,
     },
     {
@@ -189,7 +190,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised under the shift horns of an industrial arcology, where the air tasted of flux and everyone the same age worked the same floor',
       skillBias: { electricalEngineering: 6, mechanicalEngineering: 6, weaponsmithing: 4 },
       attributeBias: { endurance: 2, discipline: 2, learning: -1 },
-      traitBias: { dutiful: 2, cooperative: 1 },
+      traitBias: { duty: 2, cooperation: 1 },
       weight: 14,
     },
     {
@@ -198,7 +199,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'followed the seasonal labour circuit as a child, six addresses a year and none of them permanent',
       skillBias: { exploration: 6, negotiation: 5, scavenging: 5 },
       attributeBias: { endurance: 2, agility: 1, memory: -1 },
-      traitBias: { cooperative: 2, opportunistic: 1 },
+      traitBias: { cooperation: 2, opportunity: 1 },
       weight: 10,
     },
     {
@@ -207,7 +208,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up in a hospital district where sirens were background noise and everybody knew a nurse',
       skillBias: { firstAid: 7, medicalDiagnostics: 5, persuasion: 4 },
       attributeBias: { composure: 2, socialAwareness: 1 },
-      traitBias: { compassionate: 2, dutiful: 1 },
+      traitBias: { compassion: 2, duty: 1 },
       weight: 10,
     },
     {
@@ -216,7 +217,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised at the edge of a shipbreaking yard, where most of the furniture in town came out of dead hulls',
       skillBias: { scavenging: 7, mechanicalEngineering: 5, weaponsmithing: 4 },
       attributeBias: { strength: 2, evaluation: 1, discipline: -1 },
-      traitBias: { opportunistic: 2, curious: 1 },
+      traitBias: { opportunity: 2, mystery: 1 },
       weight: 10,
     },
     {
@@ -225,7 +226,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up on a dock ring, doing schoolwork on a gantry while the loaders worked below',
       skillBias: { mechanicalEngineering: 5, piloting: 5, negotiation: 4 },
       attributeBias: { agility: 2, handEye: 1, endurance: 1 },
-      traitBias: { cooperative: 1, brave: 1 },
+      traitBias: { cooperation: 1, danger: 1 },
       weight: 12,
     },
   ],
@@ -240,7 +241,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised in a large extended family where nine people shared four rooms and no argument stayed private',
       skillBias: { cooking: 5, persuasion: 5, firstAid: 4 },
       attributeBias: { socialAwareness: 2, composure: 1 },
-      traitBias: { cooperative: 2, loyal: 2, generous: 1 },
+      traitBias: { cooperation: 2, crew: 2, share_resources: 1 },
       weight: 14,
     },
     {
@@ -249,7 +250,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'orphaned young and passed between the households that could take a child that season',
       skillBias: { scavenging: 6, stealth: 5, cooking: 4 },
       attributeBias: { resilience: 3, composure: 1, socialAwareness: -1 },
-      traitBias: { selfPreserving: 2, suspicious: 2, cautious: 1 },
+      traitBias: { self_reliance: 2, suspicion: 2, plan: 1 },
       weight: 10,
     },
     {
@@ -258,7 +259,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'brought up by one parent working double rotations, with a key on a cord and dinner left in the warmer',
       skillBias: { cooking: 6, firstAid: 5, mechanicalEngineering: 4 },
       attributeBias: { discipline: 2, resilience: 1 },
-      traitBias: { dutiful: 2, patient: 1, protective: 1 },
+      traitBias: { duty: 2, patience: 1, protect_others: 1 },
       weight: 14,
     },
     {
@@ -267,7 +268,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'apprenticed at thirteen to a trade that took a childhood and gave back a skill',
       skillBias: { mechanicalEngineering: 8, weaponsmithing: 5, electricalEngineering: 4 },
       attributeBias: { proprioception: 2, discipline: 2, learning: -1 },
-      traitBias: { dutiful: 2, patient: 2 },
+      traitBias: { duty: 2, patience: 2 },
       weight: 12,
     },
     {
@@ -276,7 +277,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised in institutional schooling, uniform issued, bed number assigned, a bell for everything',
       skillBias: { computers: 5, firearms: 5, persuasion: 4 },
       attributeBias: { discipline: 3, memory: 1, charisma: -1 },
-      traitBias: { dutiful: 2, cautious: 1, stubborn: 1 },
+      traitBias: { duty: 2, plan: 1, tradition: 1 },
       weight: 12,
     },
     {
@@ -285,7 +286,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up aboard a working ship, doing sums in the cockpit jump seat',
       skillBias: { piloting: 8, navigation: 6, mechanicalEngineering: 5 },
       attributeBias: { handEye: 2, proprioception: 1, socialAwareness: -1 },
-      traitBias: { cooperative: 2, curious: 1 },
+      traitBias: { cooperation: 2, mystery: 1 },
       weight: 10,
     },
     {
@@ -294,7 +295,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'street-raised in a district the authorities had stopped bothering to police',
       skillBias: { stealth: 7, lockpicking: 7, brawling: 5 },
       attributeBias: { agility: 2, perception: 2, discipline: -2 },
-      traitBias: { opportunistic: 2, suspicious: 2, reckless: 1 },
+      traitBias: { opportunity: 2, suspicion: 2, gamble: 1 },
       weight: 8,
     },
     {
@@ -303,7 +304,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised under a strict observance, with a schedule of duties and a very clear account of what a person owes',
       skillBias: { persuasion: 5, firstAid: 5, cooking: 4 },
       attributeBias: { discipline: 3, composure: 2, evaluation: -1 },
-      traitBias: { honest: 3, dutiful: 2, stubborn: 1 },
+      traitBias: { honesty: 3, duty: 2, tradition: 1 },
       weight: 10,
     },
     {
@@ -312,7 +313,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'pushed academically from the first year, with results posted on the kitchen wall',
       skillBias: { computers: 7, medicalResearch: 6, navigation: 4 },
       attributeBias: { learning: 3, reasoning: 2, resilience: -1 },
-      traitBias: { curious: 2, controlling: 2, jealous: 1 },
+      traitBias: { mystery: 2, control: 2, status: 1 },
       weight: 8,
     },
     {
@@ -321,7 +322,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'left to raise themselves, learning everything from manuals and from other people mishandling the job first',
       skillBias: { electricalEngineering: 6, computers: 6, scavenging: 5 },
       attributeBias: { learning: 2, resilience: 2, socialAwareness: -2 },
-      traitBias: { curious: 2, stubborn: 2, suspicious: 1 },
+      traitBias: { mystery: 2, tradition: 2, suspicion: 1 },
       weight: 8,
     },
     {
@@ -330,7 +331,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised among strangers in a rotating billet system, learning a new set of house rules every year',
       skillBias: { persuasion: 6, negotiation: 5, stealth: 4 },
       attributeBias: { socialAwareness: 3, evaluation: 1, resilience: 1 },
-      traitBias: { cautious: 2, cooperative: 1, suspicious: 1 },
+      traitBias: { plan: 2, cooperation: 1, suspicion: 1 },
       weight: 8,
     },
     {
@@ -339,7 +340,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'brought up in a tight worker collective where the shift looked after its own and expected the same back',
       skillBias: { mechanicalEngineering: 5, persuasion: 5, firstAid: 4 },
       attributeBias: { leadership: 1, composure: 1, endurance: 1 },
-      traitBias: { loyal: 3, cooperative: 2, dutiful: 1 },
+      traitBias: { crew: 3, cooperation: 2, duty: 1 },
       weight: 14,
     },
     {
@@ -348,7 +349,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'raised by a grandparent two generations out of step, on stories from a world that no longer existed',
       skillBias: { cooking: 6, firstAid: 5, mechanicalEngineering: 4 },
       attributeBias: { memory: 2, composure: 2, agility: -1 },
-      traitBias: { patient: 3, generous: 1, stubborn: 1 },
+      traitBias: { patience: 3, share_resources: 1, tradition: 1 },
       weight: 12,
     },
     {
@@ -357,7 +358,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'moved constantly as a child, never unpacking the second bag',
       skillBias: { negotiation: 5, exploration: 5, persuasion: 4 },
       attributeBias: { socialAwareness: 2, resilience: 1, memory: -1 },
-      traitBias: { cautious: 1, opportunistic: 1, selfPreserving: 1 },
+      traitBias: { plan: 1, opportunity: 1, self_reliance: 1 },
       weight: 12,
     },
     {
@@ -366,7 +367,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'grew up in the back room of an unlicensed clinic, handing over instruments before being old enough to read the labels',
       skillBias: { firstAid: 8, surgery: 5, medicalDiagnostics: 5 },
       attributeBias: { steadiness: 2, composure: 2 },
-      traitBias: { compassionate: 2, cautious: 2, dutiful: 1 },
+      traitBias: { compassion: 2, plan: 2, duty: 1 },
       weight: 6,
     },
     {
@@ -375,7 +376,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'eldest of many, minding younger siblings before being old enough to be minded themselves',
       skillBias: { cooking: 6, firstAid: 5, persuasion: 4 },
       attributeBias: { leadership: 2, composure: 1, resilience: 1 },
-      traitBias: { protective: 3, dutiful: 2, patient: 1 },
+      traitBias: { protect_others: 3, duty: 2, patience: 1 },
       weight: 14,
     },
   ],
@@ -398,7 +399,7 @@ export const LIFE_PATHS: LifePathTables = {
         explosives: 4,
       },
       attributeBias: { proprioception: 2, reasoning: 1, endurance: 1 },
-      traitBias: { patient: 2, stubborn: 1 },
+      traitBias: { patience: 2, tradition: 1 },
       weight: 16,
     },
     {
@@ -414,7 +415,7 @@ export const LIFE_PATHS: LifePathTables = {
         closeQuarters: 4,
       },
       attributeBias: { steadiness: 3, endurance: 2, proprioception: 2 },
-      traitBias: { patient: 3, dutiful: 1 },
+      traitBias: { patience: 3, duty: 1 },
       weight: 14,
     },
     {
@@ -425,7 +426,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'flew freight on unglamorous routes, judged entirely on cargo mass and margins',
       skillBias: { piloting: 18, navigation: 11, negotiation: 6, computers: 5 },
       attributeBias: { handEye: 3, decisionMaking: 2, composure: 1 },
-      traitBias: { cautious: 2, patient: 1 },
+      traitBias: { plan: 2, patience: 1 },
       weight: 16,
     },
     {
@@ -436,7 +437,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'plotted orbital transfers for a line that fined the crew for every wasted kilo of fuel',
       skillBias: { navigation: 18, computers: 11, piloting: 7, exploration: 5 },
       attributeBias: { reasoning: 3, memory: 2, perception: 2 },
-      traitBias: { patient: 2, cautious: 1 },
+      traitBias: { patience: 2, plan: 1 },
       weight: 12,
     },
     {
@@ -453,7 +454,7 @@ export const LIFE_PATHS: LifePathTables = {
         exploration: 4,
       },
       attributeBias: { composure: 3, steadiness: 2, decisionMaking: 2 },
-      traitBias: { brave: 2, compassionate: 2 },
+      traitBias: { danger: 2, compassion: 2 },
       weight: 12,
     },
     {
@@ -470,7 +471,7 @@ export const LIFE_PATHS: LifePathTables = {
         cooking: 4,
       },
       attributeBias: { composure: 2, endurance: 2, socialAwareness: 2 },
-      traitBias: { compassionate: 3, dutiful: 2, patient: 1 },
+      traitBias: { compassion: 3, duty: 2, patience: 1 },
       weight: 14,
     },
     {
@@ -481,7 +482,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'cut for a living, and learned to hold a steady conversation while doing it',
       skillBias: { surgery: 18, medicalDiagnostics: 13, firstAid: 10, medicalResearch: 8 },
       attributeBias: { steadiness: 3, proprioception: 2, composure: 2 },
-      traitBias: { controlling: 2, dutiful: 1 },
+      traitBias: { control: 2, duty: 1 },
       weight: 6,
     },
     {
@@ -498,7 +499,7 @@ export const LIFE_PATHS: LifePathTables = {
         firstAid: 5,
       },
       attributeBias: { leadership: 3, decisionMaking: 2, endurance: 2 },
-      traitBias: { dutiful: 2, protective: 2, controlling: 1 },
+      traitBias: { duty: 2, protect_others: 2, control: 1 },
       weight: 10,
     },
     {
@@ -509,7 +510,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'ran a rig face for years, reading rock by the sound the bit made going in',
       skillBias: { explosives: 13, mechanicalEngineering: 10, exploration: 8, scavenging: 6 },
       attributeBias: { endurance: 3, strength: 2, perception: 2 },
-      traitBias: { stubborn: 2, patient: 1 },
+      traitBias: { tradition: 2, patience: 1 },
       weight: 14,
     },
     {
@@ -526,7 +527,7 @@ export const LIFE_PATHS: LifePathTables = {
         stealth: 5,
       },
       attributeBias: { perception: 3, agility: 2, composure: 2 },
-      traitBias: { brave: 2, opportunistic: 2, greedy: 1 },
+      traitBias: { danger: 2, opportunity: 2, wealth: 1 },
       weight: 12,
     },
     {
@@ -543,7 +544,7 @@ export const LIFE_PATHS: LifePathTables = {
         stealth: 4,
       },
       attributeBias: { perception: 2, steadiness: 2, discipline: 2 },
-      traitBias: { cautious: 2, suspicious: 2, dutiful: 1 },
+      traitBias: { plan: 2, suspicion: 2, duty: 1 },
       weight: 14,
     },
     {
@@ -560,7 +561,7 @@ export const LIFE_PATHS: LifePathTables = {
         stealth: 5,
       },
       attributeBias: { steadiness: 2, endurance: 2, discipline: 1 },
-      traitBias: { brave: 2, loyal: 2, aggressive: 1 },
+      traitBias: { danger: 2, crew: 2, aggression: 1 },
       weight: 12,
     },
     {
@@ -571,7 +572,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'brokered cargo lots on a thin margin, where the whole job was knowing what a thing was actually worth',
       skillBias: { negotiation: 18, persuasion: 12, computers: 7, scavenging: 5 },
       attributeBias: { evaluation: 3, socialAwareness: 2, charisma: 1 },
-      traitBias: { opportunistic: 2, greedy: 2 },
+      traitBias: { opportunity: 2, wealth: 2 },
       weight: 12,
     },
     {
@@ -582,7 +583,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'worked a market stall where the day\'s takings depended entirely on reading the person in front of them',
       skillBias: { negotiation: 15, persuasion: 13, cooking: 6, scavenging: 5 },
       attributeBias: { charisma: 3, socialAwareness: 2, evaluation: 2 },
-      traitBias: { opportunistic: 2, generous: 1 },
+      traitBias: { opportunity: 2, share_resources: 1 },
       weight: 14,
     },
     {
@@ -598,7 +599,7 @@ export const LIFE_PATHS: LifePathTables = {
         navigation: 5,
       },
       attributeBias: { reasoning: 2, memory: 2, steadiness: 1 },
-      traitBias: { curious: 2, patient: 1 },
+      traitBias: { mystery: 2, patience: 1 },
       weight: 14,
     },
     {
@@ -615,7 +616,7 @@ export const LIFE_PATHS: LifePathTables = {
         electricalEngineering: 5,
       },
       attributeBias: { perception: 2, learning: 2, discipline: 2 },
-      traitBias: { patient: 3, generous: 1 },
+      traitBias: { patience: 3, share_resources: 1 },
       weight: 12,
     },
     {
@@ -632,7 +633,7 @@ export const LIFE_PATHS: LifePathTables = {
         firstAid: 5,
       },
       attributeBias: { perception: 3, discipline: 2, composure: 1 },
-      traitBias: { cautious: 3, patient: 1 },
+      traitBias: { plan: 3, patience: 1 },
       weight: 12,
     },
     {
@@ -649,7 +650,7 @@ export const LIFE_PATHS: LifePathTables = {
         medicalDiagnostics: 4,
       },
       attributeBias: { socialAwareness: 3, memory: 2, evaluation: 1 },
-      traitBias: { generous: 3, cooperative: 2, patient: 1 },
+      traitBias: { share_resources: 3, cooperation: 2, patience: 1 },
       weight: 14,
     },
     {
@@ -666,7 +667,7 @@ export const LIFE_PATHS: LifePathTables = {
         negotiation: 5,
       },
       attributeBias: { charisma: 2, leadership: 2, memory: 2, composure: 2 },
-      traitBias: { patient: 3, compassionate: 2, dutiful: 1 },
+      traitBias: { patience: 3, compassion: 2, duty: 1 },
       weight: 12,
     },
     {
@@ -682,7 +683,7 @@ export const LIFE_PATHS: LifePathTables = {
         electricalEngineering: 6,
       },
       attributeBias: { learning: 3, reasoning: 3, endurance: -1 },
-      traitBias: { curious: 3, patient: 2, jealous: 1 },
+      traitBias: { mystery: 3, patience: 2, status: 1 },
       weight: 8,
     },
     {
@@ -698,7 +699,7 @@ export const LIFE_PATHS: LifePathTables = {
         scavenging: 5,
       },
       attributeBias: { proprioception: 3, steadiness: 2, evaluation: 1 },
-      traitBias: { patient: 2, stubborn: 2, controlling: 1 },
+      traitBias: { patience: 2, tradition: 2, control: 1 },
       weight: 12,
     },
     {
@@ -715,7 +716,7 @@ export const LIFE_PATHS: LifePathTables = {
         striking: 4,
       },
       attributeBias: { strength: 3, endurance: 3, proprioception: 1 },
-      traitBias: { cooperative: 2, stubborn: 1 },
+      traitBias: { cooperation: 2, tradition: 1 },
       weight: 16,
     },
     {
@@ -732,7 +733,7 @@ export const LIFE_PATHS: LifePathTables = {
         mechanicalEngineering: 6,
       },
       attributeBias: { leadership: 3, decisionMaking: 3, evaluation: 2 },
-      traitBias: { dutiful: 2, stubborn: 2, controlling: 1 },
+      traitBias: { duty: 2, tradition: 2, control: 1 },
       weight: 6,
     },
     {
@@ -749,7 +750,7 @@ export const LIFE_PATHS: LifePathTables = {
         computers: 5,
       },
       attributeBias: { handEye: 3, perception: 2, composure: 2 },
-      traitBias: { dutiful: 2, cautious: 1 },
+      traitBias: { duty: 2, plan: 1 },
       weight: 10,
     },
     {
@@ -766,7 +767,7 @@ export const LIFE_PATHS: LifePathTables = {
         medicalDiagnostics: 5,
       },
       attributeBias: { socialAwareness: 3, composure: 2, resilience: 2 },
-      traitBias: { compassionate: 3, patient: 2, generous: 1 },
+      traitBias: { compassion: 3, patience: 2, share_resources: 1 },
       weight: 12,
     },
     {
@@ -783,7 +784,7 @@ export const LIFE_PATHS: LifePathTables = {
         explosives: 5,
       },
       attributeBias: { endurance: 3, perception: 2, resilience: 2 },
-      traitBias: { patient: 2, curious: 2, stubborn: 1 },
+      traitBias: { patience: 2, mystery: 2, tradition: 1 },
       weight: 10,
     },
   ],
@@ -798,7 +799,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'was in the compartment when it blew, and remembers the sound of it more than the cold',
       skillBias: { firstAid: 5, exploration: 4 },
       attributeBias: { composure: 2, resilience: 2 },
-      traitBias: { cautious: 3, selfPreserving: 2, brave: 1 },
+      traitBias: { plan: 3, self_reliance: 2, danger: 1 },
       weight: 10,
     },
     {
@@ -807,7 +808,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'lost a sibling to an industrial accident that the report afterwards called unavoidable',
       skillBias: { mechanicalEngineering: 5, firstAid: 4 },
       attributeBias: { resilience: 2, composure: 1 },
-      traitBias: { protective: 3, suspicious: 2, vindictive: 1 },
+      traitBias: { protect_others: 3, suspicion: 2, punishment: 1 },
       weight: 10,
     },
     {
@@ -816,7 +817,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'held a failing reactor together for six hours with two people and a manual',
       skillBias: { electricalEngineering: 8, mechanicalEngineering: 7 },
       attributeBias: { composure: 3, discipline: 2, steadiness: 1 },
-      traitBias: { brave: 3, dutiful: 2, stubborn: 1 },
+      traitBias: { danger: 3, duty: 2, tradition: 1 },
       weight: 8,
     },
     {
@@ -825,7 +826,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'carried the blame for something they did not do, and watched the one who did it get promoted',
       skillBias: { negotiation: 5, computers: 4 },
       attributeBias: { socialAwareness: 2, composure: 1 },
-      traitBias: { suspicious: 3, stubborn: 2, vindictive: 2 },
+      traitBias: { suspicion: 3, tradition: 2, punishment: 2 },
       weight: 10,
     },
     {
@@ -834,7 +835,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'pulled a stranger out of something without stopping to think first, and has never entirely explained why',
       skillBias: { firstAid: 7, exploration: 4 },
       attributeBias: { decisionMaking: 2, resilience: 1 },
-      traitBias: { brave: 3, compassionate: 3, impulsive: 1 },
+      traitBias: { danger: 3, compassion: 3, improvise: 1 },
       weight: 10,
     },
     {
@@ -843,7 +844,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'was left behind once, on a dock, watching a ship they held a berth on clear the ring',
       skillBias: { negotiation: 6, scavenging: 5 },
       attributeBias: { resilience: 2, socialAwareness: 1 },
-      traitBias: { selfPreserving: 3, suspicious: 2, cautious: 1 },
+      traitBias: { self_reliance: 3, suspicion: 2, plan: 1 },
       weight: 10,
     },
     {
@@ -852,7 +853,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'buried a parent during the worst of the collapse, in a queue, with a number instead of a service',
       skillBias: { firstAid: 5, persuasion: 4 },
       attributeBias: { resilience: 3, composure: 2 },
-      traitBias: { dutiful: 2, protective: 2, patient: 1 },
+      traitBias: { duty: 2, protect_others: 2, patience: 1 },
       weight: 12,
     },
     {
@@ -861,7 +862,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'walked away from a fight they should probably have taken, and has thought about it since',
       skillBias: { negotiation: 6, stealth: 5 },
       attributeBias: { evaluation: 2, composure: 1 },
-      traitBias: { cautious: 3, selfPreserving: 2, patient: 1 },
+      traitBias: { plan: 3, self_reliance: 2, patience: 1 },
       weight: 12,
     },
     {
@@ -870,7 +871,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'walked into a fight they should have stayed well out of, and did not walk out of it whole',
       skillBias: { brawling: 8, closeQuarters: 6, striking: 5 },
       attributeBias: { resilience: 2, strength: 1, decisionMaking: -1 },
-      traitBias: { aggressive: 2, brave: 2, reckless: 2 },
+      traitBias: { aggression: 2, danger: 2, gamble: 2 },
       weight: 10,
     },
     {
@@ -879,7 +880,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'was promoted past what they actually knew how to do, and never once admitted it out loud',
       skillBias: { persuasion: 7, computers: 5 },
       attributeBias: { leadership: 2, charisma: 1, composure: -1 },
-      traitBias: { controlling: 3, stubborn: 2, jealous: 1 },
+      traitBias: { control: 3, tradition: 2, status: 1 },
       weight: 8,
     },
     {
@@ -888,7 +889,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'was put back a grade to cover somebody else\'s shortfall, and stayed on anyway because the work was there',
       skillBias: { mechanicalEngineering: 6, negotiation: 4 },
       attributeBias: { resilience: 2, discipline: 2 },
-      traitBias: { stubborn: 3, dutiful: 2, vindictive: 1 },
+      traitBias: { tradition: 3, duty: 2, punishment: 1 },
       weight: 10,
     },
     {
@@ -897,7 +898,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'kept a secret that was not theirs to keep, and someone else paid the whole cost of it',
       skillBias: { stealth: 6, persuasion: 5 },
       attributeBias: { composure: 2, socialAwareness: 2 },
-      traitBias: { loyal: 3, cautious: 2, suspicious: 1 },
+      traitBias: { crew: 3, plan: 2, suspicion: 1 },
       weight: 8,
     },
     {
@@ -906,7 +907,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'found something worth more than a year of wages and handed it in, and has never fully settled whether that was right',
       skillBias: { scavenging: 6, negotiation: 4 },
       attributeBias: { evaluation: 2, discipline: 1 },
-      traitBias: { honest: 3, generous: 2, dutiful: 1 },
+      traitBias: { honesty: 3, share_resources: 2, duty: 1 },
       weight: 10,
     },
     {
@@ -915,7 +916,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'spent a year unable to work after an injury, learning exactly how fast a life closes up behind you',
       skillBias: { computers: 6, firstAid: 5, medicalDiagnostics: 4 },
       attributeBias: { learning: 2, resilience: 2, endurance: -1 },
-      traitBias: { patient: 2, cautious: 2, alcoholic: 1 },
+      traitBias: { patience: 2, plan: 2, comfort: 1 },
       weight: 10,
     },
     {
@@ -924,7 +925,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'talked four hundred angry people back from a gate they were about to go through',
       skillBias: { persuasion: 12, negotiation: 8 },
       attributeBias: { charisma: 2, leadership: 2, composure: 2 },
-      traitBias: { brave: 2, cooperative: 2, honest: 1 },
+      traitBias: { danger: 2, cooperation: 2, honesty: 1 },
       weight: 6,
     },
     {
@@ -933,7 +934,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'was the only one who came back, and gave the same flat account to every board that asked',
       skillBias: { exploration: 7, firstAid: 5, scavenging: 4 },
       attributeBias: { composure: 3, resilience: 2, socialAwareness: -1 },
-      traitBias: { loyal: 3, dutiful: 3, protective: 1 },
+      traitBias: { crew: 3, duty: 3, protect_others: 1 },
       weight: 6,
     },
     {
@@ -942,7 +943,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'signed off on a hull that did not come back, and has read the same maintenance log a hundred times since',
       skillBias: { mechanicalEngineering: 7, navigation: 5 },
       attributeBias: { discipline: 3, evaluation: 2, composure: 1 },
-      traitBias: { cautious: 3, dutiful: 2, controlling: 1 },
+      traitBias: { plan: 3, duty: 2, control: 1 },
       weight: 8,
     },
     {
@@ -951,7 +952,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'cleared somebody else\'s debt out of their own account and never mentioned it again',
       skillBias: { negotiation: 7, persuasion: 5 },
       attributeBias: { socialAwareness: 2, evaluation: 1, composure: 1 },
-      traitBias: { generous: 3, loyal: 2, patient: 1 },
+      traitBias: { share_resources: 3, crew: 2, patience: 1 },
       weight: 10,
     },
     {
@@ -960,7 +961,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'trained up an apprentice who turned out better than them, and was glad about it',
       skillBias: { persuasion: 7, mechanicalEngineering: 5 },
       attributeBias: { leadership: 2, memory: 2, socialAwareness: 1 },
-      traitBias: { patient: 3, generous: 2, cooperative: 1 },
+      traitBias: { patience: 3, share_resources: 2, cooperation: 1 },
       weight: 10,
     },
     {
@@ -969,7 +970,7 @@ export const LIFE_PATHS: LifePathTables = {
       text: 'stayed down and quiet through something they could hear happening on the other side of a wall',
       skillBias: { stealth: 8, lockpicking: 5 },
       attributeBias: { perception: 2, composure: 1, resilience: 1 },
-      traitBias: { cowardly: 2, selfPreserving: 2, cautious: 2 },
+      traitBias: { retreat: 2, self_reliance: 2, plan: 2 },
       weight: 8,
     },
   ],

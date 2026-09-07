@@ -15,7 +15,8 @@ import { pushLog } from './log';
 import type { Rng } from './rng';
 import { isFlyable } from './ship';
 import { applyStress, clampMorale, shipboardCrew } from './sim';
-import { effectsOf, traitLabel } from './personality';
+import { optionWeight, traitLabel } from './personality';
+import { tagsForChoice } from './tags';
 import { AUTONOMY, EVENTS, MORALE } from './tuning';
 import type {
   Character,
@@ -23,7 +24,6 @@ import type {
   EventChoice,
   EventEffect,
   GameState,
-  TraitEffect,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -51,75 +51,6 @@ export function actingCaptain(state: GameState): Character | null {
 // ---------------------------------------------------------------------------
 // Option scoring
 // ---------------------------------------------------------------------------
-
-/**
- * How strongly somebody's personality pulls them toward a given choice.
- *
- * This reads the behaviours the character's canonical traits produce. It is the
- * one place personality changes an outcome, and it consumes the same rolled
- * traits the player reads on the character sheet — there is no second set.
- */
-function traitAffinity(choice: EventChoice, traitEffects: TraitEffect[]): number {
-  let score = 0;
-  const effects = collectEffects(choice);
-
-  const risksHarm = effects.some((e) => e.wound !== undefined || e.combat !== undefined);
-  const gainsCredits = effects.some((e) => (e.credits ?? 0) > 0);
-  const spendsCredits = effects.some((e) => (e.credits ?? 0) < 0);
-  const costsTime = effects.some((e) => (e.hours ?? 0) > 6);
-  const helpsCrew = effects.some((e) => (e.morale ?? 0) > 0 || (e.medicine ?? 0) > 0);
-  const risksCrew = effects.some((e) => e.loseCrew === true);
-
-  for (const effect of traitEffects) {
-    switch (effect) {
-      case 'aggressive':
-      case 'brave':
-        if (risksHarm) score += 1;
-        break;
-      case 'cowardly':
-      case 'selfPreserving':
-      case 'cautious':
-        if (risksHarm) score -= 1.2;
-        if (risksCrew) score -= 1.5;
-        break;
-      case 'reckless':
-      case 'impulsive':
-        if (risksHarm) score += 0.8;
-        if (costsTime) score -= 0.8;
-        break;
-      case 'greedy':
-      case 'opportunistic':
-        if (gainsCredits) score += 1.2;
-        if (spendsCredits) score -= 1;
-        break;
-      case 'generous':
-      case 'compassionate':
-      case 'protective':
-        if (helpsCrew) score += 1.2;
-        if (risksCrew) score -= 1.4;
-        break;
-      case 'patient':
-      case 'dutiful':
-        if (costsTime) score += 0.7;
-        break;
-      case 'loyal':
-        if (risksCrew) score -= 1.6;
-        if (helpsCrew) score += 0.8;
-        break;
-      case 'curious':
-        if (choice.check) score += 0.5;
-        break;
-      case 'stubborn':
-      case 'controlling':
-        if (choice.check) score += 0.3;
-        break;
-      default:
-        break;
-    }
-  }
-
-  return score;
-}
 
 function collectEffects(choice: EventChoice): EventEffect[] {
   const effects: EventEffect[] = [];
@@ -223,7 +154,12 @@ export function decideAutonomously(
   const scores = choices.map((choice) => {
     const competence = competenceScore(choice, crew);
     const outcome = outcomeScore(state, choice);
-    const trait = traitAffinity(choice, effectsOf(decider));
+    // Personality biases what they want before competence decides what they
+    // can actually pull off. Several traits can pull in opposite directions,
+    // and the sum is what moves the score.
+    const trait = optionWeight(decider, tagsForChoice(choice), {
+      crisis: Boolean(state.combat),
+    });
     return {
       choiceId: choice.id,
       competence,

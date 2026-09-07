@@ -7,7 +7,6 @@
  */
 
 import { SAVE } from '../engine/tuning';
-import { PERSONALITY_TRAITS } from '../content/personality';
 import type { GameState } from '../engine/types';
 
 export interface SaveMeta {
@@ -274,17 +273,40 @@ export async function hasAutosave(): Promise<boolean> {
  * one. Built from the library itself rather than written out by hand, so it
  * cannot drift away from the words that actually exist.
  */
-const LEGACY_TRAIT_MAP = new Map<string, string>(
-  (() => {
-    const pairs: [string, string][] = [];
-    for (const trait of PERSONALITY_TRAITS) {
-      if (trait.effect && !pairs.some(([key]) => key === trait.effect)) {
-        pairs.push([trait.effect, trait.id]);
-      }
-    }
-    return pairs;
-  })(),
-);
+const LEGACY_TRAIT_MAP = new Map<string, string>([
+  // The 24 behaviour keys the game used before the canonical library became
+  // the mechanics. Each maps to the trait that best carries the same idea, so
+  // an old save keeps a recognisable person. Nothing else survives the trip.
+  ['loyal', 'loyal'],
+  ['protective', 'protective-of-dependents'],
+  ['compassionate', 'compassionate'],
+  ['dutiful', 'duty-bound'],
+  ['patient', 'patient'],
+  ['generous', 'generous'],
+  ['brave', 'brave'],
+  ['cooperative', 'cooperative'],
+  ['curious', 'curious'],
+  ['honest', 'honest'],
+  ['vindictive', 'vindictive'],
+  ['reckless', 'risk-taker'],
+  ['selfPreserving', 'self-reliant'],
+  ['greedy', 'materialistic'],
+  ['jealous', 'possessive'],
+  ['cowardly', 'timid'],
+  ['impulsive', 'impulsive'],
+  ['controlling', 'controlling'],
+  ['suspicious', 'suspicious'],
+  ['alcoholic', 'volatile'],
+  ['aggressive', 'aggressive'],
+  ['cautious', 'cautious'],
+  ['opportunistic', 'opportunistic'],
+  ['stubborn', 'traditionalist'],
+]);
+
+/** Exported so the migration can be tested without touching IndexedDB. */
+export function migrateSavedState(state: GameState): GameState {
+  return migrate(state);
+}
 
 function migrate(state: GameState): GameState {
   const patched = state as GameState & Record<string, unknown>;

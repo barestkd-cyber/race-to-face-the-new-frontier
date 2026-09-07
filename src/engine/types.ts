@@ -270,54 +270,13 @@ export type ExposureBand = 'none' | 'familiar' | 'trained' | 'professional' | 'e
 // Personality
 //
 // One system. A character rolls one to seven traits from the canonical library
-// in content/personality.ts, and nothing else. `TraitEffect` is not a second
-// personality — it is the closed vocabulary of behaviours those traits produce,
-// so the simulation has something finite to switch on. Several words share an
-// effect because several words describe the same tendency.
+// in content/personality.ts, and nothing else. Each trait carries its own tags,
+// its own intensity and its own rule; there is no behaviour class underneath
+// and nothing translates a trait into one before it resolves.
 // ---------------------------------------------------------------------------
 
 /** The id of a canonical personality trait. */
 export type PersonalityTraitId = string;
-
-export const TRAIT_EFFECTS = [
-  'loyal',
-  'protective',
-  'compassionate',
-  'dutiful',
-  'patient',
-  'generous',
-  'brave',
-  'cooperative',
-  'curious',
-  'honest',
-  'vindictive',
-  'reckless',
-  'selfPreserving',
-  'greedy',
-  'jealous',
-  'cowardly',
-  'impulsive',
-  'controlling',
-  'suspicious',
-  'alcoholic',
-  'aggressive',
-  'cautious',
-  'opportunistic',
-  'stubborn',
-] as const;
-
-export type TraitEffect = (typeof TRAIT_EFFECTS)[number];
-
-/** What one behavioural effect means, and what it does to somebody's choices. */
-export interface TraitEffectDef {
-  key: TraitEffect;
-  label: string;
-  /** Loose valence used only for generation weighting, never shown as morality. */
-  valence: 'positive' | 'negative';
-  description: string;
-  /** Short hint shown once the trait is discovered. */
-  behaviour: string;
-}
 
 /** What the player currently knows about one of somebody's traits. */
 export interface TraitKnowledge {
@@ -1079,6 +1038,12 @@ export interface EventOutcomeBranch {
 export interface EventChoice {
   id: string;
   label: string;
+  /**
+   * Semantic tags personality reads. Most are derived from what the choice
+   * actually does; these are for the things structure cannot see — deception,
+   * mercy, a promise being broken. Additive, and optional everywhere.
+   */
+  tags?: string[];
   /** Shown under the label; may describe the time cost or risk. */
   hint?: string;
   /** Optional check gating the outcome. */

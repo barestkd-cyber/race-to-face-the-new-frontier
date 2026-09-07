@@ -253,15 +253,51 @@ export const SKILLS_TUNING = {
 // Personality
 // ---------------------------------------------------------------------------
 
-export const TRAITS_TUNING = {
-  /** 2 is common, 3 is less common. */
-  countWeights: [
-    { count: 2, weight: 72 },
-    { count: 3, weight: 28 },
-  ],
-  /** Chance the whole set rolls all-positive or all-negative. */
-  uniformValenceChance: 0.14,
-  /** Evidence needed to move from unknown -> suspected -> known. */
+/**
+ * PERSONALITY — every number the trait system uses, in one place.
+ *
+ * The 247 canonical traits carry their own tags and their own intensity; this
+ * is only how loud each intensity is. Nothing personality-related should be a
+ * literal anywhere else.
+ */
+export const PERSONALITY = {
+  /** The intensity table from Part IV. */
+  intensity: {
+    mild: { morale: 2, stress: 2, weight: 1, relationship: 1 },
+    moderate: { morale: 4, stress: 4, weight: 2, relationship: 2 },
+    strong: { morale: 7, stress: 7, weight: 3, relationship: 3 },
+    extreme: { morale: 10, stress: 10, weight: 4, relationship: 4 },
+  } as Record<
+    'mild' | 'moderate' | 'strong' | 'extreme',
+    { morale: number; stress: number; weight: number; relationship: number }
+  >,
+
+  /**
+   * A seven-trait character must not come apart over one ordinary decision, so
+   * the summed reaction is capped. Deaths and catastrophes get the wider limit.
+   */
+  aggregateCap: 12,
+  uncappedLimit: 30,
+  relationshipCap: 8,
+
+  /**
+   * How long somebody holds a bad reaction. Read off each trait's own rule:
+   * a grudge keeps its weight, a forgiving person sheds most of it.
+   */
+  slowDecayScale: 1.5,
+  fastDecayScale: 0.5,
+
+  /** Below this the UI does not mention the friction at all. */
+  frictionThreshold: 4,
+
+  /** How hard a life history pulls the personality roll, and how hard a
+   *  contradiction pushes back. Soft, never absolute. */
+  baseTraitWeight: 10,
+  minTraitWeight: 0.5,
+  biasWeight: 3,
+  contradictionPenalty: 4,
+
+  /** Evidence needed to move a trait from unknown -> suspected -> known. */
   evidenceForSuspected: 3,
   evidenceForKnown: 7,
   /** Familiarity gained per shared meaningful scene. */
@@ -1268,7 +1304,7 @@ export const TUNING = {
   ATTRIBUTE_GEN,
   POTENTIAL_CAP,
   SKILLS_TUNING,
-  TRAITS_TUNING,
+  PERSONALITY,
   HEALTH,
   WOUNDS,
   ARMOR,

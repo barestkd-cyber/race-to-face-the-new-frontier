@@ -437,10 +437,10 @@ function CaptainIntro({
         </p>
         <div className="divider" />
         <div className="stack stack--tight">
-          {temperament.tendencies.map((tendency: { label: string; behaviour: string }) => (
+          {temperament.tendencies.map((tendency: { label: string; rule: string }) => (
             <p key={tendency.label} className="tiny">
               <span className="amber">{tendency.label}.</span>{' '}
-              <span className="dim">{tendency.behaviour}</span>
+              <span className="dim">{tendency.rule}</span>
             </p>
           ))}
         </div>

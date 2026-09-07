@@ -12,7 +12,8 @@ import { hasRoom, overcrowding, quartersQuality, roomsOfKind } from './ship';
 import { COMMAND, FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
 import { tickStudy } from './study';
 import { autoDevelop } from './development';
-import { griefMultiplier, recoveryMultiplier } from './personality';
+import { reactTo } from './personality';
+import { TAGS_CREW_DEATH, TAGS_REST } from './tags';
 import { isFlyable } from './ship';
 import { tickWounds } from './wounds';
 import { advanceHomeworldClock } from './world';
@@ -199,16 +200,16 @@ export function advanceTime(
   for (const member of crew) {
     if (resting) {
       member.rested = Math.min(100, member.rested + REST.restedPerHour * hours);
-      // Some people come back from a bad week faster than others.
+      // Rest is comfort and home, and some personalities take more from it.
+      const rested = reactTo(member, TAGS_REST);
       member.stress = clampStress(
         member.stress -
-          (STRESS.restRecoveryPerHour + facilityRecovery) * hours * recoveryMultiplier(member),
+          (STRESS.restRecoveryPerHour + facilityRecovery) * hours -
+          Math.max(0, -rested.stress) * (hours / 24),
       );
     } else {
       member.rested = Math.max(0, member.rested - REST.restedLossPerHour * hours);
-      member.stress = clampStress(
-        member.stress - STRESS.passiveRecoveryPerHour * hours * recoveryMultiplier(member),
-      );
+      member.stress = clampStress(member.stress - STRESS.passiveRecoveryPerHour * hours);
     }
   }
 
@@ -256,9 +257,12 @@ export function advanceTime(
     for (const survivor of crewMembers(state)) {
       const rel = survivor.relationships[dead.id];
       const closeness = rel ? 0.5 + rel.value / 200 : 0.5;
-      // How hard somebody takes a loss is part of who they are.
-      const grief = STRESS.fromCrewDeath * closeness * griefMultiplier(survivor);
+      // How hard somebody takes a loss is part of who they are. A death is not
+      // held to the ordinary aggregate cap.
+      const reaction = reactTo(survivor, TAGS_CREW_DEATH, { uncapped: true });
+      const grief = STRESS.fromCrewDeath * closeness + Math.max(0, reaction.stress);
       survivor.stress = clampStress(survivor.stress + grief);
+      state.morale = clampMorale(state.morale + reaction.morale / crewMembers(state).length);
     }
     lines.push(`${dead.name} ${dead.surname} is dead. ${dead.departedReason ?? ''}`.trim());
     // Everybody grieves. The captain also signed for them.

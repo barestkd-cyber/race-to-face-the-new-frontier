@@ -21,7 +21,7 @@ import {
   POTENTIAL_CAP,
   SKILLS_TUNING,
   SPEC,
-  TRAITS_TUNING,
+  PERSONALITY,
 } from './tuning';
 import {
   ATTRIBUTE_KEYS,
@@ -41,7 +41,6 @@ import {
   type SkillKey,
   type SkillMap,
   type SkillPotentialMap,
-  type TraitEffect,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -51,7 +50,8 @@ import {
 export interface GenerationBias {
   skill: Partial<Record<SkillKey, number>>;
   attribute: Partial<Record<AttributeKey, number>>;
-  trait: Partial<Record<TraitEffect, number>>;
+  /** Semantic tags the life history leans toward. */
+  trait: Record<string, number>;
 }
 
 function emptyBias(): GenerationBias {
@@ -68,7 +68,7 @@ function mergeBias(target: GenerationBias, entry: LifePathEntry): void {
     target.attribute[key] = (target.attribute[key] ?? 0) + (v as number);
   }
   for (const [k, v] of Object.entries(entry.traitBias ?? {})) {
-    const key = k as TraitEffect;
+    const key = k;
     target.trait[key] = (target.trait[key] ?? 0) + (v as number);
   }
 }
@@ -753,7 +753,7 @@ export function generateFamily(rng: Rng, protagonist: Character): Character[] {
     // Family are known people — their traits start partly visible.
     for (const tk of member.traitKnowledge) {
       tk.known = rng.chance(0.55) ? 2 : 1;
-      tk.evidence = TRAITS_TUNING.evidenceForKnown;
+      tk.evidence = PERSONALITY.evidenceForKnown;
     }
 
     family.push(member);

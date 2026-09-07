@@ -18,7 +18,7 @@ import { generateSeed, normalizeSeed, streamRng, type Rng } from './rng';
 import { ensurePlaces, placeKnownCharacters } from './places';
 import { generateShip, recomputeShipCapacities } from './ship';
 import { pruneDeadCrew } from './sim';
-import { MORALE, ONBOARDING, SAVE, SHIPS, START, TRAITS_TUNING } from './tuning';
+import { MORALE, ONBOARDING, SAVE, SHIPS, START, PERSONALITY } from './tuning';
 import { startingCreditsDelta } from './lifeStory';
 import { generateWorld } from './world';
 import type { Character, GameState, Resources } from './types';
@@ -110,7 +110,7 @@ export function createGame(seed: string, protagonist: Character): GameState {
   // that rule is about visibility, not about a different set of traits.
   for (const knowledge of protagonist.traitKnowledge) {
     knowledge.known = 2;
-    knowledge.evidence = TRAITS_TUNING.evidenceForKnown;
+    knowledge.evidence = PERSONALITY.evidenceForKnown;
   }
   characters[protagonist.id] = protagonist;
 

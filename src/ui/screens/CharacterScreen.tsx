@@ -580,7 +580,7 @@ export function CharacterScreen() {
                   {temperament.tendencies.map((tendency) => (
                     <p key={tendency.label} className="tiny">
                       <span className="amber">{tendency.label}.</span>{' '}
-                      <span className="dim">{tendency.behaviour}</span>
+                      <span className="dim">{tendency.rule}</span>
                     </p>
                   ))}
                 </div>

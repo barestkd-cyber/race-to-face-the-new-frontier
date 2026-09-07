@@ -14,7 +14,6 @@ import type {
   RecruitVenue,
   SiteNodeKind,
   SkillKey,
-  TraitEffect,
 } from '../engine/types';
 
 // ---------------------------------------------------------------------------
@@ -113,7 +112,8 @@ export interface LifePathEntry {
   text: string;
   skillBias?: Partial<Record<SkillKey, number>>;
   attributeBias?: Partial<Record<AttributeKey, number>>;
-  traitBias?: Partial<Record<TraitEffect, number>>;
+  /** Semantic tags this life leans toward, weighting the personality roll. */
+  traitBias?: Record<string, number>;
   weight?: number;
 }
 

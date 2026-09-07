@@ -12,7 +12,16 @@ import { addItem } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
 import { damageSystem } from './ship';
-import { activeParty, advanceTime, applyCrewStress, clampMorale, crewMembers } from './sim';
+import {
+  activeParty,
+  advanceTime,
+  applyCrewStress,
+  clampMorale,
+  clampStress,
+  crewMembers,
+} from './sim';
+import { reactTo, relationshipDelta } from './personality';
+import { tagsForChoice } from './tags';
 import { EVENTS, MORALE, SHIPS } from './tuning';
 import { applyRawWound } from './wounds';
 import type {
@@ -468,6 +477,37 @@ export function resolveChoice(
   } else if (choice.result) {
     const result = applyEffects(state, choice.result.effects, rng, state.characters[state.playerId]);
     lines.push(...result.lines);
+  }
+
+  // What the crew make of what was just decided.
+  //
+  // The tags come off what the choice actually does, so every authored event
+  // in the game reaches personality without naming a trait anywhere in
+  // content. The captain carries the decision; everybody aboard reacts to it,
+  // and the ones whose values it touched adjust how they feel about the person
+  // who made it.
+  const tags = tagsForChoice(choice);
+  const captain = state.characters[state.captainId];
+  const crisis = Boolean(state.combat);
+  if (captain && captain.alive) {
+    const felt = reactTo(captain, tags, { crisis });
+    captain.stress = clampStress(captain.stress + felt.stress);
+    state.morale = clampMorale(state.morale + felt.morale / 2);
+    if (felt.conflicted.length > 0 && felt.stress > 0) {
+      lines.push(`That sat badly with ${captain.name}.`);
+    }
+  }
+  for (const member of crewMembers(state)) {
+    if (!captain || member.id === captain.id) continue;
+    const felt = reactTo(member, tags, { crisis });
+    member.stress = clampStress(member.stress + felt.stress);
+    const rel = member.relationships[captain.id];
+    if (rel) {
+      const { delta } = relationshipDelta(member, tags, { crisis });
+      if (delta !== 0) {
+        rel.value = Math.max(-100, Math.min(100, rel.value + delta));
+      }
+    }
   }
 
   active.resolution = {

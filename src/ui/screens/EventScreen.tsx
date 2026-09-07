@@ -4,6 +4,8 @@
  */
 
 import { assessCheck, bestAssessor } from '../../engine/assess';
+import { frictionFor, refusalFor } from '../../engine/personality';
+import { tagsForChoice } from '../../engine/tags';
 import { availableChoices, applyTokens } from '../../engine/eventEngine';
 import { CHECK_OUTCOME_LABELS, SKILL_LABELS } from '../../engine/types';
 import { activeParty } from '../../engine/sim';
@@ -81,6 +83,7 @@ export function EventScreen() {
   }
 
   const choices = availableChoices(state, event.def);
+  const captain = state.characters[state.captainId];
 
   return (
     <div className="stack">
@@ -118,13 +121,23 @@ export function EventScreen() {
               }
             }
 
+            // What this choice will cost the person making it. Personality
+            // never picks for the player — it says what the captain will carry
+            // afterwards, and only when that is worth saying.
+            const friction = captain
+              ? frictionFor(captain, tagsForChoice(choice), { crisis: Boolean(state.combat) })
+              : null;
+            const refusal = captain
+              ? refusalFor(captain, tagsForChoice(choice))
+              : { refused: false };
+
             return (
               <div key={choice.id} className="panel panel--inset" style={{ marginBottom: 0 }}>
                 <div className="panel__body panel__body--tight">
                   <Btn
                     block
                     tone={available ? 'default' : 'ghost'}
-                    disabled={!available}
+                    disabled={!available || refusal.refused}
                     onClick={() => store.chooseEventOption(choice.id)}
                     sub={
                       !available
@@ -136,6 +149,19 @@ export function EventScreen() {
                   >
                     {applyTokens(choice.label, event.tokens)}
                   </Btn>
+
+                  {refusal.refused ? (
+                    <p className="tiny red" style={{ marginTop: 6, marginBottom: 0 }}>
+                      {refusal.reason}
+                    </p>
+                  ) : friction?.material ? (
+                    <p
+                      className={friction.aligned ? 'tiny green' : 'tiny amber'}
+                      style={{ marginTop: 6, marginBottom: 0 }}
+                    >
+                      {friction.note}
+                    </p>
+                  ) : null}
 
                   <div className="chips" style={{ marginTop: 6 }}>
                     {choice.check && (
