@@ -1,18 +1,20 @@
 /**
  * PERSONALITY — the canonical trait library. Authored data, no logic.
  *
- * These 247 traits ARE the personality mechanics. Each one carries its own
- * favoured and opposed tags, its own intensity and its own rule, straight
- * from the Part IV matrix. Nothing here is a synonym for anything else, and
- * no trait is resolved by being translated into a shared personality class.
+ * All 250 traits, each carrying its own mechanics straight from the Part IV
+ * matrix: its own favoured tags, opposed tags, intensity and rule. Nothing
+ * here is a synonym for anything else, and no trait resolves by being
+ * translated into a shared behaviour class.
  *
- * Brave, Fearless, Steady Under Fire and Protective Courage all care about
- * danger, and all four resolve differently: different intensities, different
- * opposed tags, and two of them only fire in a matching situation.
+ * Three words are listed twice in two different groups, with different
+ * tags and different rules — Patient, Humble and Thick-Skinned. They are two
+ * entries each, not one, because the library means two different things by
+ * them. The second copy carries its group in its id.
  *
- * `favored` tags are what this person is drawn to and steadied by.
- * `opposed` tags are what costs them.
+ * `favored` is what this person is drawn to and steadied by.
+ * `opposed` is what costs them.
  * `context` marks a rule that only applies in a matching situation.
+ * `decay` is how long they hold a reaction.
  * `attribute` keeps a word off somebody the numbers contradict.
  */
 
@@ -21,7 +23,7 @@ import type { AttributeKey } from '../engine/types';
 /**
  * A semantic tag on a choice, an outcome or an action. The world emits
  * these; traits subscribe to them. The vocabulary is open on purpose: the
- * matrix names far more than the game currently emits, and those stay as
+ * matrix names far more than the game currently emits, and the rest stay as
  * dormant hooks rather than being trimmed away.
  */
 export type PersonalityTag = string;
@@ -70,8 +72,8 @@ export interface PersonalityTrait {
   /** Reactions linger rather than fading at the normal rate. */
   persistence?: boolean;
   /**
-   * How long this person holds a reaction. `slow` keeps a grudge and a
-   * good turn alike; `fast` lets both go. Read off the authored rule.
+   * How long this person holds a reaction. `slow` keeps a grudge and a good
+   * turn alike; `fast` lets both go. Read off the authored rule.
    */
   decay?: 'slow' | 'fast';
   /** The rule only applies in this situation. */
@@ -2187,6 +2189,15 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'favors chosen subgroup within larger crew; inter-faction disputes can create relationship bias.',
   },
   {
+    id: 'patient-patience-time',
+    label: 'Patient',
+    group: 'Patience & Time',
+    favored: ['patience', 'wait'],
+    opposed: ['urgency_without_need'],
+    intensity: 'moderate',
+    rule: 'waiting carries little stress; can tolerate slow plans for better outcomes.',
+  },
+  {
     id: 'impatient',
     label: 'Impatient',
     group: 'Patience & Time',
@@ -2282,6 +2293,17 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'humiliation causes major morale loss; save-face options gain weight.',
   },
   {
+    id: 'humble-pride-shame',
+    label: 'Humble',
+    group: 'Pride & Shame',
+    favored: ['service', 'accountability'],
+    opposed: ['boasting', 'status'],
+    intensity: 'mild',
+    rule: 'recognition/status have reduced impact; apologizing/admitting error has low cost.',
+    attribute: 'charisma',
+    direction: 'low',
+  },
+  {
     id: 'shame-prone',
     label: 'Shame-Prone',
     group: 'Pride & Shame',
@@ -2292,6 +2314,17 @@ export const PERSONALITY_TRAITS: PersonalityTrait[] = [
     rule: 'public failure/exposure creates lingering stress; redemption options gain weight.',
     attribute: 'composure',
     direction: 'low',
+  },
+  {
+    id: 'thick-skinned-pride-shame',
+    label: 'Thick-Skinned',
+    group: 'Pride & Shame',
+    favored: ['directness', 'criticism'],
+    opposed: ['insult', 'embarrassment'],
+    intensity: 'strong',
+    rule: 'social criticism/insult has reduced emotional effect.',
+    attribute: 'resilience',
+    direction: 'high',
   },
   {
     id: 'boastful',

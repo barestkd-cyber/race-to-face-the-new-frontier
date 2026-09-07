@@ -29,6 +29,8 @@ import {
 import { pushLog } from './log';
 import type { Rng } from './rng';
 import { applyStress, crewMembers, activeParty, isDependent, pruneDeadCrew } from './sim';
+import { reactTo } from './personality';
+import { tagsForCombat } from './tags';
 import { COMBAT, POTENTIAL_CAP, XP } from './tuning';
 import { applyWound, isIncapacitated, rollHitRegion } from './wounds';
 import {
@@ -1018,6 +1020,13 @@ export function endCombat(
     }
 
     state.crewXp += XP.perCombatVictory;
+  // What the fight did to each of them, as themselves. A fight is a crisis, so
+  // the traits that only fire under fire fire here.
+  const felt = tagsForCombat(resolution, (state.combat?.casualties ?? []).length);
+  for (const member of crewMembers(state)) {
+    const reaction = reactTo(member, felt, { crisis: true });
+    applyStress(member, reaction.stress);
+  }
     if (resolution === 'victory') {
       lines.push(template?.victoryText ?? 'The fight is over.');
     } else {

@@ -19,6 +19,8 @@ import { buyPrice, negotiationSwing, sellPrice, type PriceContext } from './econ
 import { crisisMultiplierFromInfrastructure } from './economy';
 import { formatDuration, pushLog } from './log';
 import { noteSkillUse } from './development';
+import { reactTo } from './personality';
+import { TAGS_FAMILY, TAGS_SOCIALISE, TAGS_TREATMENT, tagsForRepair } from './tags';
 import type { Rng } from './rng';
 import { medicalFacility, qualityIndex, safeCrewCapacity, SYSTEM_LABELS } from './ship';
 import { advanceTime, applyStress, clampMorale, crewMembers } from './sim';
@@ -222,6 +224,11 @@ export function performRepair(
     lines.push(`The yard works on the ${target.label.toLowerCase()}.`);
   }
 
+  // Some people need their hands on it; some are glad to hand it over.
+  for (const member of crewMembers(state)) {
+    applyStress(member, reactTo(member, tagsForRepair(payYard)).stress);
+  }
+
   if (target.kind === 'system' && target.systemKind) {
     const system = ship.systems[target.systemKind];
     system.condition = Math.max(0, Math.min(100, system.condition + achieved));
@@ -333,6 +340,9 @@ export function performTreatment(
   );
 
   noteSkillUse(medic, option.skill);
+  for (const member of crewMembers(state)) {
+    applyStress(member, reactTo(member, TAGS_TREATMENT).stress);
+  }
   const result = treatWound(patient, wound, check.outcome, state.resources.medicine, rng);
   state.resources.medicine = Math.max(0, state.resources.medicine - result.medicineUsed);
   lines.push(...result.lines);
@@ -710,7 +720,11 @@ export function socialise(state: GameState, rng: Rng): string[] {
     }
   }
 
-  for (const member of crew) applyStress(member, -rng.float(2, 6));
+  for (const member of crew) {
+    applyStress(member, -rng.float(2, 6));
+    // Company is worth more to some people than others.
+    applyStress(member, reactTo(member, TAGS_SOCIALISE).stress);
+  }
   state.morale = clampMorale(state.morale + rng.int(1, 4));
   if (crew.length >= 2) lines.push('The crew spends some time not working.');
 
@@ -929,6 +943,12 @@ export function visitContact(state: GameState, id: string, rng: Rng): string[] {
   }
 
   state.morale = clampMorale(state.morale + rng.int(0, 3));
+
+  // Family is not the same as company, and some people are built around it.
+  const kin = state.homeworld.familyIds.includes(id) || rel.kind === 'family';
+  for (const member of crewMembers(state)) {
+    applyStress(member, reactTo(member, kin ? TAGS_FAMILY : TAGS_SOCIALISE).stress);
+  }
 
   // The visit itself, in their voice. Family time on a dying world should not
   // read like a receipt.

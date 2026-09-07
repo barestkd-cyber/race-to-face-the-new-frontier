@@ -489,24 +489,36 @@ export function resolveChoice(
   const tags = tagsForChoice(choice);
   const captain = state.characters[state.captainId];
   const crisis = Boolean(state.combat);
-  if (captain && captain.alive) {
-    const felt = reactTo(captain, tags, { crisis });
-    captain.stress = clampStress(captain.stress + felt.stress);
-    state.morale = clampMorale(state.morale + felt.morale / 2);
-    if (felt.conflicted.length > 0 && felt.stress > 0) {
-      lines.push(`That sat badly with ${captain.name}.`);
-    }
-  }
-  for (const member of crewMembers(state)) {
-    if (!captain || member.id === captain.id) continue;
+  const aboard = crewMembers(state);
+
+  // Everybody reacts as themselves. Two people can watch the same decision and
+  // feel opposite things about it, because they are different people — the
+  // shared morale figure is the average of what the room actually felt, not a
+  // reading taken off the captain and applied to everyone.
+  let moraleSum = 0;
+  for (const member of aboard) {
     const felt = reactTo(member, tags, { crisis });
     member.stress = clampStress(member.stress + felt.stress);
-    const rel = member.relationships[captain.id];
-    if (rel) {
-      const { delta } = relationshipDelta(member, tags, { crisis });
-      if (delta !== 0) {
-        rel.value = Math.max(-100, Math.min(100, rel.value + delta));
+    moraleSum += felt.morale;
+
+    if (captain && member.id !== captain.id) {
+      // And how they feel about the person who decided it.
+      const rel = member.relationships[captain.id];
+      if (rel) {
+        const { delta } = relationshipDelta(member, tags, { crisis });
+        if (delta !== 0) rel.value = Math.max(-100, Math.min(100, rel.value + delta));
       }
+    }
+  }
+  if (aboard.length > 0) {
+    state.morale = clampMorale(state.morale + moraleSum / aboard.length / 2);
+  }
+
+  // The captain carries the decision, so a conflict of theirs is worth saying.
+  if (captain && captain.alive) {
+    const felt = reactTo(captain, tags, { crisis });
+    if (felt.conflicted.length > 0 && felt.stress > 0) {
+      lines.push(`That sat badly with ${captain.name}.`);
     }
   }
 

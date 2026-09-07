@@ -22,38 +22,59 @@ import type { EventChoice, EventEffect } from './types';
 
 /** The tags the game actually emits today. Everything else is a dormant hook. */
 export const EMITTED_TAGS: PersonalityTag[] = [
+  // Danger and violence
   'danger',
   'physical_risk',
   'combat',
   'violence',
+  'confrontation',
+  'nonviolence',
+  'deescalation',
   'retreat',
+  'calm',
+  'gamble',
+  // People
+  'crew',
+  'family',
   'protect_others',
   'rescue',
   'abandon_others',
+  'abandon_ally',
   'sacrifice_crew',
+  'separation',
   'compassion',
   'aid',
+  'socialize',
+  'trust',
+  'cooperation',
+  'solo',
+  'home',
+  // Command
+  'authority',
+  'control',
+  'delegation',
+  'duty',
+  'recognition',
+  'institution',
+  'autonomy',
+  'self_reliance',
+  // Money and stores
   'wealth',
   'opportunity',
   'spend',
-  'conserve',
   'save',
+  'conserve',
   'loot',
-  'delay',
-  'urgency',
+  // Work and the world
   'plan',
   'verify',
   'decisive_action',
   'explore',
   'mystery',
-  'socialize',
-  'trust',
+  'novelty',
   'craft_quality',
+  'delay',
   'comfort',
-  'home',
-  'crew',
-  'family',
-  'duty',
 ];
 
 function push(tags: Set<PersonalityTag>, ...added: PersonalityTag[]): void {
@@ -103,6 +124,10 @@ export function tagsForChoice(choice: EventChoice): PersonalityTag[] {
   // A check is somebody committing to do a thing rather than avoid it.
   if (choice.check) {
     push(tags, 'decisive_action');
+    // Whether the ship does this together or sends one person.
+    push(tags, choice.check.participation === 'individual' ? 'solo' : 'cooperation');
+    // A check that can go badly wrong is a gamble, and some people love that.
+    if (choice.check.criticalRisk) push(tags, 'gamble');
     if (choice.check.skill === 'exploration' || choice.check.skill === 'scavenging') {
       push(tags, 'explore', 'mystery');
     }
@@ -130,18 +155,27 @@ export function tagsForChoice(choice: EventChoice): PersonalityTag[] {
 /** A fight, as it ended. */
 export function tagsForCombat(resolution: string, casualties: number): PersonalityTag[] {
   const tags: PersonalityTag[] = ['combat', 'violence', 'danger', 'physical_risk'];
-  if (resolution === 'fled') tags.push('retreat');
-  if (resolution === 'victory' || resolution === 'droveOff') tags.push('decisive_action');
-  if (casualties > 0) tags.push('abandon_others', 'sacrifice_crew');
+  if (resolution === 'fled') tags.push('retreat', 'deescalation', 'nonviolence');
+  if (resolution === 'truce') tags.push('deescalation', 'nonviolence');
+  if (resolution === 'victory' || resolution === 'droveOff') {
+    tags.push('decisive_action', 'confrontation');
+  }
+  // Coming out of a fight with everybody standing is its own kind of steadiness.
+  if (casualties === 0 && resolution !== 'defeat') tags.push('calm');
+  if (casualties > 0) tags.push('abandon_ally', 'sacrifice_crew', 'separation');
   return tags;
 }
 
-/** Somebody died. Everybody aboard has an opinion about that. */
+/**
+ * Somebody died. Everybody aboard has an opinion about that, and each of them
+ * has it as themselves.
+ */
 export const TAGS_CREW_DEATH: PersonalityTag[] = [
   'crew',
   'abandon_others',
+  'abandon_ally',
   'sacrifice_crew',
-  'loss',
+  'separation',
 ];
 
 /** Treating a wound. */
@@ -155,6 +189,9 @@ export function tagsForTrade(creditsSpent: number): PersonalityTag[] {
   return creditsSpent > 0 ? ['spend', 'wealth'] : ['save', 'conserve'];
 }
 
+/** Time with somebody you are related to. */
+export const TAGS_FAMILY: PersonalityTag[] = ['family', 'home', 'socialize'];
+
 /** Sitting with somebody, on purpose. */
 export const TAGS_SOCIALISE: PersonalityTag[] = ['socialize', 'crew', 'trust'];
 
@@ -163,3 +200,28 @@ export const TAGS_REST: PersonalityTag[] = ['comfort', 'home'];
 
 /** Going back for somebody. */
 export const TAGS_RESCUE: PersonalityTag[] = ['rescue', 'protect_others', 'danger'];
+
+/** Somewhere nobody aboard has been before. */
+export const TAGS_NEW_PLACE: PersonalityTag[] = ['novelty', 'explore'];
+
+/**
+ * Who is leading this away party.
+ *
+ * The captain going themselves is taking hold of it; sending the crew lead is
+ * handing it over. Both are real to somebody.
+ */
+export function tagsForCommand(captainLeads: boolean): PersonalityTag[] {
+  return captainLeads
+    ? ['authority', 'control', 'decisive_action']
+    : ['delegation', 'trust', 'autonomy'];
+}
+
+/** Fixing the ship yourself, or paying somebody who does it for a living. */
+export function tagsForRepair(paidTheYard: boolean): PersonalityTag[] {
+  return paidTheYard
+    ? ['institution', 'spend', 'delegation']
+    : ['self_reliance', 'craft_quality', 'autonomy'];
+}
+
+/** A job finished and paid for. */
+export const TAGS_MISSION_DONE: PersonalityTag[] = ['recognition', 'duty', 'wealth'];

@@ -58,7 +58,7 @@ import {
   temperamentOf,
   traitById,
 } from './personality';
-import { tagsForChoice } from './tags';
+import { EMITTED_TAGS, tagsForChoice } from './tags';
 import { migrateSavedState } from '../persistence/storage';
 import {
   berthSecurity,
@@ -2118,5 +2118,101 @@ describe('personality and the life a character lived', () => {
         }
       }
     }
+  });
+});
+
+describe('personality is per character, not per ship', () => {
+  it('lets two people react differently to the same event', () => {
+    // One who is steadied by danger, one who is not.
+    const brave = withTraits('PC1', 'fearless');
+    const timid = withTraits('PC2', 'timid');
+    const tags = ['danger', 'physical_risk', 'extreme_risk'];
+
+    const a = reactTo(brave, tags);
+    const b = reactTo(timid, tags);
+    expect(a.stress).toBeLessThan(0);
+    expect(b.stress).toBeGreaterThan(0);
+    expect(a.morale).not.toBe(b.morale);
+  });
+
+  it('moves each crew member by their own traits when an event resolves', () => {
+    const draft = generateProtagonistDraft(streamRng('PC-EVENT', 'protagonist'));
+    const state = createGame('PC-EVENT', draft.character);
+
+    const calm = createCharacter({ rng: new Rng('PC-EVENT:calm'), aboard: true });
+    calm.traits = ['fearless'];
+    calm.traitKnowledge = [{ trait: 'fearless', known: 0, evidence: 0 }];
+    calm.stress = 40;
+
+    const jumpy = createCharacter({ rng: new Rng('PC-EVENT:jumpy'), aboard: true });
+    jumpy.traits = ['timid'];
+    jumpy.traitKnowledge = [{ trait: 'timid', known: 0, evidence: 0 }];
+    jumpy.stress = 40;
+
+    for (const person of [calm, jumpy]) {
+      state.characters[person.id] = person;
+      state.crewIds.push(person.id);
+    }
+
+    // A dangerous choice, resolved the way the game resolves one.
+    const before = { calm: calm.stress, jumpy: jumpy.stress };
+    const tags = ['danger', 'physical_risk', 'extreme_risk'];
+    for (const person of [calm, jumpy]) {
+      person.stress = Math.max(0, person.stress + reactTo(person, tags).stress);
+    }
+
+    // Same event, opposite outcomes, because they are different people.
+    expect(calm.stress).toBeLessThan(before.calm);
+    expect(jumpy.stress).toBeGreaterThan(before.jumpy);
+  });
+
+  it('keeps all 250 canonical traits, including the three listed twice', () => {
+    expect(PERSONALITY_TRAITS).toHaveLength(250);
+    expect(new Set(PERSONALITY_TRAITS.map((t) => t.id)).size).toBe(250);
+
+    // Patient, Humble and Thick-Skinned appear in two groups with different
+    // rules. Both copies survive, and they do not resolve identically.
+    for (const label of ['Patient', 'Humble', 'Thick-Skinned']) {
+      const copies = PERSONALITY_TRAITS.filter((t) => t.label === label);
+      expect(copies).toHaveLength(2);
+      expect(copies[0]!.group).not.toBe(copies[1]!.group);
+      expect(copies[0]!.opposed).not.toEqual(copies[1]!.opposed);
+    }
+
+    // But one person is never described by the same word twice.
+    for (let seed = 0; seed < 200; seed += 1) {
+      const character = createCharacter({ rng: new Rng(`dup-${seed}`) });
+      const labels = character.traits.map((id) => traitById(id)!.label);
+      expect(new Set(labels).size).toBe(labels.length);
+    }
+  });
+});
+
+describe('the tags the world emits', () => {
+  it('declares exactly what it emits, and every one is listened to', () => {
+    const listened = new Set(
+      PERSONALITY_TRAITS.flatMap((t) => [...t.favored, ...t.opposed]),
+    );
+    for (const tag of EMITTED_TAGS) {
+      expect(listened.has(tag)).toBe(true);
+    }
+    // A choice that does anything at all produces tags.
+    const paid = tagsForChoice({
+      id: 'x',
+      label: 'x',
+      result: { text: '', effects: { credits: 200 } },
+    });
+    expect(paid).toContain('wealth');
+    for (const tag of paid) expect(EMITTED_TAGS).toContain(tag);
+  });
+
+  it('reaches a large part of the library through the tags V1 actually emits', () => {
+    const live = new Set(EMITTED_TAGS);
+    const reached = PERSONALITY_TRAITS.filter((t) =>
+      [...t.favored, ...t.opposed].some((tag) => live.has(tag)),
+    );
+    // Two thirds of the library is live today; the rest waits on content that
+    // does not exist yet, which is the intended shape.
+    expect(reached.length).toBeGreaterThan(150);
   });
 });

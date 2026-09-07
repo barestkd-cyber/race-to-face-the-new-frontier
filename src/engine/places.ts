@@ -12,7 +12,9 @@
 
 import { pushLog } from './log';
 import { streamRng, type Rng } from './rng';
-import { advanceTime } from './sim';
+import { advanceTime, applyStress, crewMembers } from './sim';
+import { reactTo } from './personality';
+import { TAGS_NEW_PLACE } from './tags';
 import { LOCAL } from './tuning';
 import type {
   Character,
@@ -763,6 +765,14 @@ export function walkTo(state: GameState, placeId: PlaceId, rng: Rng): MoveResult
 
   const hours = walkEstimateHours(state, target);
   const advance = advanceTime(state, hours, rng);
+
+  // Somewhere nobody aboard has seen before is worth something to some people
+  // and nothing to others.
+  if (!target.visited) {
+    for (const member of crewMembers(state)) {
+      applyStress(member, reactTo(member, TAGS_NEW_PLACE).stress);
+    }
+  }
 
   state.currentPlaceId = target.id;
   target.visited = true;

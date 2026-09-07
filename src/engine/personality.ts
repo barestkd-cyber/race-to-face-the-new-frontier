@@ -84,10 +84,16 @@ export function rollPersonality(
 
   const chosen: PersonalityTrait[] = [];
   const usedGroups = new Set<string>();
+  // Three words are listed in two groups each, with different rules. They are
+  // two entries, but one person must not be described by the same word twice.
+  const usedLabels = new Set<string>();
 
   for (let guard = 0; guard < 200 && chosen.length < wanted; guard += 1) {
     const pool = PERSONALITY_TRAITS.filter(
-      (trait) => !usedGroups.has(trait.group) && fits(trait, attributes),
+      (trait) =>
+        !usedGroups.has(trait.group) &&
+        !usedLabels.has(trait.label) &&
+        fits(trait, attributes),
     );
     if (pool.length === 0) break;
 
@@ -102,6 +108,7 @@ export function rollPersonality(
     );
     chosen.push(pick);
     usedGroups.add(pick.group);
+    usedLabels.add(pick.label);
   }
 
   return chosen.map((t) => t.id);
