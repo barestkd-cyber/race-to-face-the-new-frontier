@@ -10,6 +10,7 @@ import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
 import { EARTH_FEMALE_GIVEN, EARTH_MALE_GIVEN, EARTH_SURNAMES } from '../content/names';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
+import { rollCaptainAge, rollDemeanor, rollLifeStory } from './lifeStory';
 import type { Rng } from './rng';
 import {
   ATTRIBUTE_GEN,
@@ -522,6 +523,13 @@ export function seededCharacterId(rng: Rng, prefix = 'chr'): CharacterId {
 export interface CreateCharacterOptions {
   rng: Rng;
   isPlayer?: boolean;
+  /**
+   * Roll this person from the captain generation library — the wider age
+   * spread, one of 250 working lives, two influential events out of 500, and
+   * the words those add up to. Recruits and family keep the ordinary life-path
+   * generator, which knows about recruitment venues.
+   */
+  captainLibrary?: boolean;
   role?: CharacterRole;
   venue?: RecruitVenue;
   ageRange?: [number, number];
@@ -537,6 +545,25 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   const { rng } = options;
   const { history, bias, career } = generateLifeHistory(rng, options.venue);
 
+  // The captain's age is rolled first, because their whole history is gated on
+  // it: no chief engineers at nineteen, no grandchildren at twenty-two.
+  const libraryAge = options.captainLibrary ? rollCaptainAge(rng) : null;
+  const story = libraryAge !== null ? rollLifeStory(rng, libraryAge) : null;
+  if (story) {
+    // The working life and the two events replace the life-path career and
+    // formative event; origin and upbringing stay exactly as they were.
+    mergeBias(bias, {
+      id: story.profession.id,
+      label: story.profession.name,
+      text: story.professionText,
+      skillBias: story.skillBias,
+      attributeBias: story.attributeBias,
+    });
+    history.career = story.profession.name;
+    history.formativeEvent = story.events[0]?.category ?? history.formativeEvent;
+    history.notes = [history.notes[0]!, history.notes[1]!, story.professionText];
+  }
+
   const { attributes, playerPoints } = generateAttributes(rng, bias, options.attributeTotal);
   const potential = generatePotential(rng, bias);
 
@@ -546,7 +573,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   const given = rng.pick(sex === 'male' ? EARTH_MALE_GIVEN : EARTH_FEMALE_GIVEN);
   const surname = options.surname ?? rng.pick(EARTH_SURNAMES);
   const ageRange = options.ageRange ?? [21, 56];
-  const age = rng.taperedInt(ageRange[0], ageRange[1], 2);
+  const age = libraryAge ?? rng.taperedInt(ageRange[0], ageRange[1], 2);
 
   // Specialization is earned, never dealt. The protagonist starts with nothing on
   // the ladder and climbs it in play; people met along the way arrive with as
@@ -583,6 +610,13 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     alive: true,
     personalXp: 0,
     lifeHistory: history,
+    ...(story
+      ? {
+          profession: story.profession.name,
+          professionId: story.profession.id,
+          lifeEvents: story.events,
+        }
+      : {}),
     relationships: {},
     equipment: {},
     backpackSlots: rollBackpackSlots(rng),
@@ -590,6 +624,10 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     isPlayer: options.isPlayer ?? false,
     aboard: options.aboard ?? true,
   };
+
+  if (story) {
+    character.demeanor = rollDemeanor(rng, character.traits, character.attributes);
+  }
 
   // The protagonist keeps their allocation pool for the character-gen screen;
   // everyone else has it spent for them so they arrive fully formed.
@@ -652,7 +690,13 @@ export interface ProtagonistDraft {
 }
 
 export function generateProtagonistDraft(rng: Rng): ProtagonistDraft {
-  const character = createCharacter({ rng, isPlayer: true, role: 'captain', ageRange: [23, 47] });
+  // The captain is the one person rolled from the full generation library.
+  const character = createCharacter({
+    rng,
+    isPlayer: true,
+    role: 'captain',
+    captainLibrary: true,
+  });
   const { bias } = generateLifeHistory(rng);
   const total = attributeTotal(character.attributes);
   const attributePoints = Math.round(

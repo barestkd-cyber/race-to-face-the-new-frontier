@@ -38,6 +38,7 @@ src/
     places.ts     The walkable world inside a location
     access.ts     What you may physically do from where you stand
     situation.ts  What matters right now, said in sentences
+    lifeStory.ts  The captain's generated life: age, trade, two events, words
     advice.ts     Who is best at a job, and what is wrong with them
     development.ts  One development decision instead of twenty +1 taps
     study.ts      Knowledge specialization, earned in hours
@@ -52,6 +53,9 @@ src/
     events/       195 authored events across nine scopes
     items.ts      93 items
     names.ts      3,600 names, split by sex, plus alien pools
+    professions.ts  250 working lives, for the captain
+    lifeEvents.ts   500 influential events, 175/175/150 good/bad/mixed
+    demeanor.ts     247 words a person is described with
     siteArchetypes*.ts, encounters.ts, lifepaths.ts, traits.ts
   state/       The store the UI talks to
   persistence/ Save layer (IndexedDB → localStorage → memory)

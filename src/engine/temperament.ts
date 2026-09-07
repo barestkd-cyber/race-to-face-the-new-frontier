@@ -108,10 +108,16 @@ export function temperamentOf(character: Character): Temperament {
 
   const traits = character.traits.map((key) => TRAIT_DEFS[key]);
 
-  const descriptors = [
-    ...traits.map((def) => def.label),
-    ...leanings.slice(0, 2).map((entry) => entry.leaning.word),
-  ];
+  // A captain rolled from the generation library already carries the words
+  // that describe them, chosen from the same traits and attributes this
+  // module reads. Use those rather than saying the same thing twice.
+  const descriptors =
+    character.demeanor && character.demeanor.length > 0
+      ? character.demeanor
+      : [
+          ...traits.map((def) => def.label),
+          ...leanings.slice(0, 2).map((entry) => entry.leaning.word),
+        ];
 
   const clauses = leanings.slice(0, 3).map((entry) => entry.leaning.clause);
   const summary =

@@ -24,6 +24,11 @@ import { developmentOptions, hasDevelopmentToSpend, recentSkills } from '../../e
 import { focuses, isStudying, studyOptions, studyVenue } from '../../engine/study';
 import { SPEC } from '../../engine/tuning';
 import { WOUNDS } from '../../engine/tuning';
+import {
+  lifeEventsOf,
+  POLARITY_LABELS,
+  SEVERITY_LABELS as EVENT_SEVERITY_LABELS,
+} from '../../engine/lifeStory';
 import { conditionLabel, SEVERITY_LABELS } from '../../engine/wounds';
 import {
   ATTRIBUTE_KEYS,
@@ -161,6 +166,11 @@ export function CharacterScreen() {
             <span className="tiny">
               Age {character.age} · {sexLabel(character)} · {titleCase(character.role)}
             </span>
+            {character.profession && (
+              <span className="tiny cyan" style={{ display: 'block' }}>
+                {character.profession}
+              </span>
+            )}
             <span className="chips" style={{ marginTop: 6 }}>
               {character.isPlayer && <Chip tone="amber">You</Chip>}
               {isCaptain && <Chip tone="cyan">Captain</Chip>}
@@ -651,6 +661,20 @@ export function CharacterScreen() {
               {note}
             </p>
           ))
+        )}
+        {/* The two things that actually turned the life, for anyone who has them. */}
+        {lifeEventsOf(character).length > 0 && (
+          <>
+            <div className="divider" />
+            {lifeEventsOf(character).map((event) => (
+              <p key={event.id} className="prose" style={{ marginTop: 6 }}>
+                <span className="label">
+                  {POLARITY_LABELS[event.polarity]} · {EVENT_SEVERITY_LABELS[event.severity]}
+                </span>
+                {event.text}
+              </p>
+            ))}
+          </>
         )}
       </Fold>
 

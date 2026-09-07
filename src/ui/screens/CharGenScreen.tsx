@@ -23,6 +23,11 @@ import type { NewRunDraft } from '../../engine/newGame';
 import { Rng } from '../../engine/rng';
 import { skillCapLabel } from '../../engine/progression';
 import { temperamentOf } from '../../engine/temperament';
+import {
+  lifeEventsOf,
+  POLARITY_LABELS,
+  SEVERITY_LABELS,
+} from '../../engine/lifeStory';
 import { ATTRIBUTE_GEN } from '../../engine/tuning';
 import {
   ATTRIBUTE_KEYS,
@@ -41,6 +46,13 @@ import {
 } from '../../engine/types';
 
 const ATTRIBUTE_MAX = ATTRIBUTE_GEN.maxPerAttribute;
+
+/** Good, bad, or both — said as a colour, not as a score. */
+const POLARITY_TONE: Record<string, 'green' | 'red' | 'amber'> = {
+  positive: 'green',
+  negative: 'red',
+  mixed: 'amber',
+};
 
 export function CharGenScreen() {
   const draft = useDraft();
@@ -340,6 +352,7 @@ function CaptainIntro({
   onReroll: () => void;
 }) {
   const temperament = temperamentOf(character);
+  const events = lifeEventsOf(character);
 
   return (
     <div className="stack">
@@ -355,7 +368,7 @@ function CaptainIntro({
               <span style={{ textTransform: 'capitalize' }}>{character.role}</span>
             </div>
             <div className="chips" style={{ marginTop: 6 }}>
-              <Chip tone="amber">{character.lifeHistory.career}</Chip>
+              <Chip tone="amber">{character.profession ?? character.lifeHistory.career}</Chip>
             </div>
           </div>
         </div>
@@ -375,9 +388,36 @@ function CaptainIntro({
         <div className="chips">
           <Chip>{character.lifeHistory.origin}</Chip>
           <Chip>{character.lifeHistory.upbringing}</Chip>
-          <Chip>{character.lifeHistory.formativeEvent}</Chip>
+          {events.length === 0 && <Chip>{character.lifeHistory.formativeEvent}</Chip>}
         </div>
       </Panel>
+
+      {/*
+        The two influential events, kept apart from the life-history beats
+        because they are the things that actually turned the life. Influential
+        does not mean bad: a third of the library is outright good, and a good
+        year is allowed to have changed somebody as much as a bad one.
+      */}
+      {events.length > 0 && (
+        <Panel title="What Turned Their Life" aside={`${events.length}`}>
+          <div className="stack stack--tight">
+            {events.map((event) => (
+              <div key={event.id}>
+                <div className="chips" style={{ marginBottom: 3 }}>
+                  <Chip tone={POLARITY_TONE[event.polarity]}>
+                    {POLARITY_LABELS[event.polarity]}
+                  </Chip>
+                  <Chip>{SEVERITY_LABELS[event.severity]}</Chip>
+                  <Chip>{event.category}</Chip>
+                </div>
+                <p className="prose" style={{ marginTop: 0 }}>
+                  {event.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {/*
         You know your own temperament. A stranger's still has to be watched for

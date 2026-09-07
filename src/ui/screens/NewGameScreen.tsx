@@ -72,7 +72,7 @@ export function NewGameScreen() {
               Background
             </span>
             <span className="tiny cyan" style={{ display: 'block' }}>
-              {character.lifeHistory.career}
+              {character.profession ?? character.lifeHistory.career}
             </span>
           </span>
         </div>

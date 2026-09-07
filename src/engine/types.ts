@@ -394,6 +394,15 @@ export interface Relationship {
   kind: 'family' | 'friend' | 'crew' | 'rival' | 'stranger' | 'partner';
 }
 
+/** One influential event, as it was rolled onto a character. */
+export interface RolledLifeEvent {
+  id: string;
+  text: string;
+  polarity: 'positive' | 'negative' | 'mixed';
+  category: string;
+  severity: 'minor' | 'moderate' | 'major' | 'transformative' | 'catastrophic';
+}
+
 export interface LifeHistory {
   origin: string;
   upbringing: string;
@@ -460,6 +469,17 @@ export interface Character {
    * studies while deployed, and switching subject loses the partial work.
    */
   study?: { skill: SkillKey; hours: number };
+
+  /**
+   * The captain's generated life: the trade they worked and the two influential
+   * events behind them. Absent on anyone rolled by the ordinary recruit
+   * generator, and on saves made before the library existed.
+   */
+  profession?: string;
+  professionId?: string;
+  lifeEvents?: RolledLifeEvent[];
+  /** The words this person is described with, from the demeanor library. */
+  demeanor?: string[];
 
   /**
    * What this person has actually been doing, newest last, capped at a couple

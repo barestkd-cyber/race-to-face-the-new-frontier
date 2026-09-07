@@ -43,12 +43,16 @@ import { recommend } from './advice';
 import { situationReport } from './situation';
 import { temperamentOf } from './temperament';
 import { TRAIT_DEFS } from '../content/traits';
+import { PROFESSIONS } from '../content/professions';
+import { LIFE_EVENTS } from '../content/lifeEvents';
+import { DEMEANOR } from '../content/demeanor';
+import { rollCaptainAge, rollLifeStory, startingCreditsDelta } from './lifeStory';
 import { treatmentFacility } from './actions';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
 import { createGame } from './newGame';
 import { simulateRun } from './simulate';
-import { SKILL_KEYS } from './types';
+import { ATTRIBUTE_KEYS, SKILL_KEYS, type AttributeKey, type SkillKey } from './types';
 
 // ---------------------------------------------------------------------------
 // Check system
@@ -1132,17 +1136,21 @@ describe('temperament', () => {
     const character = draft.character;
     const temperament = temperamentOf(character);
 
-    // Every trait they actually carry gets named and explained.
+    // Every trait they actually carry gets explained by name.
     expect(temperament.tendencies).toHaveLength(character.traits.length);
     for (const trait of character.traits) {
-      expect(temperament.descriptors).toContain(TRAIT_DEFS[trait].label);
+      expect(temperament.tendencies.map((t) => t.label)).toContain(TRAIT_DEFS[trait].label);
     }
+    // A captain rolled from the library is described in demeanor words, and
+    // every one of those words has to be an expression of something they are.
+    expect(character.demeanor?.length).toBeGreaterThan(0);
+    expect(temperament.descriptors).toEqual(character.demeanor);
     // Always a sentence, even for somebody with no extreme attribute.
     expect(temperament.summary.length).toBeGreaterThan(0);
     expect(temperament.summary.startsWith(character.name)).toBe(true);
   });
 
-  it('invents no personality of its own', () => {
+  it('invents no personality of its own for an ordinary character', () => {
     // Whatever it says has to come from the trait set or the attributes; the
     // point of this module is wording, not a second personality system.
     for (let seed = 0; seed < 40; seed += 1) {
@@ -1166,5 +1174,129 @@ describe('temperament', () => {
     // The rule for strangers is untouched: recruits are still read, not looked up.
     const stranger = createCharacter({ rng: new Rng('TEMP-2:stranger') });
     expect(stranger.traitKnowledge.every((k) => k.known === 0)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Captain generation library
+// ---------------------------------------------------------------------------
+
+describe('the captain generation library', () => {
+  it('carries the sizes and the balance the library specifies', () => {
+    expect(PROFESSIONS).toHaveLength(250);
+    expect(LIFE_EVENTS).toHaveLength(500);
+
+    // 35 / 35 / 30, on purpose: influential does not mean bad.
+    const polarity = { positive: 0, negative: 0, mixed: 0 };
+    for (const event of LIFE_EVENTS) polarity[event.polarity] += 1;
+    expect(polarity.positive).toBe(175);
+    expect(polarity.negative).toBe(175);
+    expect(polarity.mixed).toBe(150);
+
+    // Every profession leans on skills and attributes the engine actually has.
+    for (const profession of PROFESSIONS) {
+      const skills = Object.keys(profession.skillBias) as SkillKey[];
+      const attrs = Object.keys(profession.attributeBias) as AttributeKey[];
+      expect(skills.length).toBeGreaterThanOrEqual(2);
+      for (const key of skills) expect(SKILL_KEYS).toContain(key);
+      for (const key of attrs) expect(ATTRIBUTE_KEYS).toContain(key);
+    }
+  });
+
+  it('spreads captain age across the whole range instead of the middle', () => {
+    const ages: number[] = [];
+    for (let seed = 0; seed < 400; seed += 1) {
+      ages.push(rollCaptainAge(new Rng(`age-${seed}`)));
+    }
+    expect(Math.min(...ages)).toBeLessThanOrEqual(22);
+    expect(Math.max(...ages)).toBeGreaterThanOrEqual(64);
+    // The old generator could not produce either end of this.
+    expect(ages.some((a) => a < 25)).toBe(true);
+    expect(ages.some((a) => a > 56)).toBe(true);
+  });
+
+  it('never gives somebody a history they are too young to have had', () => {
+    for (let seed = 0; seed < 200; seed += 1) {
+      const rng = new Rng(`story-${seed}`);
+      const age = rollCaptainAge(rng);
+      const story = rollLifeStory(rng, age);
+      expect(story.profession.minAge).toBeLessThanOrEqual(age);
+      for (const event of story.events) {
+        const entry = LIFE_EVENTS.find((e) => e.id === event.id)!;
+        expect(entry.minAge).toBeLessThanOrEqual(age);
+      }
+    }
+  });
+
+  it('rolls exactly two events, from two different areas of a life', () => {
+    for (let seed = 0; seed < 200; seed += 1) {
+      const rng = new Rng(`events-${seed}`);
+      const story = rollLifeStory(rng, rollCaptainAge(rng));
+      expect(story.events).toHaveLength(2);
+      expect(story.events[0]!.category).not.toBe(story.events[1]!.category);
+    }
+  });
+
+  it('keeps polarity and severity as separate axes', () => {
+    // A good thing is allowed to be transformative and a bad thing minor.
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 600; seed += 1) {
+      const rng = new Rng(`axes-${seed}`);
+      for (const event of rollLifeStory(rng, rollCaptainAge(rng)).events) {
+        seen.add(`${event.polarity}:${event.severity}`);
+      }
+    }
+    expect(seen.has('positive:transformative')).toBe(true);
+    expect(seen.has('negative:minor')).toBe(true);
+  });
+
+  it('gives the captain one to seven words, drawn from what they actually are', () => {
+    const counts = new Set<number>();
+    for (let seed = 0; seed < 300; seed += 1) {
+      const draft = generateProtagonistDraft(streamRng(`CAP-${seed}`, 'protagonist'));
+      const words = draft.character.demeanor ?? [];
+      expect(words.length).toBeGreaterThanOrEqual(1);
+      expect(words.length).toBeLessThanOrEqual(7);
+      counts.add(words.length);
+      // No word appears twice, and every one is in the library.
+      expect(new Set(words).size).toBe(words.length);
+      for (const word of words) {
+        expect(DEMEANOR.some((d) => d.label === word)).toBe(true);
+      }
+    }
+    // The whole 1..7 range is reachable, not just the middle.
+    expect(counts.has(1)).toBe(true);
+    expect(counts.has(7)).toBe(true);
+  });
+
+  it('gives the captain a profession and leaves recruits on the old generator', () => {
+    const draft = generateProtagonistDraft(streamRng('CAP-PROF', 'protagonist'));
+    expect(draft.character.profession).toBeTruthy();
+    expect(draft.character.lifeEvents).toHaveLength(2);
+    expect(draft.character.lifeHistory.career).toBe(draft.character.profession);
+
+    // Recruits and family are untouched by this pass.
+    const recruit = createCharacter({ rng: new Rng('CAP-PROF:recruit') });
+    expect(recruit.profession).toBeUndefined();
+    expect(recruit.lifeEvents).toBeUndefined();
+  });
+
+  it('is deterministic — the same seed builds the same life', () => {
+    const a = generateProtagonistDraft(streamRng('CAP-DET', 'protagonist'));
+    const b = generateProtagonistDraft(streamRng('CAP-DET', 'protagonist'));
+    expect(a.character.age).toBe(b.character.age);
+    expect(a.character.profession).toBe(b.character.profession);
+    expect(a.character.lifeEvents).toEqual(b.character.lifeEvents);
+    expect(a.character.demeanor).toEqual(b.character.demeanor);
+  });
+
+  it('lets a history with money in it move the starting credits, and only that', () => {
+    const withMoney = LIFE_EVENTS.filter((e) => e.money !== 0);
+    expect(withMoney.length).toBeGreaterThan(0);
+    // Nothing else in the library claims an economic effect.
+    expect(withMoney.length).toBeLessThan(LIFE_EVENTS.length * 0.1);
+
+    const plain = createCharacter({ rng: new Rng('CAP-MONEY') });
+    expect(startingCreditsDelta(plain)).toBe(0);
   });
 });

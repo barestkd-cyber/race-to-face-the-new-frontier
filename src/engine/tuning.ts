@@ -1102,6 +1102,74 @@ export const SPEC = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Captain generation — the protagonist's life, before the run starts
+// ---------------------------------------------------------------------------
+
+/**
+ * The captain is generated from a wider library than anybody else: a working
+ * life out of 250, two influential events out of 500, and the words those add
+ * up to. Everything here is a bias on the ordinary generator, never a
+ * replacement for it, so two captains with the same trade still roll apart.
+ */
+export const CAPTAIN_GEN = {
+  /**
+   * Age. The old range clustered hard in the thirties and forties; this opens
+   * both ends so a run can start with somebody very young or genuinely old.
+   */
+  ageBands: [
+    { min: 18, max: 24, weight: 10 },
+    { min: 25, max: 34, weight: 22 },
+    { min: 35, max: 44, weight: 26 },
+    { min: 45, max: 54, weight: 20 },
+    { min: 55, max: 64, weight: 14 },
+    { min: 65, max: 72, weight: 8 },
+  ] as { min: number; max: number; weight: number }[],
+
+  /** Exactly two influential events, from different areas of a life. */
+  eventCount: 2,
+
+  /** How hard an event hit. Independent of whether it was good or bad. */
+  severityWeights: [
+    { value: 'minor' as const, weight: 30 },
+    { value: 'moderate' as const, weight: 35 },
+    { value: 'major' as const, weight: 22 },
+    { value: 'transformative' as const, weight: 10 },
+    { value: 'catastrophic' as const, weight: 3 },
+  ],
+
+  /** What severity multiplies: the event's pull on skills and attributes. */
+  severityScale: {
+    minor: 0.5,
+    moderate: 1,
+    major: 1.5,
+    transformative: 2.2,
+    catastrophic: 3,
+  } as Record<string, number>,
+
+  /**
+   * Credits an event moves before severity, for the small number of events
+   * that are explicitly about money. Deliberately modest: a windfall in the
+   * history is colour and a head start, never a run handed to you.
+   */
+  eventCredits: 240,
+
+  /** How many words the temperament reads as. */
+  demeanorCountWeights: [
+    { value: 1, weight: 5 },
+    { value: 2, weight: 12 },
+    { value: 3, weight: 22 },
+    { value: 4, weight: 25 },
+    { value: 5, weight: 20 },
+    { value: 6, weight: 11 },
+    { value: 7, weight: 5 },
+  ],
+
+  /** Attribute scores that count as unusually high or low, for demeanor. */
+  demeanorHigh: 10,
+  demeanorLow: 4,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Onboarding
 // ---------------------------------------------------------------------------
 

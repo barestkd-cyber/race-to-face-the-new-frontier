@@ -19,6 +19,7 @@ import { ensurePlaces, placeKnownCharacters } from './places';
 import { generateShip, recomputeShipCapacities } from './ship';
 import { pruneDeadCrew } from './sim';
 import { MORALE, ONBOARDING, SAVE, SHIPS, START, TRAITS_TUNING } from './tuning';
+import { startingCreditsDelta } from './lifeStory';
 import { generateWorld } from './world';
 import type { Character, GameState, Resources } from './types';
 
@@ -148,6 +149,15 @@ export function createGame(seed: string, protagonist: Character): GameState {
 
   const resourceRng = streamRng(seed, 'resources');
   const resources = rollResources(resourceRng, SHIPS.fuelCapacity[ship.size]);
+
+  // A history that involved money leaves some of it behind, in either
+  // direction. Only a handful of the five hundred events touch this, and the
+  // amounts are deliberately modest — colour and a head start, not a run
+  // handed over at the door. Credits never go below nothing.
+  const inherited = startingCreditsDelta(protagonist);
+  if (inherited !== 0) {
+    resources.credits = Math.max(0, Math.round(resources.credits + inherited));
+  }
 
   const state: GameState = {
     version: SAVE.schemaVersion,
