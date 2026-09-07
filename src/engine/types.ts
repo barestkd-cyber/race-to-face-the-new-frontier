@@ -460,6 +460,15 @@ export interface Character {
    * studies while deployed, and switching subject loses the partial work.
    */
   study?: { skill: SkillKey; hours: number };
+
+  /**
+   * What this person has actually been doing, newest last, capped at a couple
+   * of dozen entries. Not a currency and not a bonus — a diary, so the game can
+   * answer "where has their experience been taking them?" without the player
+   * having to remember it. Absent on old saves, which simply have no history.
+   */
+  skillLog?: SkillKey[];
+
   /** Non-crew characters (family, contacts) live in the roster but are not aboard. */
   aboard: boolean;
   /** Recruitment terms still owed, if any. */

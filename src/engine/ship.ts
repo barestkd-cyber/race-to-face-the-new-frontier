@@ -505,3 +505,107 @@ export function notableFacts(ship: Ship): string[] {
 
   return facts.slice(0, 3);
 }
+
+// ---------------------------------------------------------------------------
+// Flight readiness — one answer to "can I safely fly?"
+// ---------------------------------------------------------------------------
+
+/**
+ * The cockpit, the Ship screen and the Set Course button used to give three
+ * different answers to the same question. They all ask this now.
+ *
+ * `canFly` is exactly `isFlyable` — the permission never moves. Everything
+ * else is language for what the condition actually means.
+ */
+export interface FlightReadiness {
+  canFly: boolean;
+  tone: 'ok' | 'warn' | 'bad';
+  /** One line, in words, safe to show as a headline. */
+  headline: string;
+  /** What that means for the next leg. */
+  detail: string;
+  /** The system driving the verdict, if any. */
+  worst: ShipSystem | null;
+}
+
+/**
+ * Where the verdict changes. These sit on `shipConditionLabel`'s own band
+ * edges on purpose: if the headline said "showing their age" while the row
+ * underneath said "Failing", we would be back to two answers for one question.
+ */
+const CALLS_FOR_WORK_AT = 55; // Poor and below
+const BREAKDOWN_RISK_AT = 35; // Failing and below
+
+/** Systems named as a person would name them, so the sentences read straight. */
+const SYSTEM_SUBJECT: Record<ShipSystemKind, { noun: string; verb: string }> = {
+  engines: { noun: 'The engines', verb: 'are' },
+  power: { noun: 'Power generation', verb: 'is' },
+  lifeSupport: { noun: 'Life support', verb: 'is' },
+  hull: { noun: 'The hull', verb: 'is' },
+  sensors: { noun: 'The sensors', verb: 'are' },
+  shields: { noun: 'The shields', verb: 'are' },
+};
+
+export function worstSystem(ship: Ship | null): ShipSystem | null {
+  if (!ship) return null;
+  const installed = Object.values(ship.systems).filter((s) => s.installed);
+  if (installed.length === 0) return null;
+  return installed.reduce((worst, s) => (s.condition < worst.condition ? s : worst));
+}
+
+export function flightReadiness(ship: Ship | null): FlightReadiness {
+  if (!ship || ship.destroyed) {
+    return {
+      canFly: false,
+      tone: 'bad',
+      headline: 'You have no ship.',
+      detail: 'Nothing here is going anywhere.',
+      worst: null,
+    };
+  }
+
+  const worst = worstSystem(ship);
+  const subject = worst ? SYSTEM_SUBJECT[worst.kind] : { noun: 'Something aboard', verb: 'is' };
+
+  if (!isFlyable(ship)) {
+    // Which of the three flight-critical systems is actually the blocker.
+    const blocker = (['engines', 'hull', 'lifeSupport'] as ShipSystemKind[])
+      .map((kind) => ship.systems[kind])
+      .filter((s) => s.condition <= 5)
+      .sort((a, b) => a.condition - b.condition)[0];
+    const blockerSubject = blocker ? SYSTEM_SUBJECT[blocker.kind] : subject;
+    return {
+      canFly: false,
+      tone: 'bad',
+      headline: `${blockerSubject.noun} ${blockerSubject.verb} past the point of use.`,
+      detail: 'She cannot fly until that is repaired. Parts and hours, or the yard and money.',
+      worst: blocker ?? worst,
+    };
+  }
+
+  // From here the headline is always the condition word the rest of the game
+  // uses for that system, so no two screens can describe it differently.
+  if (worst && worst.condition < CALLS_FOR_WORK_AT) {
+    const label = shipConditionLabel(worst.condition).toLowerCase();
+    return {
+      canFly: true,
+      tone: 'warn',
+      headline: `${subject.noun} ${subject.verb} ${label}.`,
+      detail:
+        worst.condition < BREAKDOWN_RISK_AT
+          ? 'She will fly. Expect her to break down somewhere with nobody around.'
+          : 'Nothing is stopping you leaving, but it is not getting better on its own.',
+      worst,
+    };
+  }
+
+  return {
+    canFly: true,
+    tone: 'ok',
+    headline: 'She is ready to fly.',
+    detail: worst
+      ? `${subject.noun} ${subject.verb} ${shipConditionLabel(worst.condition).toLowerCase()}, and nothing aboard is worse than that.`
+      : 'Nothing aboard is asking for attention.',
+    worst,
+  };
+}

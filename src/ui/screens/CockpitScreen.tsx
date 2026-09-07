@@ -16,6 +16,7 @@ import { formatDuration, stardayLabel } from '../../engine/log';
 import { currentPlace, shipPlace } from '../../engine/places';
 import {
   estimateFuel,
+  flightReadiness,
   hasRoom,
   hullCondition,
   isFlyable,
@@ -23,14 +24,14 @@ import {
   safeCrewCapacity,
   sensorIntel,
   shipConditionLabel,
-  SYSTEM_LABELS,
 } from '../../engine/ship';
 import { crewMembers, daysOfFoodRemaining, moraleBand } from '../../engine/sim';
+import { situationReport, type SituationGo } from '../../engine/situation';
 import { estimateLeg, travelProgress } from '../../engine/travel';
 import { ONBOARDING } from '../../engine/tuning';
 import { estimateTerminalDay, reachableFrom } from '../../engine/world';
 import type { LocationId, TimeSpeed } from '../../engine/types';
-import { Btn, Chip, LogFeed, Meter, Panel, ResourceStrip, Row, Segments } from '../components';
+import { Btn, LogFeed, Meter, Panel, ResourceStrip, Segments } from '../components';
 import { LocalView } from '../LocalView';
 import { StarMap } from '../StarMap';
 import { store, useGame } from '../useStore';
@@ -115,6 +116,25 @@ export function CockpitScreen() {
     !state.homeworld.ended && (location?.kind === 'homeworld' || location?.kind === 'moon');
 
   const step = state.onboardingStep;
+  const situation = situationReport(state);
+  const flight = flightReadiness(state.ship);
+
+  /** Situation lines carry their own way of being acted on. */
+  const runSituation = (go: SituationGo): void => {
+    switch (go) {
+      case 'outside':
+        store.stepOutside();
+        break;
+      case 'map':
+        setView('navigation');
+        break;
+      case 'expedition':
+        store.setScreen('expedition');
+        break;
+      default:
+        store.setScreen(go);
+    }
+  };
 
   return (
     <div className="cockpit-shell">
@@ -222,7 +242,42 @@ export function CockpitScreen() {
 
       {/* ---------------- Instruments and context ---------------- */}
       <div className="cockpit-shell__panel">
-        {!underway && <Onboarding step={step} capacity={capacity} />}
+        {!underway && <Onboarding step={step} />}
+
+        {/*
+          What matters right now, in sentences, before any number. The gauges
+          are still below for anyone who wants them — but the first thing the
+          screen says is what the gauges mean, and only when they mean
+          something.
+        */}
+        <Panel
+          title="The Situation"
+          aside={inHomeRegion ? clock.urgency.toUpperCase() : undefined}
+        >
+          <div className="stack stack--tight">
+            {situation.map((line) => (
+              <div key={line.id} className="situation">
+                <span
+                  className={
+                    line.tone === 'bad'
+                      ? 'situation__label situation__label--bad'
+                      : line.tone === 'warn'
+                        ? 'situation__label situation__label--warn'
+                        : 'situation__label'
+                  }
+                >
+                  {line.label}
+                </span>
+                <p className="situation__text">{line.text}</p>
+                {line.action && (
+                  <Btn small onClick={() => runSituation(line.action!.go)}>
+                    {line.action.label}
+                  </Btn>
+                )}
+              </div>
+            ))}
+          </div>
+        </Panel>
 
         <ResourceStrip
           resources={state.resources}
@@ -231,26 +286,6 @@ export function CockpitScreen() {
           foodDays={daysOfFoodRemaining(state)}
           fuelDays={fuel.daysRemaining}
         />
-
-        {inHomeRegion && (
-          <Panel title="Homeworld Forecast" aside={clock.urgency.toUpperCase()}>
-            <p className="prose">{clock.text}</p>
-            <div className="split" style={{ marginTop: 6 }}>
-              <span className="tiny dim">Starday {clock.elapsedDays + 1}</span>
-              <Chip
-                tone={
-                  clock.urgency === 'critical' || clock.urgency === 'urgent'
-                    ? 'red'
-                    : clock.urgency === 'pressing'
-                      ? 'amber'
-                      : 'green'
-                }
-              >
-                {clock.urgency}
-              </Chip>
-            </div>
-          </Panel>
-        )}
 
         {underway && state.travel && (
           <Panel title="Under Way" aside={`${Math.round(travelProgress(state) * 100)}%`}>
@@ -398,25 +433,27 @@ export function CockpitScreen() {
           </Panel>
         </div>
 
-        {state.ship &&
-          Object.values(state.ship.systems).some((s) => s.installed && s.condition < 30) && (
-            <Panel title="System Warnings">
-              <div className="rows">
-                {Object.values(state.ship.systems)
-                  .filter((s) => s.installed && s.condition < 30)
-                  .map((system) => (
-                    <Row
-                      key={system.kind}
-                      title={SYSTEM_LABELS[system.kind]}
-                      sub={shipConditionLabel(system.condition)}
-                      danger
-                      right={<span className="red value">{Math.round(system.condition)}%</span>}
-                      onClick={() => store.setScreen('ship')}
-                    />
-                  ))}
-              </div>
-            </Panel>
-          )}
+        {/*
+          The cockpit, the Ship screen and Set Course all read the same
+          verdict now, so "can I safely fly?" has exactly one answer.
+        */}
+        {state.ship && flight.tone !== 'ok' && (
+          <Panel title="Flight Readiness" aside={flight.canFly ? 'Flyable' : 'Grounded'}>
+            <p className={flight.tone === 'bad' ? 'prose red' : 'prose amber'} style={{ marginTop: 0 }}>
+              {flight.headline}
+            </p>
+            <p className="prose prose--dim">{flight.detail}</p>
+            {flight.worst && (
+              <p className="tiny faint" style={{ marginBottom: 6 }}>
+                Worst aboard: {shipConditionLabel(flight.worst.condition)} at{' '}
+                {Math.round(flight.worst.condition)}%.
+              </p>
+            )}
+            <Btn block onClick={() => store.setScreen('ship')}>
+              Work on the ship
+            </Btn>
+          </Panel>
+        )}
 
         <Panel
           title="Log"
@@ -434,37 +471,24 @@ export function CockpitScreen() {
 }
 
 /**
- * One prompt at a time, pointing at one control, cleared by using it. This
- * teaches the grammar of the game — possessions, ship, crew, world — and then
- * stops.
+ * Two beats, and only two. Not a tour of the screens — a statement of what the
+ * player is out here to do. Everything else in the game introduces itself at
+ * the moment it first carries a decision.
  */
-function Onboarding({ step, capacity }: { step: number; capacity: number }) {
+function Onboarding({ step }: { step: number }) {
   switch (step) {
-    case ONBOARDING.INVENTORY:
+    case ONBOARDING.OUTSIDE:
       return (
-        <Hint aside="Your possessions">
-          You grabbed what you could on the way out. See what actually made it aboard —
-          it is under <span className="amber">Pack</span>.
+        <Hint aside="Where the game is">
+          Nothing out there comes to you. Everyone you might carry off this world is
+          standing somewhere on it. <span className="amber">Step Outside</span>.
         </Hint>
       );
-    case ONBOARDING.SHIP:
+    case ONBOARDING.GOALS:
       return (
-        <Hint aside="Your ship">
-          This hull is the whole plan for getting off this world. Look over what you
-          have been left — <span className="amber">Ship</span>.
-        </Hint>
-      );
-    case ONBOARDING.CREW:
-      return (
-        <Hint aside="Your crew">
-          Safe capacity is {capacity}. A ship with empty berths is opportunity, if you
-          can convince anyone to come. Check <span className="amber">Crew</span>.
-        </Hint>
-      );
-    case ONBOARDING.TRAVEL:
-      return (
-        <Hint aside="The world">
-          Nothing out there comes to you. Step outside and go and find it.
+        <Hint aside="What you are here to do">
+          Find the people you will not leave behind. Find anyone worth a berth. Get
+          stores and a hull that will hold. Then go, before the clock decides for you.
         </Hint>
       );
     default:

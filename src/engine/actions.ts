@@ -17,7 +17,8 @@ import {
 } from './inventory';
 import { buyPrice, negotiationSwing, sellPrice, type PriceContext } from './economy';
 import { crisisMultiplierFromInfrastructure } from './economy';
-import { pushLog } from './log';
+import { formatDuration, pushLog } from './log';
+import { noteSkillUse } from './development';
 import type { Rng } from './rng';
 import { medicalFacility, qualityIndex, safeCrewCapacity, SYSTEM_LABELS } from './ship';
 import { advanceTime, applyStress, clampMorale, crewMembers } from './sim';
@@ -297,8 +298,9 @@ export function performTreatment(
   if (!patient || !wound) return ['That injury is no longer there.'];
 
   const crew = crewMembers(state);
-  const facility = medicalFacility(state.ship);
-  const facilityBonus = facility ? MEDICINE.medBayBonus[facility.quality] : 0;
+  // The room you are actually standing in, ship or shore.
+  const facility = treatmentFacility(state);
+  const facilityBonus = facility.bonus;
 
   const medic = bestAt(
     crew.filter((c) => c.id !== patient.id || crew.length === 1),
@@ -318,7 +320,7 @@ export function performTreatment(
       secondarySkill: 'medicalDiagnostics',
       modifiers: [
         ...(facilityBonus > 0
-          ? [{ label: facility ? 'Medical facility' : 'Facility', value: facilityBonus }]
+          ? [{ label: facility.ashore ? 'Clinic' : 'Medical facility', value: facilityBonus }]
           : [{ label: 'No proper facility', value: -8 }]),
         ...(toolHelp > 0 ? [{ label: 'Equipment', value: toolHelp }] : []),
       ],
@@ -330,6 +332,7 @@ export function performTreatment(
     rng,
   );
 
+  noteSkillUse(medic, option.skill);
   const result = treatWound(patient, wound, check.outcome, state.resources.medicine, rng);
   state.resources.medicine = Math.max(0, state.resources.medicine - result.medicineUsed);
   lines.push(...result.lines);
@@ -820,12 +823,63 @@ export function contactAccess(
     return { ok: false, reason: place ? `They are at ${place.name}.` : 'They are elsewhere.' };
   }
   if (person.availability === 'working') {
-    return { ok: false, reason: 'They are on shift and cannot stop.' };
+    return { ok: false, reason: `They are on shift until ${shiftEndLabel(state, person)}.` };
   }
   if (person.availability === 'unreachable') {
-    return { ok: false, reason: 'They will not see you.' };
+    return { ok: false, reason: 'They will not see you. Whatever that is about, today will not fix it.' };
   }
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Shifts
+// ---------------------------------------------------------------------------
+
+/** The hour of the day a shift lets out. Late enough to cost you something. */
+const SHIFT_END_HOUR = 18;
+
+/** When this person is next off work, in absolute game hours. */
+export function shiftEndsAt(state: GameState, _person: Character): number {
+  const dayStart = Math.floor(state.hours / 24) * 24;
+  const end = dayStart + SHIFT_END_HOUR;
+  return end > state.hours ? end : end + 24;
+}
+
+export function shiftEndLabel(state: GameState, person: Character): string {
+  const wait = shiftEndsAt(state, person) - state.hours;
+  if (wait <= 4) return 'this evening';
+  if (wait <= 12) return 'tonight';
+  return 'tomorrow evening';
+}
+
+/**
+ * Wait for somebody's shift to end.
+ *
+ * A relative who was "working" used to be a wall for the whole homeworld
+ * phase — the roll happened once at placement and nothing ever changed it. It
+ * is a complication now, and complications should be decisions: you can burn
+ * the hours standing about, or you can go and do something else and come back.
+ */
+export function waitForShift(state: GameState, id: string, rng: Rng): string[] {
+  const person = state.characters[id];
+  if (!person) return ['There is nobody here by that name.'];
+  if (person.availability !== 'working') {
+    return [`${person.name} is free already.`];
+  }
+  if (person.placeId !== state.currentPlaceId) {
+    return ['You would have to be where they are.'];
+  }
+
+  const hours = Math.max(0.5, shiftEndsAt(state, person) - state.hours);
+  const advance = advanceTime(state, hours, rng);
+  person.availability = 'available';
+
+  const lines = [
+    `You wait ${formatDuration(hours)}. ${person.name} comes off shift stiff, filthy, and glad to see you.`,
+    ...advance.lines,
+  ];
+  pushLog(state, 'crew', `Waited for ${person.name} ${person.surname} to finish work.`);
+  return lines;
 }
 
 export function isFamily(state: GameState, id: string): boolean {
@@ -1115,11 +1169,54 @@ export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
 // Facility helpers used by the UI
 // ---------------------------------------------------------------------------
 
+/**
+ * Where this treatment actually happens, and what the room is worth.
+ *
+ * Walking into a clinic and being told there is no medical facility was the
+ * game reporting on the ship while the player stood in a treatment room. A
+ * place that offers care counts as a place that offers care — at the same
+ * value as a basic med bay, which is the modest end of the existing ladder.
+ */
+export interface TreatmentFacility {
+  bonus: number;
+  /** One line naming the room and what it is worth. */
+  label: string;
+  /** True when the room is the world's, not the ship's. */
+  ashore: boolean;
+}
+
+export function treatmentFacility(state: GameState): TreatmentFacility {
+  const aboard: ShipRoom | null = medicalFacility(state.ship);
+  const aboardBonus = aboard ? MEDICINE.medBayBonus[aboard.quality] : 0;
+
+  const place = state.currentPlaceId ? state.places[state.currentPlaceId] : undefined;
+  const clinic = place?.actions.includes('medical') ? place : undefined;
+  const clinicBonus = clinic ? MEDICINE.medBayBonus.basic : 0;
+
+  if (clinic && clinicBonus >= aboardBonus) {
+    return {
+      bonus: clinicBonus,
+      ashore: true,
+      label: `${clinic.name} — their room, their light, their hands to hold things. +${clinicBonus} to treatment.`,
+    };
+  }
+  if (aboard) {
+    const quality = aboard.quality;
+    return {
+      bonus: aboardBonus,
+      ashore: false,
+      label: `${aboard.kind === 'medicalWard' ? 'Medical Ward' : 'Med Bay'} (${quality}), +${aboardBonus} to treatment.`,
+    };
+  }
+  return {
+    bonus: 0,
+    ashore: false,
+    label: 'No proper room for this — field treatment, wherever you are standing.',
+  };
+}
+
 export function medicalFacilityLabel(state: GameState): string {
-  const facility: ShipRoom | null = medicalFacility(state.ship);
-  if (!facility) return 'No medical facility — field treatment only.';
-  const quality = facility.quality;
-  return `${facility.kind === 'medicalWard' ? 'Medical Ward' : 'Med Bay'} (${quality}), +${MEDICINE.medBayBonus[quality]} to treatment.`;
+  return treatmentFacility(state).label;
 }
 
 export function canRepairHere(state: GameState): boolean {

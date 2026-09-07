@@ -29,7 +29,7 @@ import {
   foodProductionPerDay,
 } from '../../engine/sim';
 import { CHECK_OUTCOME_LABELS, type ItemStack } from '../../engine/types';
-import { Btn, Chip, Duration, Empty, KV, Panel, Row, Sheet, Stepper } from '../components';
+import { Btn, Chip, Duration, Empty, Fold, KV, Panel, Row, Sheet, Stepper } from '../components';
 import { store, useGame } from '../useStore';
 
 type ChipTone = 'amber' | 'green' | 'red' | 'cyan' | undefined;
@@ -129,6 +129,24 @@ export function TradeScreen() {
   const foodPerDay = foodConsumptionPerDay(state) - foodProductionPerDay(state);
   const foodDaysNow = daysOfFoodRemaining(state);
 
+  /**
+   * What this ship is actually short of, decided by the game rather than by
+   * the player reading four gauges and doing the arithmetic. Short things come
+   * up first and open; everything else folds away.
+   */
+  const shortOf = (kind: ResupplyKind): boolean => {
+    switch (kind) {
+      case 'fuel':
+        return fuelNow.daysRemaining < 8;
+      case 'food':
+        return Number.isFinite(foodDaysNow) && foodDaysNow < 12;
+      case 'medicine':
+        return state.resources.medicine < 6;
+      case 'repairParts':
+        return state.resources.repairParts < 15;
+    }
+  };
+
   const resupplyRows: {
     kind: ResupplyKind;
     label: string;
@@ -193,23 +211,22 @@ export function TradeScreen() {
     },
   ];
 
+  const needed = resupplyRows.filter((row) => shortOf(row.kind));
+  const stocked = resupplyRows.filter((row) => !shortOf(row.kind));
+
   const swing = Math.round(trade.priceModifier * 100);
 
   return (
     <div className="stack">
+      {/* The way out sits at the top. It used to be the last thing on the page. */}
+      <Btn block tone="ghost" onClick={() => store.closeTrade()}>
+        Leave the market
+      </Btn>
+
       <Panel title="Market" aside={location.name}>
         <p className="prose prose--dim">
           {location.subtitle}. Prices here move with what the place has and what it is short of.
         </p>
-        <div className="btn-row" style={{ marginTop: 6 }}>
-          <Btn wide tone={buying ? 'primary' : 'ghost'} onClick={() => switchMode('buy')}>
-            Buy
-          </Btn>
-          <Btn wide tone={!buying ? 'primary' : 'ghost'} onClick={() => switchMode('sell')}>
-            Sell
-          </Btn>
-        </div>
-        <div className="divider" />
         <KV
           items={[
             ['Credits', Math.floor(state.resources.credits).toLocaleString()],
@@ -242,12 +259,21 @@ export function TradeScreen() {
         </Btn>
       </Panel>
 
-      <Panel title="Resupply" aside="bulk">
+      {/*
+        The decision first: what you are short of, and the button that fixes
+        it. The rest of the stores, and the shelves themselves, fold away —
+        this screen used to run four phone-screens deep with the exit last.
+      */}
+      <Panel
+        title={needed.length > 0 ? 'What You Need' : 'Stores'}
+        aside={needed.length > 0 ? `${needed.length} short` : 'all topped up'}
+      >
         <p className="prose prose--dim">
-          Top up before a long leg, captain. This is bought by the unit and goes straight into the
-          tanks and stores rather than the hold.
+          {needed.length > 0
+            ? 'Bought by the unit and loaded straight into the tanks and stores.'
+            : 'Nothing aboard is running low. Anything below is topping up for the sake of it.'}
         </p>
-        {resupplyRows.map((row) => {
+        {needed.map((row) => {
           const unit = resupplyUnitPrice(state, row.kind);
           const amount = Math.max(0, Math.min(row.max, amounts[row.kind]));
           const cost = unit * amount;
@@ -293,7 +319,56 @@ export function TradeScreen() {
         })}
       </Panel>
 
-      <Panel title={buying ? 'On offer' : 'Your hold'} aside={`${listed.length} lines`}>
+      {stocked.length > 0 && (
+        <Fold title={`Other stores (${stocked.length})`}>
+          {stocked.map((row) => {
+            const unit = resupplyUnitPrice(state, row.kind);
+            const amount = Math.max(0, Math.min(row.max, amounts[row.kind]));
+            const cost = unit * amount;
+            const affordable = cost > 0 && cost <= state.resources.credits;
+            return (
+              <div key={row.kind} className="panel panel--inset" style={{ marginTop: 6 }}>
+                <div className="panel__body panel__body--tight">
+                  <div className="split">
+                    <span className="value">{row.label}</span>
+                    <span className="tiny">
+                      {unit > 0 ? `${unit} cr ${row.unit}` : 'not sold here'}
+                    </span>
+                  </div>
+                  <Stepper
+                    value={amount}
+                    min={0}
+                    max={row.max}
+                    step={row.kind === 'medicine' ? 1 : 5}
+                    onChange={(next) => setAmount(row.kind, next)}
+                    label="Amount"
+                  />
+                  <p className="tiny" style={{ marginTop: 2 }}>
+                    {row.impact(amount)}
+                  </p>
+                  <Btn
+                    block
+                    disabled={unit <= 0 || amount <= 0 || !affordable}
+                    onClick={() => store.resupplyResource(row.kind, amount)}
+                  >
+                    Buy {amount} — {cost} cr
+                  </Btn>
+                </div>
+              </div>
+            );
+          })}
+        </Fold>
+      )}
+
+      <Fold title={`${buying ? 'Browse the shelves' : 'Sell from the hold'} (${listed.length})`}>
+        <div className="btn-row" style={{ marginBottom: 8 }}>
+          <Btn wide small tone={buying ? 'primary' : 'ghost'} onClick={() => switchMode('buy')}>
+            Buy
+          </Btn>
+          <Btn wide small tone={!buying ? 'primary' : 'ghost'} onClick={() => switchMode('sell')}>
+            Sell
+          </Btn>
+        </div>
         {listed.length === 0 ? (
           <Empty>
             {buying
@@ -338,11 +413,7 @@ export function TradeScreen() {
           The deal read compares the asking price against what the item is actually worth. How sharp
           that read is depends on the Evaluation of whoever is standing at the counter.
         </p>
-      </Panel>
-
-      <Btn block tone="ghost" onClick={() => store.closeTrade()}>
-        Leave the market
-      </Btn>
+      </Fold>
 
       <Sheet
         open={Boolean(selected)}

@@ -13,6 +13,7 @@ import {
   CONCERN_INFO,
   isFamily,
   relationshipLabel,
+  shiftEndLabel,
 } from '../../engine/actions';
 import { safeCrewCapacity } from '../../engine/ship';
 import { formatDuration } from '../../engine/log';
@@ -44,12 +45,13 @@ const ACTIONS: Record<LocationActionKind, ActionSpec> = {
   },
   findWork: {
     label: 'Look For Work',
-    description: 'Paid jobs going right now.',
+    description: 'Jobs going right now, and the ruins worth taking a party into.',
     time: 'varies',
   },
   missions: {
-    label: 'Contracts',
-    description: 'Work worth taking a party out for.',
+    // Same board, same screen. Kept for places that only carry this one.
+    label: 'Look For Work',
+    description: 'Jobs going right now, and the ruins worth taking a party into.',
     time: 'varies',
   },
   scavenge: {
@@ -136,6 +138,8 @@ export function PlaceScreen() {
   const actions = place.actions.filter((a) => {
     if (a === 'depart') return false;
     if (a === 'social') return canSocialise;
+    // Two rows opening the same board taught the player that doors lie.
+    if (a === 'missions' && place.actions.includes('findWork')) return false;
     return true;
   });
 
@@ -239,9 +243,26 @@ export function PlaceScreen() {
                           )}
                       </>
                     ) : (
-                      <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
-                        {access.reason}
-                      </p>
+                      <>
+                        <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
+                          {access.reason}
+                        </p>
+                        {/*
+                          A generated complication should become a decision.
+                          Waiting is real: it costs the hours, and the clock
+                          on this world does not pause while you stand there.
+                        */}
+                        {person.availability === 'working' && (
+                          <Btn
+                            small
+                            block
+                            onClick={() => store.waitForShift(person.id)}
+                            sub={`Costs you until ${shiftEndLabel(state, person)}`}
+                          >
+                            Wait For Them To Finish
+                          </Btn>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

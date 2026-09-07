@@ -14,6 +14,7 @@ import { ENCOUNTER_INDEX } from '../content';
 import type { EncounterEnemy, EncounterTemplate, EnemyTier } from '../content/contentTypes';
 import { performCheck, type CheckContext } from './check';
 import { deriveMaxHealth } from './character';
+import { noteSkillUse } from './development';
 import {
   GRAPPLE_ATTACK,
   UNARMED_ATTACK,
@@ -467,7 +468,7 @@ export function availableActions(state: GameState, combatant: Combatant): Combat
       reason: !nearest
         ? 'No target'
         : !inBand
-          ? `Not usable at ${range} range`
+          ? rangeProblem(range, attack.ranges)
           : !ammoOk
             ? 'No ammunition'
             : undefined,
@@ -492,7 +493,7 @@ export function availableActions(state: GameState, combatant: Combatant): Combat
   actions.push({
     kind: 'closeDistance',
     label: idx > 0 ? 'Close Distance' : 'Press the Attack',
-    hint: idx > 0 ? `Move to ${COMBAT_RANGES[idx - 1]}` : 'Already engaged',
+    hint: idx > 0 ? `Get closer — ${RANGE_LABELS[COMBAT_RANGES[idx - 1]!].toLowerCase()}` : 'Already engaged',
     speed: 0.8,
     available: idx > 0,
     reason: idx > 0 ? undefined : 'Already engaged',
@@ -501,7 +502,10 @@ export function availableActions(state: GameState, combatant: Combatant): Combat
   actions.push({
     kind: 'createDistance',
     label: 'Create Distance',
-    hint: idx < COMBAT_RANGES.length - 1 ? `Move to ${COMBAT_RANGES[idx + 1]}` : 'Already at range',
+    hint:
+      idx < COMBAT_RANGES.length - 1
+        ? `Back off — ${RANGE_LABELS[COMBAT_RANGES[idx + 1]!].toLowerCase()}`
+        : 'Already at range',
     speed: 0.9,
     available: idx < COMBAT_RANGES.length - 1,
     reason: idx < COMBAT_RANGES.length - 1 ? undefined : 'Already at maximum range',
@@ -759,6 +763,8 @@ function resolveAttack(
   if (!attacker.hostile) {
     attackerChar.personalXp += check.outcome === 'exceptional' ? XP.perExceptional : XP.perCheckSuccess;
     maybeGrowSkill(attackerChar, attack.skill, rng);
+    // Remember what they actually did, so development can follow the story.
+    noteSkillUse(attackerChar, attack.skill);
   }
 
   // Badly hurt hostiles look for the door.
@@ -1083,6 +1089,29 @@ export const RANGE_LABELS: Record<CombatRange, string> = {
   medium: 'Medium',
   long: 'Long',
 };
+
+/**
+ * Why a weapon will not fire, said the way a person would say it.
+ *
+ * "Not usable at close range" was technically true and read backwards: the
+ * player is at close range and the weapon wants to be nearer still. Name the
+ * direction to move instead of the band you are standing in.
+ */
+function rangeProblem(current: CombatRange, usable: CombatRange[]): string {
+  const here = COMBAT_RANGES.indexOf(current);
+  const wants = usable.map((r) => COMBAT_RANGES.indexOf(r)).sort((a, b) => a - b);
+  const nearest = wants[0];
+  const furthest = wants[wants.length - 1];
+  if (nearest === undefined || furthest === undefined) return 'Cannot be used here';
+  // COMBAT_RANGES runs engaged -> long, so a bigger index is further away.
+  if (here < nearest) {
+    return `Too close — needs ${RANGE_LABELS[COMBAT_RANGES[nearest]!].toLowerCase()} range or further`;
+  }
+  if (here > furthest) {
+    return `Too far — move to ${RANGE_LABELS[COMBAT_RANGES[furthest]!].toLowerCase()} range`;
+  }
+  return 'Cannot be used here';
+}
 
 export function damageTypeLabel(type: DamageType): string {
   return type[0]!.toUpperCase() + type.slice(1);

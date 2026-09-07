@@ -1106,15 +1106,20 @@ export const SPEC = {
 // ---------------------------------------------------------------------------
 
 /**
- * The opening teaches the grammar of the game, not every mechanic. Each step
- * points at one control, clears when the player uses it, and then gets out of
- * the way. Set `startStep` to DONE to skip the whole thing.
+ * The opening teaches what the player is here to DO, not where the screens are.
+ *
+ * It used to be a tour: Pack, then Ship, then Crew, then the world — which put
+ * the busiest screen in the game in front of a player who had nothing to put in
+ * it. Now there are two beats. Get off the ship. Know what you are out here
+ * for. Everything else introduces itself when it first matters.
+ *
+ * Set `startStep` to DONE to skip the whole thing.
  */
 export const ONBOARDING = {
-  INVENTORY: 1,
-  SHIP: 2,
-  CREW: 3,
-  TRAVEL: 4,
+  /** Aboard, never having left: the world is the game. */
+  OUTSIDE: 1,
+  /** Standing outside for the first time: here is what you are trying to do. */
+  GOALS: 2,
   DONE: 99,
   startStep: 1,
 } as const;

@@ -10,7 +10,7 @@ import { Btn, Chip, Duration, Empty, Panel, Row } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useGame } from '../useStore';
 import { medicalFacilityLabel, treatmentOptions } from '../../engine/actions';
-import { bestAt } from '../../engine/check';
+import { recommend } from '../../engine/advice';
 import { crewMembers } from '../../engine/sim';
 import { WOUNDS } from '../../engine/tuning';
 import { SEVERITY_LABELS } from '../../engine/wounds';
@@ -68,10 +68,22 @@ export function MedicalScreen() {
 
               // The engine will not let someone operate on themselves unless
               // there is nobody else left aboard.
-              const performer = bestAt(
-                crew.filter((c) => c.id !== patient.id || crew.length === 1),
-                option.skill,
+              const pool = crew.filter((c) => c.id !== patient.id || crew.length === 1);
+              const advice = recommend(pool, option.skill, { label: 'this' });
+              const performer = advice.best?.character ?? null;
+              const alternative = advice.ranked.find(
+                (c) => c.character.id !== performer?.id && !c.unavailable && c.value > 0,
               );
+              // What the room, the hands and the injury add up to, in a word.
+              const outlook = !performer || advice.untrained
+                ? 'Poor — nobody here is trained for this'
+                : advice.best!.value >= 55
+                  ? advice.best!.problems.length > 0
+                    ? 'Fair — good hands, in bad shape'
+                    : 'Good'
+                  : advice.best!.value >= 25
+                    ? 'Uncertain'
+                    : 'Poor — barely trained';
               const septic = wound.infection >= WOUNDS.infectionSepticAt;
 
               return (
@@ -121,11 +133,29 @@ export function MedicalScreen() {
                         }
                         sub={
                           performer
-                            ? `${SKILL_LABELS[option.skill]} ${performer.skills[option.skill]}`
+                            ? `${SKILL_LABELS[option.skill]} ${advice.best!.value}${
+                                advice.best!.problems.length > 0
+                                  ? ` · ${advice.best!.problems.join(', ')}`
+                                  : ''
+                              }`
                             : 'There is no one aboard who can hold the instruments.'
                         }
+                        right={<Chip tone={outlook.startsWith('Good') ? 'green' : outlook.startsWith('Poor') ? 'red' : 'amber'}>{outlook}</Chip>}
                       />
                     </div>
+                    {/*
+                      The next-best pair of hands, named, so choosing between
+                      them never means opening five character sheets.
+                    */}
+                    {alternative && (
+                      <p className="tiny faint" style={{ marginTop: 4, marginBottom: 0 }}>
+                        Also aboard: {alternative.character.name} at {alternative.value}
+                        {alternative.problems.length > 0
+                          ? ` (${alternative.problems.join(', ')})`
+                          : ''}
+                        . The engine sends whoever is best when you press Treat.
+                      </p>
+                    )}
 
                     {wound.severity === 'mortal' && wound.lethalInHours !== undefined && (
                       <p className="prose" style={{ marginTop: 6 }}>
@@ -169,6 +199,10 @@ export function MedicalScreen() {
           </div>
         )}
       </Panel>
+
+      <Btn block tone="ghost" onClick={() => store.back()}>
+        Done here
+      </Btn>
     </div>
   );
 }

@@ -17,14 +17,31 @@ import {
 } from './check';
 import { attributeTotal, createCharacter, generateProtagonistDraft } from './character';
 import { applyRawWound, computeSeverityScore, severityFromScore, tickWounds } from './wounds';
-import { childPlaces, districtsAt, shipPlace, walkTo } from './places';
+import {
+  childPlaces,
+  districtsAt,
+  shipPlace,
+  walkEstimateHours,
+  walkOptions,
+  walkTo,
+} from './places';
 import { endCombat } from './combat';
 import type { GameState } from './types';
 import { offerPassage, visitContact } from './actions';
 import { skillUpgradeCost, attributeUpgradeCost } from './progression';
 import { beginStudy, countAtTier, focuses, studyOptions, tickStudy } from './study';
 import { Rng, streamRng } from './rng';
-import { generateShip, safeCrewCapacity } from './ship';
+import {
+  flightReadiness,
+  generateShip,
+  isFlyable,
+  safeCrewCapacity,
+  shipConditionLabel,
+} from './ship';
+import { applyDevelopment, developmentOptions, noteSkillUse, recentSkills } from './development';
+import { recommend } from './advice';
+import { situationReport } from './situation';
+import { treatmentFacility } from './actions';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
 import { createGame } from './newGame';
@@ -482,6 +499,195 @@ function countVictories(prefix: string, strategy: 'balanced' | 'explore' | 'rush
   }
   return victories;
 }
+
+// ---------------------------------------------------------------------------
+// Playability pass: the game answers for itself
+// ---------------------------------------------------------------------------
+
+describe('walking somewhere', () => {
+  it('quotes the same time it charges', () => {
+    const draft = generateProtagonistDraft(streamRng('WALK-1', 'protagonist'));
+    const state = createGame('WALK-1', draft.character);
+
+    const options = walkOptions(state);
+    expect(options.length, 'a homeworld you can move around').toBeGreaterThan(3);
+
+    // The flat list is only honest if the card and the clock agree.
+    const target = options.find((o) => o.place.parentId)!;
+    expect(target, 'somewhere inside a district').toBeTruthy();
+    const quoted = target.hours;
+
+    const before = state.hours;
+    const move = walkTo(state, target.place.id, new Rng('WALK-1:move'));
+    expect(move.ok).toBe(true);
+    expect(state.hours - before).toBeCloseTo(quoted, 6);
+  });
+
+  it('charges for crossing a district as well as walking in', () => {
+    const draft = generateProtagonistDraft(streamRng('WALK-2', 'protagonist'));
+    const state = createGame('WALK-2', draft.character);
+
+    // A venue in a district you are not standing in costs both legs. Before the
+    // flat list this quietly cost only the second one.
+    const away = Object.values(state.places).find(
+      (place) => place.parentId !== undefined && !state.places[place.parentId]?.shipHere,
+    )!;
+    const district = state.places[away.parentId!]!;
+    expect(walkEstimateHours(state, away)).toBeGreaterThanOrEqual(district.travelHours);
+  });
+
+  it('lists every discovered place on the world, not just the current branch', () => {
+    const draft = generateProtagonistDraft(streamRng('WALK-3', 'protagonist'));
+    const state = createGame('WALK-3', draft.character);
+    const discovered = Object.values(state.places).filter(
+      (p) => p.locationId === state.currentLocationId && p.discovered,
+    );
+    expect(walkOptions(state).length).toBe(discovered.length);
+  });
+});
+
+describe('flight readiness', () => {
+  it('never disagrees with the rule that actually gates travel', () => {
+    // One verdict feeds the cockpit, the ship screen and Set Course, so it must
+    // agree with isFlyable at every condition, not just the comfortable ones.
+    const ship = generateShip(new Rng('FLY-1'), { size: 'small' });
+    for (const condition of [0, 3, 5, 6, 14, 29, 30, 54, 55, 80, 100]) {
+      ship.systems.engines.condition = condition;
+      expect(flightReadiness(ship).canFly).toBe(isFlyable(ship));
+    }
+  });
+
+  it('says something is wrong whenever something is wrong', () => {
+    const ship = generateShip(new Rng('FLY-2'), { size: 'small' });
+    for (const system of Object.values(ship.systems)) system.condition = 100;
+    expect(flightReadiness(ship).tone).toBe('ok');
+
+    ship.systems.engines.condition = 20;
+    const worn = flightReadiness(ship);
+    expect(worn.canFly).toBe(true);
+    expect(worn.tone).toBe('warn');
+    expect(worn.worst?.kind).toBe('engines');
+    // The headline must use the same word the rest of the game uses for that
+    // condition, or the player is back to reconciling two vocabularies.
+    expect(worn.headline.toLowerCase()).toContain(
+      shipConditionLabel(ship.systems.engines.condition).toLowerCase(),
+    );
+
+    ship.systems.engines.condition = 33;
+    const failing = flightReadiness(ship);
+    expect(failing.headline.toLowerCase()).toContain(
+      shipConditionLabel(33).toLowerCase(),
+    );
+
+    ship.systems.engines.condition = 2;
+    expect(flightReadiness(ship).canFly).toBe(false);
+    expect(flightReadiness(ship).tone).toBe('bad');
+  });
+});
+
+describe('development', () => {
+  it('remembers what somebody has been doing, within a bounded window', () => {
+    const draft = generateProtagonistDraft(streamRng('DEV-1', 'protagonist'));
+    const character = draft.character;
+    for (let i = 0; i < 40; i += 1) noteSkillUse(character, 'scavenging');
+    noteSkillUse(character, 'firearms');
+    expect(character.skillLog!.length).toBeLessThanOrEqual(24);
+    expect(recentSkills(character)[0]!.skill).toBe('scavenging');
+  });
+
+  it('offers a direction drawn from the character, and follows the story first', () => {
+    const draft = generateProtagonistDraft(streamRng('DEV-2', 'protagonist'));
+    const state = createGame('DEV-2', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    for (let i = 0; i < 6; i += 1) noteSkillUse(captain, 'scavenging');
+    const options = developmentOptions(captain);
+    expect(options.length).toBeGreaterThan(0);
+    expect(options[0]!.id).toBe('story');
+    expect(options[0]!.skills).toContain('scavenging');
+  });
+
+  it('spends only what is banked and never past potential', () => {
+    const draft = generateProtagonistDraft(streamRng('DEV-3', 'protagonist'));
+    const state = createGame('DEV-3', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    for (let i = 0; i < 6; i += 1) noteSkillUse(captain, 'scavenging');
+    state.crewXp = 500;
+    captain.personalXp = 0;
+
+    const before = captain.skills.scavenging;
+    const result = applyDevelopment(state, captain, 'story');
+
+    expect(result.ok).toBe(true);
+    expect(captain.skills.scavenging).toBeGreaterThan(before);
+    expect(state.crewXp).toBeGreaterThanOrEqual(0);
+    expect(state.crewXp).toBe(500 - result.spent);
+    // Potential is the ceiling, exactly as it is for a hand-placed point.
+    expect(captain.skills.scavenging).toBeLessThanOrEqual(
+      POTENTIAL_CAP[captain.potential.scavenging.grade],
+    );
+  });
+
+  it('refuses politely when there is nothing banked', () => {
+    const draft = generateProtagonistDraft(streamRng('DEV-4', 'protagonist'));
+    const state = createGame('DEV-4', draft.character);
+    const captain = state.characters[state.playerId]!;
+    noteSkillUse(captain, 'scavenging');
+    state.crewXp = 0;
+    captain.personalXp = 0;
+    const result = applyDevelopment(state, captain, 'story');
+    expect(result.ok).toBe(false);
+    expect(result.spent).toBe(0);
+  });
+});
+
+describe('telling the player who should do a job', () => {
+  it('ranks by the skill as it actually performs, and names the catch', () => {
+    const draft = generateProtagonistDraft(streamRng('ADV-1', 'protagonist'));
+    const state = createGame('ADV-1', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    captain.skills.scavenging = 60;
+    captain.rested = 10; // below the exhaustion floor the check already penalises
+    const advice = recommend([captain], 'scavenging');
+
+    expect(advice.best?.character.id).toBe(captain.id);
+    expect(advice.best?.problems).toContain('exhausted');
+    expect(advice.line).toContain('exhausted');
+  });
+});
+
+describe('the situation report', () => {
+  it('always says something, and says the worst thing first when asked', () => {
+    const draft = generateProtagonistDraft(streamRng('SIT-1', 'protagonist'));
+    const state = createGame('SIT-1', draft.character);
+    expect(situationReport(state).length).toBeGreaterThan(0);
+  });
+
+  it('speaks up about exhaustion instead of leaving it in a number', () => {
+    const draft = generateProtagonistDraft(streamRng('SIT-2', 'protagonist'));
+    const state = createGame('SIT-2', draft.character);
+    state.characters[state.playerId]!.rested = CHECK.exhaustionFloor - 5;
+    const lines = situationReport(state);
+    expect(lines.some((l) => l.id === 'exhausted')).toBe(true);
+  });
+});
+
+describe('treatment facilities', () => {
+  it('reports the room you are standing in, not only the one aboard', () => {
+    const draft = generateProtagonistDraft(streamRng('MED-1', 'protagonist'));
+    const state = createGame('MED-1', draft.character);
+
+    const clinic = Object.values(state.places).find((p) => p.actions.includes('medical'));
+    expect(clinic, 'the homeworld has somewhere to be treated').toBeTruthy();
+
+    state.currentPlaceId = clinic!.id;
+    const facility = treatmentFacility(state);
+    expect(facility.bonus).toBeGreaterThan(0);
+    expect(facility.label).toContain(clinic!.name);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Places and physical access

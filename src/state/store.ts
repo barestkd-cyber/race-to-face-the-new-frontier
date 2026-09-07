@@ -27,6 +27,7 @@ import {
   type RepairTarget,
   type ResupplyKind,
   type TreatmentOption,
+  waitForShift,
 } from '../engine/actions';
 import { runAutonomousShip } from '../engine/captain';
 import {
@@ -45,6 +46,7 @@ import {
   unequip,
 } from '../engine/inventory';
 import { pushLog } from '../engine/log';
+import { applyDevelopment } from '../engine/development';
 import { bindSitesToPlaces, boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
 import { canAccessHold, canEquipFromHold, canUseRepairYard, canWorkOnShip } from '../engine/access';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
@@ -107,6 +109,7 @@ class GameStore {
   private listeners = new Set<() => void>();
   private version = 0;
   private toastId = 0;
+  private toastTimers = new Map<number, number>();
 
   // -- React binding ------------------------------------------------------
 
@@ -143,22 +146,12 @@ class GameStore {
     // A death gets one beat, whatever code path caused it.
     this.queueFarewells(crewBefore);
 
-    // The first time there is real XP to spend, say so once. The spend
-    // controls live inside the character sheet, which nobody reopens unprompted.
-    if (!this.state.flags['xpNudged'] && this.state.crewXp >= 10) {
-      this.state.flags['xpNudged'] = true;
-      this.pushToast(
-        ['Crew XP banked. Open a crew member — Self, or tap anyone — and raise a skill under Skills.'],
-        'Experience',
-      );
-    }
-
     // When a fight or an event takes the screen, yesterday's news gets off it.
     if (
       (!hadCombat && this.state.combat) ||
       (!hadEvent && this.state.activeEvent)
     ) {
-      this.toasts = [];
+      this.clearToasts();
     }
 
     checkRunEnded(this.state);
@@ -199,14 +192,43 @@ class GameStore {
     void this.autosave();
   };
 
+  /**
+   * A toast is news, not a record. It says its piece and goes.
+   *
+   * These used to persist until a fight or an event cleared them, so a line
+   * about breaking contact was still on screen fifteen taps and several game
+   * hours later — permanent load carrying no decision. Anything worth keeping
+   * is already in the journal, so this just expires.
+   */
+  private static TOAST_MS = 9000;
+
   private pushToast(lines: string[], title?: string): void {
     const cleaned = lines.filter((l) => l && l.trim().length > 0);
     if (cleaned.length === 0) return;
     this.toastId += 1;
-    this.toasts = [...this.toasts, { id: this.toastId, lines: cleaned, title }].slice(-4);
+    const id = this.toastId;
+    this.toasts = [...this.toasts, { id, lines: cleaned, title }].slice(-3);
+    const timer = window.setTimeout(() => {
+      this.toastTimers.delete(id);
+      if (!this.toasts.some((t) => t.id === id)) return;
+      this.toasts = this.toasts.filter((t) => t.id !== id);
+      this.notify();
+    }, GameStore.TOAST_MS);
+    this.toastTimers.set(id, timer);
+  }
+
+  private clearToasts(): void {
+    for (const timer of this.toastTimers.values()) window.clearTimeout(timer);
+    this.toastTimers.clear();
+    this.toasts = [];
   }
 
   dismissToast = (id: number): void => {
+    const timer = this.toastTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      this.toastTimers.delete(id);
+    }
     this.toasts = this.toasts.filter((t) => t.id !== id);
     this.notify();
   };
@@ -245,21 +267,9 @@ class GameStore {
 
   // -- Navigation ---------------------------------------------------------
 
-  /** Which screen clears which onboarding step, when the player opens it. */
-  private static ONBOARDING_TARGET: Partial<Record<ScreenId, number>> = {
-    inventory: ONBOARDING.INVENTORY,
-    ship: ONBOARDING.SHIP,
-    crew: ONBOARDING.CREW,
-  };
-
   setScreen = (screen: ScreenId): void => {
     this.mutate((state) => {
       state.screen = screen;
-      // The hint clears by being acted on, not by being dismissed.
-      const target = GameStore.ONBOARDING_TARGET[screen];
-      if (target !== undefined && state.onboardingStep === target) {
-        state.onboardingStep = target + 1;
-      }
     });
   };
 
@@ -349,7 +359,8 @@ class GameStore {
         return;
       }
       state.screen = 'place';
-      this.advanceOnboardingTo(state, ONBOARDING.DONE);
+      // Off the ship. The second and last beat is knowing what you are out here for.
+      this.advanceOnboardingTo(state, ONBOARDING.GOALS);
     });
   };
 
@@ -363,6 +374,8 @@ class GameStore {
       }
       if (result.lines.length > 0) this.pushToast(result.lines);
       state.screen = 'place';
+      // Walking somewhere on purpose is proof the opening has landed.
+      this.advanceOnboardingTo(state, ONBOARDING.DONE);
     });
     void this.autosave();
   };
@@ -397,6 +410,10 @@ class GameStore {
    */
   openPlaceAction = (kind: LocationActionKind): void => {
     if (!this.state) return;
+    // Doing something on purpose out in the world is the end of the opening.
+    if (this.state.onboardingStep < ONBOARDING.DONE) {
+      this.mutate((state) => this.advanceOnboardingTo(state, ONBOARDING.DONE));
+    }
     switch (kind) {
       case 'trade':
         this.mutate((state) => beginTrade(state));
@@ -898,6 +915,14 @@ class GameStore {
     });
   };
 
+  /** Burn the hours until somebody comes off shift. */
+  waitForShift = (id: string): void => {
+    this.mutate((state) => {
+      this.pushToast(waitForShift(state, id, this.rng), 'Waiting');
+    });
+    void this.autosave();
+  };
+
   offerPassage = (id: string): void => {
     this.mutate((state) => {
       this.pushToast(offerPassage(state, id, this.rng), 'Passage');
@@ -920,6 +945,23 @@ class GameStore {
   };
 
   // -- Progression --------------------------------------------------------
+
+  /**
+   * The player picks a direction; the game spends the points.
+   *
+   * Nothing about the advancement rules moves — this buys ordinary raises at
+   * ordinary costs from the ordinary pools, it just stops making somebody tap
+   * +1 twenty times to express one intention.
+   */
+  developCharacter = (characterId: string, optionId: string): void => {
+    this.mutate((state) => {
+      const character = state.characters[characterId];
+      if (!character) return;
+      const result = applyDevelopment(state, character, optionId);
+      this.pushToast(result.lines, result.ok ? 'Developed' : undefined);
+    });
+    void this.autosave();
+  };
 
   raiseSkill = (characterId: string, skill: SkillKey): void => {
     this.mutate((state) => {

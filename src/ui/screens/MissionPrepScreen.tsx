@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { assessDanger, bestAssessor } from '../../engine/assess';
+import { problemsFor, recommend } from '../../engine/advice';
 import { availableAttacks } from '../../engine/inventory';
 import { MISSIONS } from '../../engine/tuning';
 import {
@@ -154,171 +155,56 @@ export function MissionPrepScreen() {
     return 'Nobody in this party is carrying a ranged weapon.';
   }, [selectedIds, state.characters, state.ship]);
 
-  // "Prepare" answers below the fold on a phone — bring the answer to the tap.
+  /**
+   * If the game already knows who is going, it does not ask.
+   *
+   * A party of one out of a crew of one was never a decision — it was a
+   * sentence explaining there was no decision, followed by a disabled button
+   * waiting to be un-disabled by hand. When the composition is forced, fill it.
+   * The moment a genuine alternative exists, the choice comes back.
+   */
+  const forced = rules !== null && crew.length > 0 && crew.length <= rules.min;
+  useEffect(() => {
+    if (!prep || !rules) return;
+    if (deployed) return;
+    const everyone = crew.map((c) => c.id);
+    const needsFill = forced && selectedIds.length !== everyone.length;
+    // The captain leads unless the player says otherwise.
+    const captain = state.captainId && everyone.includes(state.captainId) ? state.captainId : null;
+    const ids = needsFill ? everyone : selectedIds;
+    const wantLeader =
+      ids.length >= 2 && (!prep.leaderId || !ids.includes(prep.leaderId))
+        ? (captain && ids.includes(captain) ? captain : (ids[0] ?? null))
+        : prep.leaderId;
+    if (needsFill || wantLeader !== prep.leaderId) {
+      store.setMissionPrep({ ...prep, selectedIds: ids, leaderId: wantLeader ?? null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prep?.missionId, prep?.siteId, forced, crew.length, deployed]);
+
+  // The party panel is above the listings now, so "Prepare" answers upward.
   useEffect(() => {
     if (!prep?.missionId && !prep?.siteId) return;
-    document.getElementById('party-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('party-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [prep?.missionId, prep?.siteId]);
   const leaderId = prep?.leaderId ?? null;
 
+  /** Who the game would send, and what is wrong with them. */
+  const advice = recommend(crew, jobSkill, { label: 'this work' });
+
+  /** The best Leadership among the people actually going. */
+  const steadiest = selectedIds
+    .map((id) => state.characters[id])
+    .filter((c): c is Character => Boolean(c))
+    .sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0];
+
   return (
     <div className="stack">
-      <Panel title={locked ? (selectedSite?.name ?? 'This site') : 'Away work'} aside={location.name}>
-        <p className="prose">
-          {locked
-            ? 'You are standing in it. Pick who goes in with you — anywhere else on this world means walking there first.'
-            : 'Contracts and sites both put people outside the hull, captain. You can only have one party out at a time, and while they are gone the ship keeps running without them — time passes, food is eaten, and whoever stayed behind handles whatever comes up.'}
-        </p>
-      </Panel>
-
-      {deployed && (
-        <Panel title="Party already out">
-          <p className="prose amber">
-            You have people at a site right now. Bring them back before you commit anyone else.
-          </p>
-          <Btn block tone="primary" onClick={() => store.setScreen('expedition')}>
-            Go to the party
-          </Btn>
-        </Panel>
-      )}
-
-      {!locked && (
-      <Panel title="Contracts" aside={`${missions.length} posted`}>
-        {missions.length === 0 ? (
-          <Empty>Nothing is posted here right now.</Empty>
-        ) : (
-          <div className="stack stack--tight">
-            {missions.map((mission) => {
-              const risk = assessDanger(mission.danger, { assessor });
-              const missionRules = partyRules(mission, crew.length);
-              const expiresIn =
-                mission.expiresAtHours !== undefined ? mission.expiresAtHours - state.hours : null;
-              const chosen = prep?.missionId === mission.id;
-              return (
-                <div
-                  key={mission.id}
-                  className={chosen ? 'panel panel--inset row--selected' : 'panel panel--inset'}
-                >
-                  <div className="panel__body panel__body--tight">
-                    <div className="split">
-                      <span className="value">{mission.title}</span>
-                      <span className="chips">
-                        <Chip tone="cyan">{KIND_LABELS[mission.kind]}</Chip>
-                        {mission.accepted && <Chip tone="green">Accepted</Chip>}
-                      </span>
-                    </div>
-                    <p className="prose prose--dim">{mission.description}</p>
-                    <p className="tiny faint">{KIND_NOTES[mission.kind]}</p>
-                    <KV
-                      items={[
-                        ['Risk', `${risk.label}${risk.unsure ? ' (unsure)' : ''}`],
-                        ['Time', <Duration hours={mission.estimatedHours} />],
-                        ['Pay', `${mission.rewardCredits} cr`],
-                        ['Party', missionRules.label],
-                        [
-                          'Expires',
-                          expiresIn === null ? (
-                            'No deadline'
-                          ) : expiresIn <= 0 ? (
-                            'Gone'
-                          ) : (
-                            <Duration hours={expiresIn} />
-                          ),
-                        ],
-                      ]}
-                    />
-                    <p className="tiny faint">{risk.note}</p>
-                    {mission.siteId && (
-                      <p className="tiny">
-                        This one is tied to a site. You can also work that site directly from below.
-                      </p>
-                    )}
-                    <div className="btn-row">
-                      {!mission.accepted && (
-                        <Btn
-                          wide
-                          onClick={() => store.acceptMissionById(mission.id)}
-                          disabled={deployed}
-                        >
-                          Accept
-                        </Btn>
-                      )}
-                      <Btn
-                        wide
-                        tone={chosen ? 'primary' : 'default'}
-                        onClick={() => chooseMission(mission)}
-                        disabled={deployed}
-                      >
-                        {chosen ? 'Selected' : 'Prepare'}
-                      </Btn>
-                      <Btn
-                        wide
-                        tone="danger"
-                        onClick={() => store.abandonMissionById(mission.id)}
-                        disabled={deployed}
-                      >
-                        Drop
-                      </Btn>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Panel>
-      )}
-
-      {!locked && (
-      <Panel title="Sites" aside={`${sites.length} known`}>
-        {sites.length === 0 ? (
-          <Empty>Nothing here is worth breaking into.</Empty>
-        ) : (
-          <div className="stack stack--tight">
-            {sites.map((site) => {
-              const brief = briefSite(state, site);
-              const chosen = prep?.siteId === site.id;
-              return (
-                <div
-                  key={site.id}
-                  className={chosen ? 'panel panel--inset row--selected' : 'panel panel--inset'}
-                >
-                  <div className="panel__body panel__body--tight">
-                    <div className="split">
-                      <span className="value">{site.name}</span>
-                      <span className="chips">
-                        {site.exhausted && <Chip tone="red">Stripped</Chip>}
-                        <Chip>{`Intel ${site.intel}/3`}</Chip>
-                      </span>
-                    </div>
-                    <p className="prose prose--dim">{site.description}</p>
-                    <KV
-                      items={[
-                        ['Risk', `${brief.risk.label}${brief.risk.unsure ? ' (unsure)' : ''}`],
-                        ['Mapped', `${brief.knownNodes} of ${brief.totalNodes} spaces`],
-                      ]}
-                    />
-                    <p className="tiny faint">
-                      {brief.risk.note} {brief.note}
-                    </p>
-                    <Btn
-                      block
-                      tone={chosen ? 'primary' : 'default'}
-                      onClick={() => chooseSite(site)}
-                      disabled={deployed || site.exhausted}
-                      sub={site.exhausted ? 'Nothing left in there' : undefined}
-                    >
-                      {chosen ? 'Selected' : 'Prepare a party'}
-                    </Btn>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Panel>
-      )}
-
+      {/*
+        The decision, and the button that commits it, come before the reading.
+        This panel used to sit at the bottom of three screens of description on
+        a phone, so choosing a job meant scrolling past everything twice.
+      */}
       {prep && rules && (selectedMission || selectedSite) && (
         <Panel
           title="Party"
@@ -329,9 +215,14 @@ export function MissionPrepScreen() {
             {selectedMission ? selectedMission.title : (selectedSite?.name ?? '')} — {rules.label}
           </p>
           <p className="tiny faint" style={{ marginTop: 2 }}>
-            This work runs on <span className="cyan">{SKILL_LABELS[jobSkill]}</span> — each
-            person's number for it is shown on their row.
+            This work runs on <span className="cyan">{SKILL_LABELS[jobSkill]}</span>.{' '}
+            {advice.best ? advice.line : 'Nobody aboard can take this on.'}
           </p>
+          {forced && (
+            <p className="tiny faint" style={{ marginTop: 2 }}>
+              There is only one way to field this, so it is already set.
+            </p>
+          )}
           <div className="rows">
             {crew.map((member) => {
               const picked = selectedIds.includes(member.id);
@@ -353,9 +244,12 @@ export function MissionPrepScreen() {
                       >
                         {SKILL_LABELS[jobSkill]} {jobValue}
                       </span>
-                      <span className="tiny faint" style={{ textAlign: 'right' }}>
-                        Rested {Math.round(member.rested)} · Stress {Math.round(member.stress)}
-                      </span>
+                      {/* Numbers only when they are a problem. Otherwise silence. */}
+                      {problemsFor(member).length > 0 && (
+                        <span className="tiny amber" style={{ textAlign: 'right' }}>
+                          {problemsFor(member).join(', ')}
+                        </span>
+                      )}
                       <span className="chips" style={{ justifyContent: 'flex-end' }}>
                         {picked && <Chip tone="amber">Going</Chip>}
                         {leaderId === member.id && picked && <Chip tone="cyan">Leads</Chip>}
@@ -390,7 +284,10 @@ export function MissionPrepScreen() {
               <span className="label">Mission leader</span>
               <p className="tiny">
                 The leader is fixed for the whole job. On group checks their Leadership pulls the
-                weakest member of the party up toward the rest, so put your steadiest hand here.
+                weakest member of the party up toward the rest.
+                {steadiest && leaderId !== steadiest.id
+                  ? ` ${steadiest.name} has the steadiest hand here.`
+                  : ' The captain has it unless you say otherwise.'}
               </p>
               <div className="rows">
                 {selectedIds.map((id) => {
@@ -444,6 +341,194 @@ export function MissionPrepScreen() {
           </Btn>
         </Panel>
       )}
+
+      <Panel title={locked ? (selectedSite?.name ?? 'This site') : 'Away work'} aside={location.name}>
+        <p className="prose">
+          {locked
+            ? 'You are standing in it. Pick who goes in with you — anywhere else on this world means walking there first.'
+            : prep && (selectedMission || selectedSite)
+              ? 'One party out at a time. While they are gone the ship runs without them.'
+              : 'Contracts and sites both put people outside the hull, captain. You can only have one party out at a time, and while they are gone the ship keeps running without them — time passes, food is eaten, and whoever stayed behind handles whatever comes up.'}
+        </p>
+      </Panel>
+
+      {deployed && (
+        <Panel title="Party already out">
+          <p className="prose amber">
+            You have people at a site right now. Bring them back before you commit anyone else.
+          </p>
+          <Btn block tone="primary" onClick={() => store.setScreen('expedition')}>
+            Go to the party
+          </Btn>
+        </Panel>
+      )}
+
+      {!locked && (
+      <Panel title="Contracts" aside={`${missions.length} posted`}>
+        {missions.length === 0 ? (
+          <Empty>Nothing is posted here right now.</Empty>
+        ) : (
+          <div className="stack stack--tight">
+            {missions.map((mission) => {
+              const risk = assessDanger(mission.danger, { assessor });
+              const missionRules = partyRules(mission, crew.length);
+              const expiresIn =
+                mission.expiresAtHours !== undefined ? mission.expiresAtHours - state.hours : null;
+              const chosen = prep?.missionId === mission.id;
+              // A job needing two people, offered to a captain who is alone,
+              // with a live Accept button, taught the player that walking
+              // somewhere might do nothing. Say what it needs instead.
+              const shortHanded = crew.length < missionRules.min;
+              return (
+                <div
+                  key={mission.id}
+                  className={chosen ? 'panel panel--inset row--selected' : 'panel panel--inset'}
+                >
+                  <div className="panel__body panel__body--tight">
+                    <div className="split">
+                      <span className="value">{mission.title}</span>
+                      <span className="chips">
+                        <Chip tone="cyan">{KIND_LABELS[mission.kind]}</Chip>
+                        {mission.accepted && <Chip tone="green">Accepted</Chip>}
+                        {shortHanded && <Chip tone="amber">Needs {missionRules.min}</Chip>}
+                      </span>
+                    </div>
+                    <p className="prose prose--dim">{mission.description}</p>
+                    {chosen && <p className="tiny faint">{KIND_NOTES[mission.kind]}</p>}
+                    <KV
+                      items={[
+                        ['Risk', `${risk.label}${risk.unsure ? ' (unsure)' : ''}`],
+                        ['Time', <Duration hours={mission.estimatedHours} />],
+                        ['Pay', `${mission.rewardCredits} cr`],
+                        ['Party', missionRules.label],
+                        [
+                          'Expires',
+                          expiresIn === null ? (
+                            'No deadline'
+                          ) : expiresIn <= 0 ? (
+                            'Gone'
+                          ) : (
+                            <Duration hours={expiresIn} />
+                          ),
+                        ],
+                      ]}
+                    />
+                    {chosen && <p className="tiny faint">{risk.note}</p>}
+                    {chosen && mission.siteId && (
+                      <p className="tiny">
+                        This one is tied to a site. You can also work that site directly from below.
+                      </p>
+                    )}
+                    {shortHanded ? (
+                      <p className="tiny amber" style={{ marginBottom: 0 }}>
+                        This one takes {missionRules.min} people and you have{' '}
+                        {crew.length}. It keeps until you have the hands for it.
+                      </p>
+                    ) : (
+                      <div className="btn-row">
+                        {!mission.accepted && (
+                          <Btn
+                            wide
+                            onClick={() => store.acceptMissionById(mission.id)}
+                            disabled={deployed}
+                          >
+                            Accept
+                          </Btn>
+                        )}
+                        <Btn
+                          wide
+                          tone={chosen ? 'primary' : 'default'}
+                          onClick={() => chooseMission(mission)}
+                          disabled={deployed}
+                        >
+                          {chosen ? 'Selected' : 'Prepare'}
+                        </Btn>
+                        {mission.accepted && (
+                          <Btn
+                            wide
+                            tone="danger"
+                            onClick={() => store.abandonMissionById(mission.id)}
+                            disabled={deployed}
+                          >
+                            Drop
+                          </Btn>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+      )}
+
+      {!locked && (
+      <Panel title="Sites" aside={`${sites.length} known`}>
+        {sites.length === 0 ? (
+          <Empty>Nothing here is worth breaking into.</Empty>
+        ) : (
+          <div className="stack stack--tight">
+            {sites.map((site) => {
+              const brief = briefSite(state, site);
+              const chosen = prep?.siteId === site.id;
+              return (
+                <div
+                  key={site.id}
+                  className={chosen ? 'panel panel--inset row--selected' : 'panel panel--inset'}
+                >
+                  <div className="panel__body panel__body--tight">
+                    <div className="split">
+                      <span className="value">{site.name}</span>
+                      <span className="chips">
+                        {site.exhausted && <Chip tone="red">Stripped</Chip>}
+                        <Chip>{`Intel ${site.intel}/3`}</Chip>
+                      </span>
+                    </div>
+                    <p className="prose prose--dim">{site.description}</p>
+                    <KV
+                      items={[
+                        ['Risk', `${brief.risk.label}${brief.risk.unsure ? ' (unsure)' : ''}`],
+                        ['Mapped', `${brief.knownNodes} of ${brief.totalNodes} spaces`],
+                      ]}
+                    />
+                    {chosen && (
+                      <p className="tiny faint">
+                        {brief.risk.note} {brief.note}
+                      </p>
+                    )}
+                    {/*
+                      Three uncertainty readings used to sit here unexplained.
+                      One line each, and only the part the player can act on —
+                      and only on the site they are actually looking at.
+                    */}
+                    {chosen && (
+                    <p className="tiny faint">
+                      <span className="cyan">Intel</span> is what you have learned by
+                      going in before — it rises every time you work the place.{' '}
+                      <span className="cyan">Mapped</span> is how much of the floorplan
+                      you have walked. The rest you find out inside.
+                    </p>
+                    )}
+                    <Btn
+                      block
+                      tone={chosen ? 'primary' : 'default'}
+                      onClick={() => chooseSite(site)}
+                      disabled={deployed || site.exhausted}
+                      sub={site.exhausted ? 'Nothing left in there' : undefined}
+                    >
+                      {chosen ? 'Selected' : 'Prepare a party'}
+                    </Btn>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+      )}
+
 
       <Btn block tone="ghost" onClick={() => store.setScreen(state.currentPlaceId ? 'place' : 'cockpit')}>
         Back

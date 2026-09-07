@@ -37,6 +37,9 @@ src/
     check.ts      The universal d100 check system
     places.ts     The walkable world inside a location
     access.ts     What you may physically do from where you stand
+    situation.ts  What matters right now, said in sentences
+    advice.ts     Who is best at a job, and what is wrong with them
+    development.ts  One development decision instead of twenty +1 taps
     study.ts      Knowledge specialization, earned in hours
     wounds.ts     Health, wounds, treatment
     combat.ts     Action-meter combat
@@ -72,6 +75,30 @@ about design, and breaking either pair shows up immediately in play.
    Recruit. A location contains places, and a place contains what it plausibly
    contains: you recruit at a shelter because that is where people are, and you
    offer a relative passage by standing where they actually are.
+
+And one rule about what reaches the player:
+
+5. **Remove chores, preserve decisions.** If the game already knows the answer,
+   it does not ask — a party with only one possible composition fills itself, a
+   forced leader is the captain, and gear the crew obviously wants is one
+   button. If a number has a threshold that changes what a player should do,
+   the game says the sentence rather than making them watch the number.
+   `situation.ts` is the shape of that: it reads the simulation and speaks.
+   None of it removes agency, and none of it plays a turn for the player.
+
+## One answer per question
+
+Three screens used to describe the same ship three different ways. Anything
+the player might reconcile in their head belongs in one function that every
+screen calls:
+
+- `flightReadiness(ship)` — can she fly, in the same condition words the Ship
+  screen and the cockpit both print. The permission itself is still `isFlyable`.
+- `walkEstimateHours(state, place)` — the time on the travel card is the time
+  the clock charges, because `walkTo` asks the same function.
+- `treatmentFacility(state)` — the room the treatment actually happens in,
+  whether that is a med bay aboard or the clinic you are standing in.
+- `recommend(pool, skill)` — who is best at this, and what is wrong with them.
 
 ## Two axes that are easy to confuse
 

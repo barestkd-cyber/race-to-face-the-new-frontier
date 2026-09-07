@@ -13,6 +13,7 @@ import { assessDanger, bestAssessor, type RiskAssessment } from './assess';
 import { performCheck, selectParticipants, type CheckContext } from './check';
 import { addItem, getItem, partyToolBonus } from './inventory';
 import { pushLog } from './log';
+import { notePartySkillUse } from './development';
 import type { Rng } from './rng';
 import { streamRng } from './rng';
 import { activeParty, advanceTime, applyStress } from './sim';
@@ -600,6 +601,7 @@ export function exitExpedition(state: GameState, rng: Rng): string[] {
     }
     site.intel = Math.min(3, site.intel + 1);
     state.crewXp += XP.perSiteCleared;
+    notePartySkillUse(expeditionParty(state), 'scavenging');
     pushLog(state, 'mission', `Left ${site.name} with ${expedition.carried.length} finds.`);
   }
 

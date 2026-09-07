@@ -19,7 +19,8 @@ import {
   slotsUsed,
   type EquipSlot,
 } from '../../engine/inventory';
-import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../engine/progression';
+import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel, spendableXp } from '../../engine/progression';
+import { developmentOptions, hasDevelopmentToSpend, recentSkills } from '../../engine/development';
 import { focuses, isStudying, studyOptions, studyVenue } from '../../engine/study';
 import { SPEC } from '../../engine/tuning';
 import { WOUNDS } from '../../engine/tuning';
@@ -135,6 +136,10 @@ export function CharacterScreen() {
 
   const venue = studyVenue(state);
 
+  const development = developmentOptions(character);
+  const canDevelop = hasDevelopmentToSpend(state, character);
+  const doing = recentSkills(character).slice(0, 3);
+
   const attrsRaisable = ATTRIBUTE_KEYS.filter(
     (key) => quoteAttributeUpgrade(state, character, key).affordable,
   ).length;
@@ -176,6 +181,39 @@ export function CharacterScreen() {
           </Btn>
         </div>
       </Panel>
+
+      {/* -- Development --------------------------------------------------- */}
+      {/*
+        The player makes the development decision. The game does the
+        bookkeeping. Nothing about the advancement rules changes here: these
+        buy ordinary raises at ordinary costs, from the ordinary pools,
+        respecting the same potential caps. They just stop making somebody tap
+        +1 twenty times to express one intention.
+      */}
+      {canDevelop && development.length > 0 && (
+        <Panel title={`${character.name} has improved`} aside={`${spendableXp(state, character)} XP`}>
+          <p className="prose">How should their development continue?</p>
+          {doing.length > 0 && (
+            <p className="tiny faint" style={{ marginTop: 0 }}>
+              Recently: {doing.map((d) => SKILL_LABELS[d.skill]).join(' · ')}
+            </p>
+          )}
+          <div className="rows">
+            {development.map((option) => (
+              <Row
+                key={option.id}
+                title={option.label}
+                sub={option.reason}
+                onClick={() => store.developCharacter(character.id, option.id)}
+              />
+            ))}
+          </div>
+          <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+            Every point is spent under the usual rules and stops at their potential.
+            Prefer to place them yourself? Skills and Attributes are below.
+          </p>
+        </Panel>
+      )}
 
       {/* -- Condition ----------------------------------------------------- */}
       <Fold title="Condition" defaultOpen>

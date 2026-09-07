@@ -179,6 +179,46 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
         </div>
       </Panel>
 
+      {/*
+        Who you are is the decision. Where eighteen attribute points land is
+        not, unless you want it to be — so the commit sits here, the auto-spend
+        follows the life you just read, and the grids fold away below.
+      */}
+      <Panel title="Take This Life?" tight>
+        <div className="btn-col">
+          {unspent && (
+            <Btn
+              tone="go"
+              block
+              onClick={spendForMe}
+              sub="Places your points the way their history points — you can still adjust below"
+            >
+              Spend Their Points For Them
+            </Btn>
+          )}
+          <Btn
+            tone="primary"
+            block
+            onClick={takeCommand}
+            sub={
+              unspent
+                ? `${attrRemaining} attribute and ${skillRemaining} skill points unspent — they do not keep`
+                : 'Everything is placed'
+            }
+          >
+            Take Command
+          </Btn>
+          <Btn
+            tone="ghost"
+            block
+            onClick={onReroll}
+            sub="Same seed, same world, a different person in the chair"
+          >
+            Reroll Captain
+          </Btn>
+        </div>
+      </Panel>
+
       <Panel title="At a Glance" tight>
         <KV
           items={[
@@ -198,24 +238,14 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
           Health follows Endurance and Strength, so it moves as you allocate.
         </p>
         {unspent && (
-          <div style={{ marginTop: 8 }}>
-            <Btn
-              block
-              tone="go"
-              onClick={spendForMe}
-              sub="Follows their background — every point still visible below"
-            >
-              Spend For Me
-            </Btn>
-            <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
-              Or place them yourself in Attributes and Skills. Tap any stat's name to
-              see what it does.
-            </p>
-          </div>
+          <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
+            To place the points by hand, open Attributes or Skills below. Tap any stat's
+            name to see what it does.
+          </p>
         )}
       </Panel>
 
-      <Fold title={`Attributes — ${attrRemaining} left`} defaultOpen>
+      <Fold title={`Attributes — ${attrRemaining} left`}>
         <p className="tiny faint">
           Ninety percent of this captain was already dealt. These are the points you place
           yourself. Nothing can be raised past {ATTRIBUTE_MAX}, and nothing can be pulled below
@@ -344,14 +374,6 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
             }
           >
             Take Command
-          </Btn>
-          <Btn
-            tone="ghost"
-            block
-            onClick={onReroll}
-            sub="Same seed, same world, a different person in the chair"
-          >
-            Reroll Captain
           </Btn>
           <Btn tone="ghost" block onClick={() => store.quitToTitle()}>
             Back to Title

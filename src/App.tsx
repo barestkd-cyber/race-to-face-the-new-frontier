@@ -12,7 +12,6 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { stardayLabel } from './engine/log';
 import { currentPlace } from './engine/places';
-import { ONBOARDING } from './engine/tuning';
 import type { ScreenId } from './engine/types';
 import { Btn, Panel, Row, Sheet } from './ui/components';
 import { Intro } from './ui/Intro';
@@ -109,7 +108,6 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [state]);
 
-  const step = state?.onboardingStep ?? ONBOARDING.DONE;
   const here = state ? currentPlace(state) : null;
 
   return (
@@ -133,14 +131,12 @@ export function App() {
             label="Crew"
             icon="👥"
             active={screen === 'crew'}
-            hint={step === ONBOARDING.CREW}
             onClick={() => store.setScreen('crew')}
           />
           <NavButton
             label="Ship"
             icon="🚀"
             active={screen === 'ship'}
-            hint={step === ONBOARDING.SHIP}
             disabled={!state.ship || state.ship.destroyed}
             onClick={() => store.setScreen('ship')}
           />
@@ -154,7 +150,6 @@ export function App() {
             label="Pack"
             icon="🎒"
             active={screen === 'inventory'}
-            hint={step === ONBOARDING.INVENTORY}
             onClick={() => store.setScreen('inventory')}
           />
           <NavButton label="⋯" icon="☰" active={menuOpen} onClick={() => setMenuOpen(true)} />

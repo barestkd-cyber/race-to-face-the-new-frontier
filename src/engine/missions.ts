@@ -11,6 +11,7 @@
 import { performCheck, selectParticipants, type CheckContext } from './check';
 import { addItem } from './inventory';
 import { pushLog } from './log';
+import { notePartySkillUse } from './development';
 import type { Rng } from './rng';
 import { ensureSites } from './scavenge';
 import { advanceTime, applyStress, crewMembers } from './sim';
@@ -424,6 +425,8 @@ export function resolveMission(
   if (success) {
     state.crewXp += XP.perMissionCompleted;
     for (const member of party) member.personalXp += 4;
+    // The job ran on one skill; everyone who went has now done that work.
+    notePartySkillUse(party, missionPrimarySkill(mission));
     if (mission.rewardItems) {
       const container = state.ship && !state.ship.destroyed ? state.ship.cargo : party[0]!.backpack;
       for (const reward of mission.rewardItems) {

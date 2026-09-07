@@ -697,6 +697,59 @@ export interface MoveResult {
   reason?: string;
 }
 
+/**
+ * How long it takes to walk somewhere from where you are standing.
+ *
+ * The list the player chooses from and the clock that charges them both call
+ * this, so the time on the card is the time it costs. Reaching a venue in
+ * another district means crossing to the district first and then walking in —
+ * that second leg used to be free, which made a flat "everywhere you can go"
+ * list quietly dishonest.
+ */
+export function walkEstimateHours(state: GameState, target: Place): number {
+  const from = currentPlace(state);
+  if (from && from.id === target.id) return 0;
+
+  // Moving inside one district — or in and out of its own venues — is quick.
+  const sameDistrict =
+    from &&
+    (from.id === target.parentId ||
+      from.parentId === target.id ||
+      (from.parentId !== undefined && from.parentId === target.parentId));
+  if (sameDistrict) return Math.max(0.15, target.travelHours * 0.6);
+
+  // Crossing. A venue costs the walk to its district plus the walk in.
+  const district = target.parentId ? state.places[target.parentId] : undefined;
+  const crossing = district ? district.travelHours + target.travelHours : target.travelHours;
+  return Math.max(0.25, crossing);
+}
+
+/**
+ * Everywhere on this world worth walking to, with the honest cost of getting
+ * there. Districts and the venues inside them come back in one list, because
+ * making the player operate the hierarchy to reach a clinic was never a
+ * decision — the walk is the decision.
+ */
+export interface WalkOption {
+  place: Place;
+  hours: number;
+  /** The district a venue sits in, for a one-line "where is this". */
+  district: Place | null;
+}
+
+export function walkOptions(state: GameState): WalkOption[] {
+  if (!state.currentLocationId) return [];
+  const here = currentPlace(state);
+  return Object.values(state.places)
+    .filter((p) => p.locationId === state.currentLocationId && p.discovered && p.id !== here?.id)
+    .map((p) => ({
+      place: p,
+      hours: walkEstimateHours(state, p),
+      district: p.parentId ? (state.places[p.parentId] ?? null) : null,
+    }))
+    .sort((a, b) => a.hours - b.hours);
+}
+
 /** Walk to a place. Costs time; time is the currency this game actually spends. */
 export function walkTo(state: GameState, placeId: PlaceId, rng: Rng): MoveResult {
   const target = state.places[placeId];
@@ -708,14 +761,7 @@ export function walkTo(state: GameState, placeId: PlaceId, rng: Rng): MoveResult
     return { ok: false, lines: [], reason: 'A party is still deployed.' };
   }
 
-  const from = currentPlace(state);
-  // Crossing districts costs the full walk; moving inside one is quicker.
-  const sameDistrict =
-    from && (from.id === target.parentId || from.parentId === target.id || from.parentId === target.parentId);
-  const hours = sameDistrict
-    ? Math.max(0.15, target.travelHours * 0.6)
-    : Math.max(0.25, target.travelHours);
-
+  const hours = walkEstimateHours(state, target);
   const advance = advanceTime(state, hours, rng);
 
   state.currentPlaceId = target.id;

@@ -22,6 +22,7 @@ import { formatDuration } from '../../engine/log';
 import {
   describeShip,
   estimateFuel,
+  flightReadiness,
   ROOM_DESCRIPTIONS,
   ROOM_LABELS,
   safeCrewCapacity,
@@ -58,6 +59,8 @@ export function ShipScreen() {
 
   const crew = crewMembers(state);
   const capacity = safeCrewCapacity(ship);
+  // The one verdict the cockpit prints and Set Course obeys.
+  const flight = flightReadiness(ship);
   const overBy = Math.max(0, crew.length - capacity);
 
   const fuel = estimateFuel(ship, crew, state.resources.fuel);
@@ -77,25 +80,53 @@ export function ShipScreen() {
 
   return (
     <div className="stack">
-      {/* -- Identity ------------------------------------------------------ */}
-      <Panel title="Vessel" aside={SHIP_QUALITY_LABELS[ship.quality]}>
+      {/* -- The verdict --------------------------------------------------- */}
+      {/*
+        "Engines · Failing" on this screen, no warning on the cockpit, and a
+        live launch button on the map was three answers to one question. All
+        three read this now.
+      */}
+      <Panel title="Can She Fly?" aside={flight.canFly ? 'Flyable' : 'Grounded'}>
         <div className="split">
           <span className="value">{ship.name}</span>
           <Chip tone={ship.destroyed ? 'red' : 'cyan'}>{SHIP_SIZE_LABELS[ship.size]}</Chip>
         </div>
-        <p className="prose prose--dim" style={{ marginTop: 4 }}>
-          {describeShip(ship)} · {SHIP_QUALITY_LABELS[ship.quality]} build
+        <p
+          className={
+            flight.tone === 'bad'
+              ? 'prose red'
+              : flight.tone === 'warn'
+                ? 'prose amber'
+                : 'prose green'
+          }
+          style={{ marginTop: 6 }}
+        >
+          {flight.headline}
         </p>
+        <p className="prose prose--dim">{flight.detail}</p>
         {ship.destroyed && (
           <p className="prose" style={{ marginTop: 8 }}>
             <span className="red">This ship is destroyed.</span> She holds no air and
             goes nowhere. Nothing aboard can be repaired.
           </p>
         )}
+        {flight.worst && flight.tone !== 'ok' && !ship.destroyed && (
+          <Btn
+            block
+            tone="primary"
+            onClick={() => setSelectedKey(`sys:${flight.worst!.kind}`)}
+            sub={`${shipConditionLabel(flight.worst.condition)} · ${Math.round(flight.worst.condition)}%`}
+          >
+            Work on the {SYSTEM_LABELS[flight.worst.kind].toLowerCase()}
+          </Btn>
+        )}
+        <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+          {describeShip(ship)} · {SHIP_QUALITY_LABELS[ship.quality]} build
+        </p>
       </Panel>
 
       {/* -- Capacities ---------------------------------------------------- */}
-      <Panel title="Capacity" aside={`${crew.length} / ${capacity}`}>
+      <Fold title={`Capacity — ${crew.length} of ${capacity} aboard`}>
         <KV
           items={[
             ['Quarters', <span className="readout">{ship.quartersCapacity}</span>],
@@ -122,7 +153,7 @@ export function ShipScreen() {
             ? `You are ${overBy} over what the ship can hold safely. That runs as constant stress on the crew and a steady drag on morale until you fix the quarters, fix life support, or reduce the roster.`
             : 'Safe crew is the lower of quarters and life support. Better rooms or a better life support system raise it.'}
         </p>
-      </Panel>
+      </Fold>
 
       {/* -- Fuel ---------------------------------------------------------- */}
       <Panel title="Fuel" aside={`${Math.round(fuelFraction * 100)}%`}>

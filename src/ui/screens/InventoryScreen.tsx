@@ -150,6 +150,7 @@ function StackCard({
 }) {
   const def = getItem(stack.itemId);
   const bulky = isBulky(stack.itemId);
+  const worn = stack.condition < 75;
 
   return (
     <div className="panel panel--inset panel--flush">
@@ -159,18 +160,19 @@ function StackCard({
             {def?.name ?? stack.itemId}
             {stack.qty > 1 && <span className="dim"> ×{stack.qty}</span>}
           </span>
-          <span className="tiny readout">{Math.round(stack.condition)}%</span>
+          {/*
+            Condition used to sit here as a percentage on every line, next to a
+            weight nobody was budgeting against. Both are still here — they
+            speak up when the thing is actually failing or actually heavy.
+          */}
+          {worn && (
+            <span className={stack.condition < 32 ? 'tiny red' : 'tiny amber'}>
+              {conditionLabel(stack.condition)}
+            </span>
+          )}
         </div>
         <div className="chips" style={{ marginTop: 4 }}>
-          <Chip
-            tone={
-              stack.condition >= 75 ? 'green' : stack.condition >= 32 ? 'amber' : 'red'
-            }
-          >
-            {conditionLabel(stack.condition)}
-          </Chip>
           <Chip>{titleCase(def?.category ?? 'unknown')}</Chip>
-          <Chip>{stackWeight(stack).toFixed(1)} wt</Chip>
           {bulky && <Chip tone="amber">Bulky</Chip>}
           {stack.loaded !== undefined && <Chip>Loaded {stack.loaded}</Chip>}
         </div>
@@ -185,6 +187,10 @@ function StackCard({
             Too bulky for a pack. It stays in the hold.
           </p>
         )}
+        <p className="tiny faint" style={{ marginTop: 4, marginBottom: 0 }}>
+          {conditionLabel(stack.condition)} · {Math.round(stack.condition)}% ·{' '}
+          {stackWeight(stack).toFixed(1)} wt
+        </p>
         <div className="btn-row" style={{ marginTop: 8 }}>
           {actions}
         </div>
@@ -218,6 +224,26 @@ export function InventoryScreen() {
 
   return (
     <div className="stack">
+      {/*
+        The bookkeeping the game can do for itself, done in one tap, before any
+        of the lists. Choosing the important weapon is still the player's.
+      */}
+      {crew.length > 0 && (
+        <Btn
+          block
+          tone="primary"
+          disabled={!holdAccess.ok || !holdUsable}
+          onClick={() => store.equipBest()}
+          sub={
+            holdAccess.ok
+              ? 'Best weapon, sidearm, armor and tool in the hold, shared out'
+              : holdAccess.reason
+          }
+        >
+          Equip Everyone From The Hold
+        </Btn>
+      )}
+
       <Panel title="Whose pack" aside={selected ? `${packUsed}/${selected.backpackSlots}` : 'None'}>
         {crew.length === 0 ? (
           <Empty>There is nobody aboard to carry anything.</Empty>

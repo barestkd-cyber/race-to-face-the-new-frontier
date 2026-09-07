@@ -23,7 +23,7 @@ import {
   type GameState,
   type RecruitCandidate,
 } from '../../engine/types';
-import { Btn, Chip, Empty, Fold, KV, Panel, Row } from '../components';
+import { Btn, Chip, Empty, KV, Panel, Row } from '../components';
 import { Portrait } from '../Portrait';
 import { focuses } from '../../engine/study';
 import { SPEC } from '../../engine/tuning';
@@ -292,28 +292,30 @@ export function RecruitCandidateScreen() {
         </p>
       </Panel>
 
-      <Fold title="Talk to them" defaultOpen={!candidate.talkedTo}>
+      {/*
+        One conversation, continued, rather than five buttons that all mean
+        "ask them a thing". The decision was never which question — it is how
+        long to keep talking, because every half hour can move them either way.
+      */}
+      <Panel title="Talk to them" aside={beats.length > 0 ? `${beats.length} left` : 'said'}>
         <p className="tiny">
-          Every beat costs about half an hour and can move them either way. Talking is also how you
-          notice what kind of person they are.
+          Half an hour a time, and it can move them either way. Talking is also how you notice
+          what kind of person they are.
         </p>
         {beats.length === 0 ? (
           <Empty>You have said everything there is to say.</Empty>
         ) : (
-          <div className="btn-col">
-            {beats.map((beat) => (
-              <Btn
-                key={beat}
-                block
-                disabled={settled}
-                onClick={() => store.talkToCandidate(candidate, beat)}
-              >
-                {beat}
-              </Btn>
-            ))}
-          </div>
+          <Btn
+            block
+            tone="primary"
+            disabled={settled}
+            onClick={() => store.talkToCandidate(candidate, beats[0]!)}
+            sub={candidate.talkedTo ? 'Keep the conversation going' : 'Sit down with them'}
+          >
+            {candidate.talkedTo ? 'Talk Some More' : 'Talk With Them'}
+          </Btn>
         )}
-      </Fold>
+      </Panel>
 
       <Panel title="Persuade and bargain">
         <div className="btn-col">

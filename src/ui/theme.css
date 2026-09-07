@@ -1427,6 +1427,62 @@ textarea {
 }
 
 /* ------------------------------------------------------------------ */
+/* The situation — what matters right now, said in sentences           */
+/* ------------------------------------------------------------------ */
+
+.situation {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--bevel-dark);
+}
+
+.situation:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.situation:first-child {
+  padding-top: 0;
+}
+
+.situation__label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 2px;
+}
+
+.situation__label--warn {
+  color: var(--amber);
+}
+
+.situation__label--bad {
+  color: var(--red);
+}
+
+.situation__text {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-bright);
+}
+
+.situation .btn {
+  margin-top: 2px;
+}
+
+/* A place you can walk to, in the one flat list of everywhere reachable */
+.placecard__where {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ */
 /* Windshield scene — the world as seen from the parked ship           */
 /* ------------------------------------------------------------------ */
 
