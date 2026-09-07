@@ -32,6 +32,31 @@ The hooks exist (traits, evidence, discovery); the events do not. Deferred so
 that trait change, when it arrives, lands on a game whose event content has
 already been played and judged.
 
+## Species
+
+The world assumes other peoples exist and the content refers to them, but
+almost nothing is modelled.
+
+What exists today: one named species per run, drawn from a pool of seven, given
+to the ocean planet — "Home of the Vesk". A handful of authored events reference
+non-humans, and the transit station's description mentions several species. The
+name library carries 200 male, 200 female and 200 surname entries built from
+different sound shapes, ready and unused.
+
+What does not exist: any species field on a character. Every generated person —
+crew, family, recruit, hostile — is human. Nothing in the engine knows
+otherwise.
+
+Making species real means, at minimum: a field on Character, name pools per
+species, and reactions from other characters. Whether it also means different
+attribute ranges, different wounds, or different needs is the design question
+that decides how large the job is.
+
+Note that creatures and species are separate problems. The bestiary is thin —
+two animals (hull vermin, shore fauna) and one machine family (drones) across
+fifteen encounters — but adding a hostile animal only needs an encounter
+template. Adding a people needs the system above.
+
 ## Communications and translation
 
 Held at the owner's explicit request until the current game stabilises.

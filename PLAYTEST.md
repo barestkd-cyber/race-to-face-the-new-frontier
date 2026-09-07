@@ -32,13 +32,19 @@ be read alongside *how* the person was playing.
 
 ## 2. Measured baseline
 
-40 headless runs per playstyle, current tuning — **you start alone**:
+60 headless runs per playstyle, current tuning — **you start alone**:
 
 | Playstyle | Victory | Death | Avg days | Locations | Hires |
 | --- | --- | --- | --- | --- | --- |
-| **Balanced** (treat wounds, resupply, hire, push on) | **25%** | 70% | 98 | 3.0 / 7 | 3.3 |
-| **Explore** (grind every location) | 8% | 90% | 72 | 3.0 / 7 | 2.1 |
-| **Rush** (beeline, never recruits) | 3% | 98% | 36 | 2.1 / 7 | 0.0 |
+| **Balanced** (treat wounds, resupply, hire, push on) | **32%** | 65% | 74 | 3.1 / 7 | 3.3 |
+| **Explore** (grind every location) | 7% | 90% | 74 | 2.6 / 7 | 1.6 |
+| **Rush** (beeline, never recruits) | 2% | 98% | 37 | 2.0 / 7 | 0.0 |
+
+Re-measured after the navigation rework, physical-access rules, and the study
+system. Balanced play moved from 25% to 32% without any balance change — the
+harness now walks to places and loses time doing it, which changes what a run
+can fit in, and the numbers moved on their own. Treat any figure here as
+belonging to the build that produced it.
 
 Two shapes worth noting. Lingering is punished — the homeworld clock should make
 "one more day" a real gamble. And **beelining alone is close to impossible**:
@@ -200,5 +206,44 @@ campaign.
   game is fully playable offline, which was the requirement.
 - **Crew Missions** resolve as one abstract check rather than a nested
   ship-scale sequence.
-- **Family can be brought aboard but not otherwise helped.** Passage and visits
-  work; there is no content for evacuating them any other way.
+- **Family can be brought aboard, or their situation settled — but not much
+  else.** Visiting, talking, settling a debt, supplying medicine and giving
+  somebody a day all work. There is still no way to help a relative who will
+  not leave, or to get them off the world by any route but your own hold.
+
+---
+
+## 6. Added since this baseline — what to watch
+
+These systems landed after the numbers above were first measured. None has been
+tuned; they are listed because they are the most likely source of "this feels
+wrong" during a manual audit.
+
+**Places and walking.** Every location is a small tree of districts and venues,
+and crossing one costs real time — roughly two hours across the homeworld's
+districts, twenty minutes between venues in one district. That time is the
+newest pressure on the clock and has not been balanced against it. Watch for
+the walk feeling like a tax rather than a decision.
+
+**Physical access.** The hold, repairs and auto-equip all require being at the
+ship. This is correct but it is also a new source of friction: expect at least
+one moment of "why can't I do this", and judge whether the refusal explains
+itself well enough.
+
+**Knowledge specialization by study.** Opens at ×1.05 on any craft already at
+20 and climbs to ×1.20. Hours per rung are 12 / 40 / 90 / 170, modified by
+Learning and by studying in a library rather than the ship. Completely
+unmeasured against the length of a run — the top rung may be unreachable in a
+campaign, which would make it decorative.
+
+**Family concerns.** Every relative carries a hidden reason they cannot simply
+leave. The weights are guesses. If most families roll `ready`, the system is
+invisible; if most roll `wontLeaveKin`, family becomes a chain of fetch quests.
+
+**Imperfect recruit information.** What you learn about a stranger now depends
+on the crew's Evaluation. A captain with poor Evaluation sees impressions
+rather than numbers, which is the intent — but it may read as the game
+withholding rather than as the character not knowing.
+
+**Names.** 1,000 per sex. Repeats fell from 95% of runs to 26%. A handful of
+names sit in the wrong sex column in the source list; they surface rarely.
