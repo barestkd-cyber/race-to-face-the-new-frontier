@@ -41,6 +41,8 @@ import {
 import { applyDevelopment, developmentOptions, noteSkillUse, recentSkills } from './development';
 import { recommend } from './advice';
 import { situationReport } from './situation';
+import { temperamentOf } from './temperament';
+import { TRAIT_DEFS } from '../content/traits';
 import { treatmentFacility } from './actions';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
@@ -1117,5 +1119,52 @@ describe('campaign simulation', () => {
     expect(victim.alive).toBe(true);
     expect(victim.wounds.length).toBe(0);
     expect(victim.health).toBeGreaterThan(victim.maxHealth * 0.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Temperament — the captain knows their own baseline
+// ---------------------------------------------------------------------------
+
+describe('temperament', () => {
+  it('describes a person from the traits and attributes they already have', () => {
+    const draft = generateProtagonistDraft(streamRng('TEMP-1', 'protagonist'));
+    const character = draft.character;
+    const temperament = temperamentOf(character);
+
+    // Every trait they actually carry gets named and explained.
+    expect(temperament.tendencies).toHaveLength(character.traits.length);
+    for (const trait of character.traits) {
+      expect(temperament.descriptors).toContain(TRAIT_DEFS[trait].label);
+    }
+    // Always a sentence, even for somebody with no extreme attribute.
+    expect(temperament.summary.length).toBeGreaterThan(0);
+    expect(temperament.summary.startsWith(character.name)).toBe(true);
+  });
+
+  it('invents no personality of its own', () => {
+    // Whatever it says has to come from the trait set or the attributes; the
+    // point of this module is wording, not a second personality system.
+    for (let seed = 0; seed < 40; seed += 1) {
+      const character = createCharacter({ rng: new Rng(`temp-${seed}`) });
+      const temperament = temperamentOf(character);
+      const traitLabels = character.traits.map((t) => TRAIT_DEFS[t].label);
+      const fromTraits = temperament.descriptors.filter((d) => traitLabels.includes(d));
+      expect(fromTraits).toHaveLength(character.traits.length);
+      expect(temperament.descriptors.length).toBeLessThanOrEqual(character.traits.length + 2);
+    }
+  });
+
+  it('starts the captain knowing their own traits, and nobody else knowing theirs', () => {
+    const draft = generateProtagonistDraft(streamRng('TEMP-2', 'protagonist'));
+    const state = createGame('TEMP-2', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    expect(captain.traitKnowledge.length).toBeGreaterThan(0);
+    expect(captain.traitKnowledge.every((k) => k.known === 2)).toBe(true);
+
+    // The rule for strangers is untouched: recruits are still read, not looked up.
+    const stranger = createCharacter({ rng: new Rng('TEMP-2:stranger') });
+    expect(stranger.traitKnowledge.every((k) => k.known === 0)).toBe(true);
   });
 });

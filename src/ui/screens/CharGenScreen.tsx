@@ -1,5 +1,10 @@
 /**
- * Character generation.
+ * Meeting your captain, and then finishing them.
+ *
+ * Two screens, because they answer two different questions and were being
+ * asked at once. The first is "who is this person?" — a face, a life, and the
+ * temperament they already have. The second is "where do the last few points
+ * go?" — the only bookkeeping in the flow, kept to one compact screen.
  *
  * The draft is regenerated wholesale on every reroll, so the allocation the
  * player is making lives in local state until it is written back onto a copy of
@@ -8,7 +13,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Btn, Chip, Empty, Fold, KV, Panel, StatLine } from '../components';
+import { Btn, Chip, Empty, Fold, Panel, StatLine } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useDraft } from '../useStore';
 import { autoSpendDraft, deriveMaxHealth, sexLabel } from '../../engine/character';
@@ -17,6 +22,7 @@ import { ATTRIBUTE_INFO, SKILL_INFO } from '../../engine/glossary';
 import type { NewRunDraft } from '../../engine/newGame';
 import { Rng } from '../../engine/rng';
 import { skillCapLabel } from '../../engine/progression';
+import { temperamentOf } from '../../engine/temperament';
 import { ATTRIBUTE_GEN } from '../../engine/tuning';
 import {
   ATTRIBUTE_KEYS,
@@ -64,13 +70,16 @@ export function CharGenScreen() {
 function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void }) {
   const { character, attributePoints, skillPoints, baseAttributes, baseSkills } = draft.protagonist;
 
+  const [step, setStep] = useState<'who' | 'points'>('who');
   const [attributes, setAttributes] = useState<Attributes>(() => ({ ...character.attributes }));
   const [skills, setSkills] = useState<SkillMap>(() => ({ ...character.skills }));
 
-  // A new draft identity means a new person; the working copy starts over.
+  // A new draft identity means a new person; the working copy starts over, and
+  // so does the flow — a reroll is a new introduction, not a new stat sheet.
   useEffect(() => {
     setAttributes({ ...character.attributes });
     setSkills({ ...character.skills });
+    setStep('who');
   }, [character.id]);
 
   const attrSpent = useMemo(
@@ -84,11 +93,7 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
 
   const attrRemaining = attributePoints - attrSpent;
   const skillRemaining = skillPoints - skillSpent;
-  const maxHealth = deriveMaxHealth(attributes);
-  const attributeTotalNow = useMemo(
-    () => ATTRIBUTE_KEYS.reduce((sum, key) => sum + attributes[key], 0),
-    [attributes],
-  );
+  const unspent = attrRemaining > 0 || skillRemaining > 0;
 
   const bumpAttribute = (key: AttributeKey, delta: number) => {
     setAttributes((previous) => {
@@ -115,9 +120,9 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
   /**
    * Let the background finish the sheet. Same caps and rules as doing it by
    * hand — this is a real allocation, not a skip button, and every number it
-   * writes can still be inspected above before committing.
+   * writes can still be adjusted below before committing.
    */
-  const spendForMe = () => {
+  const autoAllocate = () => {
     const working: typeof draft.protagonist = {
       ...draft.protagonist,
       character: {
@@ -146,110 +151,65 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
     store.commitDraft(committed);
   };
 
-  const unspent = attrRemaining > 0 || skillRemaining > 0;
+  if (step === 'who') {
+    return (
+      <CaptainIntro
+        character={character}
+        onContinue={() => setStep('points')}
+        onReroll={onReroll}
+      />
+    );
+  }
 
   return (
     <div className="stack">
-      <Panel title="Your Captain" aside={`Seed ${draft.seed}`}>
-        <div className="split" style={{ alignItems: 'flex-start' }}>
-          <Portrait seed={character.portraitSeed} size="lg" />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="value">
-              {character.name} {character.surname}
+      {/*
+        One question on this screen: where do the last few points go? Health,
+        attribute totals and backpack slots were on it because they existed,
+        not because they helped answer that.
+      */}
+      <Panel title="Remaining Points" tight>
+        <div className="grid2">
+          <div>
+            <span className="label">Attributes</span>
+            <div className={attrRemaining > 0 ? 'value readout amber' : 'value readout green'}>
+              {attrRemaining}
             </div>
-            <div className="tiny">
-              {character.age} · {sexLabel(character)} ·{' '}
-              <span style={{ textTransform: 'capitalize' }}>{character.role}</span>
-            </div>
-            <div className="chips">
-              <Chip tone="amber">{character.lifeHistory.career}</Chip>
-              <Chip>{character.lifeHistory.origin}</Chip>
+          </div>
+          <div>
+            <span className="label">Skills</span>
+            <div className={skillRemaining > 0 ? 'value readout amber' : 'value readout green'}>
+              {skillRemaining}
             </div>
           </div>
         </div>
-
-        <div className="divider" />
-
-        <div className="stack stack--tight">
-          {character.lifeHistory.notes.map((note, index) => (
-            <p key={index} className="prose prose--dim">
-              {note}
-            </p>
-          ))}
-        </div>
-      </Panel>
-
-      {/*
-        Who you are is the decision. Where eighteen attribute points land is
-        not, unless you want it to be — so the commit sits here, the auto-spend
-        follows the life you just read, and the grids fold away below.
-      */}
-      <Panel title="Take This Life?" tight>
-        <div className="btn-col">
-          {unspent && (
-            <Btn
-              tone="go"
-              block
-              onClick={spendForMe}
-              sub="Places your points the way their history points — you can still adjust below"
-            >
-              Spend Their Points For Them
-            </Btn>
-          )}
-          <Btn
-            tone="primary"
-            block
-            onClick={takeCommand}
-            sub={
-              unspent
-                ? `${attrRemaining} attribute and ${skillRemaining} skill points unspent — they do not keep`
-                : 'Everything is placed'
-            }
-          >
-            Take Command
-          </Btn>
-          <Btn
-            tone="ghost"
-            block
-            onClick={onReroll}
-            sub="Same seed, same world, a different person in the chair"
-          >
-            Reroll Captain
-          </Btn>
-        </div>
-      </Panel>
-
-      <Panel title="At a Glance" tight>
-        <KV
-          items={[
-            ['Health', <span key="hp" className="value readout">{maxHealth}</span>],
-            ['Attribute total', `${attributeTotalNow} / ${ATTRIBUTE_KEYS.length * ATTRIBUTE_MAX}`],
-            ['Backpack', `${character.backpackSlots} slots`],
-            [
-              'Unspent',
-              <span key="left" className={unspent ? 'amber' : 'green'}>
-                {attrRemaining} attr · {skillRemaining} skill
-              </span>,
-            ],
-          ]}
-        />
-        <div className="divider" />
-        <p className="tiny faint">
-          Health follows Endurance and Strength, so it moves as you allocate.
+        <p className="prose prose--dim" style={{ marginTop: 8 }}>
+          {unspent
+            ? `${attrRemaining} attribute ${attrRemaining === 1 ? 'point' : 'points'} and ${skillRemaining} skill ${skillRemaining === 1 ? 'point' : 'points'} remain. Most of ${character.name} was dealt by the life you just read. These are yours to place.`
+            : 'Everything is placed.'}
         </p>
         {unspent && (
-          <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
-            To place the points by hand, open Attributes or Skills below. Tap any stat's
-            name to see what it does.
-          </p>
+          <div style={{ marginTop: 8 }}>
+            <Btn
+              block
+              tone="go"
+              onClick={autoAllocate}
+              sub="Spends them the way this captain's history and strengths point"
+            >
+              Auto-Allocate
+            </Btn>
+            <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
+              Or open Attributes or Skills below and place them yourself. Points not placed
+              are not carried into the run.
+            </p>
+          </div>
         )}
       </Panel>
 
       <Fold title={`Attributes — ${attrRemaining} left`}>
         <p className="tiny faint">
-          Ninety percent of this captain was already dealt. These are the points you place
-          yourself. Nothing can be raised past {ATTRIBUTE_MAX}, and nothing can be pulled below
-          what the roll gave them.
+          Nothing can be raised past {ATTRIBUTE_MAX}, and nothing can be pulled below what the
+          roll gave them. Tap a name to see what it does.
         </p>
         <div className="divider" />
         <div className="stack">
@@ -300,11 +260,9 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
       <Fold title={`Skills — ${skillRemaining} left`}>
         <p className="tiny faint">
           Every skill has a ceiling set by potential, shown beside it as grade and cap.
-          Knowledge specialization is deliberately empty: everything else about this
-          person was dealt, but what they study is decided in play, once a craft has
-          been practised. Specialization multiplies what a skill delivers — it never
-          raises the ceiling shown here. Points spent cannot be taken back below the
-          value the life history produced.
+          Knowledge specialization is deliberately empty: what this captain studies is
+          decided in play, once a craft has been practised. Points spent cannot be taken
+          back below the value the life history produced.
         </p>
         <div className="divider" />
         <div className="stack">
@@ -354,32 +312,120 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
         </div>
       </Fold>
 
-      <Panel title="Temperament" tight>
-        <p className="tiny faint">
-          Personality is not on this sheet. Your crew's tendencies reveal themselves through play —
-          you learn who someone is by watching what they do under pressure, not by reading it here.
+      <Btn
+        tone="primary"
+        block
+        onClick={takeCommand}
+        sub={unspent ? 'You can leave points unplaced if you would rather' : 'Everything is placed'}
+      >
+        Take Command
+      </Btn>
+
+      <Btn tone="ghost" block onClick={() => setStep('who')}>
+        Back to {character.name}
+      </Btn>
+    </div>
+  );
+}
+
+/**
+ * Who this person is, with nothing on the page you would have to be a
+ * spreadsheet to read. The numbers exist and are one screen away.
+ */
+function CaptainIntro({
+  character,
+  onContinue,
+  onReroll,
+}: {
+  character: Character;
+  onContinue: () => void;
+  onReroll: () => void;
+}) {
+  const temperament = temperamentOf(character);
+
+  return (
+    <div className="stack">
+      <Panel title="Your Captain">
+        <div className="split" style={{ alignItems: 'flex-start' }}>
+          <Portrait seed={character.portraitSeed} size="lg" />
+          <div style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
+            <div className="value">
+              {character.name} {character.surname}
+            </div>
+            <div className="tiny">
+              Age {character.age} · {sexLabel(character)} ·{' '}
+              <span style={{ textTransform: 'capitalize' }}>{character.role}</span>
+            </div>
+            <div className="chips" style={{ marginTop: 6 }}>
+              <Chip tone="amber">{character.lifeHistory.career}</Chip>
+            </div>
+          </div>
+        </div>
+
+        <div className="divider" />
+
+        {/* The life, as story. This is the strongest thing on the screen. */}
+        <div className="stack stack--tight">
+          {character.lifeHistory.notes.map((note, index) => (
+            <p key={index} className="prose">
+              {note}
+            </p>
+          ))}
+        </div>
+
+        <div className="divider" />
+        <div className="chips">
+          <Chip>{character.lifeHistory.origin}</Chip>
+          <Chip>{character.lifeHistory.upbringing}</Chip>
+          <Chip>{character.lifeHistory.formativeEvent}</Chip>
+        </div>
+      </Panel>
+
+      {/*
+        You know your own temperament. A stranger's still has to be watched for
+        — that rule protects recruitment, and the captain was never a stranger.
+      */}
+      <Panel title="Temperament">
+        <div className="chips">
+          {temperament.descriptors.map((word) => (
+            <Chip key={word} tone="cyan">
+              {word}
+            </Chip>
+          ))}
+        </div>
+        <p className="prose" style={{ marginTop: 8 }}>
+          {temperament.summary}
+        </p>
+        <div className="divider" />
+        <div className="stack stack--tight">
+          {temperament.tendencies.map((tendency) => (
+            <p key={tendency.label} className="tiny">
+              <span className="amber">{tendency.label}.</span>{' '}
+              <span className="dim">{tendency.behaviour}</span>
+            </p>
+          ))}
+        </div>
+        <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+          Habits deeper than these still show themselves in play.
         </p>
       </Panel>
 
-      <Panel title="Commit" tight>
-        <div className="btn-col">
-          <Btn
-            tone="primary"
-            block
-            onClick={takeCommand}
-            sub={
-              unspent
-                ? `Spend these now — they don't keep. ${attrRemaining} attr · ${skillRemaining} skill unspent`
-                : 'All points allocated'
-            }
-          >
-            Take Command
-          </Btn>
-          <Btn tone="ghost" block onClick={() => store.quitToTitle()}>
-            Back to Title
-          </Btn>
-        </div>
-      </Panel>
+      <Btn tone="primary" block onClick={onContinue} sub="A few points left to place">
+        Continue
+      </Btn>
+
+      <Btn
+        tone="ghost"
+        block
+        onClick={onReroll}
+        sub="Same seed, same world, a different person in the chair"
+      >
+        Reroll Captain
+      </Btn>
+
+      <Btn tone="ghost" block onClick={() => store.quitToTitle()}>
+        Back to Title
+      </Btn>
     </div>
   );
 }

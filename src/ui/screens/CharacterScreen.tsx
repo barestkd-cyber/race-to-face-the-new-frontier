@@ -531,8 +531,10 @@ export function CharacterScreen() {
       <Fold title="Traits">
         <p className="prose prose--dim">
           Traits are tendencies, not morality. None of them is good or bad on its own;
-          what matters is when it fires and who is standing nearby. You learn them by
-          watching someone work, not by reading a file.
+          what matters is when it fires and who is standing nearby.{' '}
+          {character.isPlayer
+            ? 'You have known your own since before the run started.'
+            : 'You learn somebody else’s by watching them work, not by reading a file.'}
         </p>
         {surfaced.length === 0 ? (
           <Empty>

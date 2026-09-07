@@ -18,7 +18,7 @@ import { generateSeed, normalizeSeed, streamRng, type Rng } from './rng';
 import { ensurePlaces, placeKnownCharacters } from './places';
 import { generateShip, recomputeShipCapacities } from './ship';
 import { pruneDeadCrew } from './sim';
-import { MORALE, ONBOARDING, SAVE, SHIPS, START } from './tuning';
+import { MORALE, ONBOARDING, SAVE, SHIPS, START, TRAITS_TUNING } from './tuning';
 import { generateWorld } from './world';
 import type { Character, GameState, Resources } from './types';
 
@@ -105,6 +105,12 @@ export function createGame(seed: string, protagonist: Character): GameState {
   protagonist.isPlayer = true;
   protagonist.aboard = true;
   protagonist.role = 'captain';
+  // You know your own temperament. Everyone else's has to be watched for —
+  // that rule is about strangers, and the captain is not one.
+  for (const knowledge of protagonist.traitKnowledge) {
+    knowledge.known = 2;
+    knowledge.evidence = TRAITS_TUNING.evidenceForKnown;
+  }
   characters[protagonist.id] = protagonist;
 
   const crewIds: string[] = [protagonist.id];

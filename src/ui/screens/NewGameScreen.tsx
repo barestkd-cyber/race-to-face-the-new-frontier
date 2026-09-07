@@ -64,6 +64,9 @@ export function NewGameScreen() {
             <span className="value" style={{ display: 'block' }}>
               {character.name} {character.surname}
             </span>
+            <span className="tiny dim" style={{ display: 'block' }}>
+              Age {character.age}
+            </span>
             <span className="label" style={{ marginTop: 6 }}>
               Background
             </span>
