@@ -368,9 +368,10 @@ export function CharacterScreen() {
         }
       >
         <p className="prose prose--dim">
-          Each skill has a potential grade and a hard ceiling. The grade is fate.
-          Devotion is not: specialization marks are yours to place, one craft each,
-          permanently — the one part of a person that grows by pure will.
+          Potential sets how far a skill can be trained, and that is fixed for life.
+          Knowledge specialization is separate and earned: studying a craft does not
+          raise its ceiling, it raises what the training delivers. A skill of 70
+          studied to ×1.20 performs at 84.
         </p>
 
         {/*
@@ -380,9 +381,9 @@ export function CharacterScreen() {
         <div className="panel panel--inset" style={{ marginTop: 8 }}>
           <div className="panel__body panel__body--tight">
             <div className="split">
-              <span className="label">Focus</span>
+              <span className="label">Knowledge Specialization</span>
               <span className="tiny dim">
-                {focuses(character).length} of {SPEC.maxFocuses} committed
+                {focuses(character).length} of {SPEC.maxFocuses} studied
               </span>
             </div>
 
@@ -429,7 +430,8 @@ export function CharacterScreen() {
             ) : (
               <p className="tiny faint" style={{ marginTop: 4, marginBottom: 6 }}>
                 Not studying anything. Pick a craft below — it must already be at{' '}
-                {SPEC.placeMinSkill}, because you cannot commit to what you have never done.
+                {SPEC.placeMinSkill}, because you cannot specialise in what you have never
+                done.
               </p>
             )}
 

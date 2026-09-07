@@ -551,6 +551,39 @@ export function conditionLabel(character: Character): string {
   return 'Critical';
 }
 
+/**
+ * The single most important physical fact about this person right now, phrased
+ * the way a crewmate would say it: "serious leg wound, bleeding".
+ *
+ * Health answers "can they keep going". This answers "what actually happened",
+ * which is what the wound model is for and what a health bar alone hides.
+ */
+export function woundHeadline(character: Character): string | null {
+  if (!character.alive) return null;
+  const worst = worstWound(character);
+  if (!worst) return null;
+
+  const region = BODY_REGION_LABELS[worst.region].toLowerCase();
+  const severity = SEVERITY_LABELS[worst.severity].toLowerCase();
+  const bleeding = character.wounds.some((w) => w.bleeding > 0);
+  const untreated = !worst.treated;
+
+  const parts = [`${severity} ${region} wound`];
+  if (bleeding) parts.push('bleeding');
+  else if (untreated) parts.push('untreated');
+  return parts.join(' · ');
+}
+
+/** How loudly the UI should shout about it. */
+export function woundTone(character: Character): 'red' | 'amber' | null {
+  const worst = worstWound(character);
+  if (!worst) return null;
+  const bleeding = character.wounds.some((w) => w.bleeding > 0);
+  if (bleeding || worst.severity === 'critical' || worst.severity === 'mortal') return 'red';
+  if (worst.severity === 'serious') return 'amber';
+  return null;
+}
+
 export function untreatedWounds(character: Character): Wound[] {
   return character.wounds.filter((w) => !w.treated);
 }

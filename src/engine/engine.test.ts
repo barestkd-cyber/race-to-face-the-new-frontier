@@ -155,7 +155,7 @@ describe('character generation', () => {
     }
   });
 
-  it('deals no devotion to the protagonist — that lever is the player’s alone', () => {
+  it('deals no specialization to the protagonist — that lever is the player’s alone', () => {
     for (let seed = 0; seed < 30; seed++) {
       const draft = generateProtagonistDraft(streamRng(`pspec-${seed}`, 'protagonist'));
       const placed = SKILL_KEYS.filter((k) => draft.character.potential[k].specialization > 1);
@@ -173,7 +173,7 @@ describe('character generation', () => {
     }
   });
 
-  it('lets an old professional arrive more devoted than a young recruit', () => {
+  it('lets an old professional arrive more specialised than a young recruit', () => {
     let young = 0;
     let old = 0;
     const runs = 80;
@@ -698,7 +698,7 @@ describe('combat resolution', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Study — devotion is earned, and the rungs above the first are a queue
+// Study — specialization is earned, and the rungs above the first are a queue
 // ---------------------------------------------------------------------------
 
 describe('study', () => {

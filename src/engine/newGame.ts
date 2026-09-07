@@ -54,7 +54,6 @@ function rollResources(rng: Rng, fuelCapacity: number): Resources {
     repairParts: rng.int(START.repairParts[0], START.repairParts[1]),
     medicine: rng.int(START.medicine[0], START.medicine[1]),
     credits: rng.taperedInt(START.credits[0], START.credits[1], 2),
-    dataCores: rng.int(START.dataCores[0], START.dataCores[1]),
   };
 }
 
@@ -133,11 +132,9 @@ export function createGame(seed: string, protagonist: Character): GameState {
 
   // Family stays on the homeworld until the player does something about it.
   const familyRng = streamRng(seed, 'family');
-  const family = generateFamily(
-    familyRng,
-    protagonist,
-    familyRng.int(START.familyCount[0], START.familyCount[1]),
-  );
+  // Family are asked into existence one relation at a time, so the size and
+  // shape of a family varies the way real ones do.
+  const family = generateFamily(familyRng, protagonist);
   for (const member of family) {
     characters[member.id] = member;
     world.homeworld.familyIds.push(member.id);

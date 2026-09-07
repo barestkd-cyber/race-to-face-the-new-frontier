@@ -299,6 +299,12 @@ function migrate(state: GameState): GameState {
     if (person.study === null) delete person.study;
   }
 
+  // Data cores stopped being a resource axis and became ordinary items. Any
+  // banked count is dropped rather than converted: the number was never
+  // spendable, so nothing of value is lost.
+  const resources = patched.resources as unknown as Record<string, unknown> | undefined;
+  if (resources && 'dataCores' in resources) delete resources.dataCores;
+
   // A place id that no longer exists would strand the player outside the ship.
   if (
     patched.currentPlaceId &&

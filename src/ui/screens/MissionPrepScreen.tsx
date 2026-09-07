@@ -66,6 +66,9 @@ export function MissionPrepScreen() {
     .filter((site): site is ScavengeSite => Boolean(site));
 
   const prep = state.missionPrep;
+  // Walked into the ruin itself: this screen is about THAT ruin, and nothing
+  // else on this world is selectable from inside it.
+  const locked = Boolean(prep?.lockedToSite);
   const selectedMission: MissionDef | undefined = prep?.missionId
     ? missions.find((m) => m.id === prep.missionId)
     : undefined;
@@ -109,7 +112,7 @@ export function MissionPrepScreen() {
           label:
             crew.length <= 1
               ? 'One person, because there is only one of you.'
-              : `Between 1 and ${Math.min(MISSIONS.groupMaxCapacity, crew.length)} people.`,
+              : `Alone, or up to ${Math.min(MISSIONS.groupMaxCapacity, crew.length)} together.`,
         }
       : null;
 
@@ -160,11 +163,11 @@ export function MissionPrepScreen() {
 
   return (
     <div className="stack">
-      <Panel title="Away work" aside={location.name}>
+      <Panel title={locked ? (selectedSite?.name ?? 'This site') : 'Away work'} aside={location.name}>
         <p className="prose">
-          Contracts and sites both put people outside the hull, captain. You can only have one party
-          out at a time, and while they are gone the ship keeps running without them — time passes,
-          food is eaten, and whoever stayed behind handles whatever comes up.
+          {locked
+            ? 'You are standing in it. Pick who goes in with you — anywhere else on this world means walking there first.'
+            : 'Contracts and sites both put people outside the hull, captain. You can only have one party out at a time, and while they are gone the ship keeps running without them — time passes, food is eaten, and whoever stayed behind handles whatever comes up.'}
         </p>
       </Panel>
 
@@ -179,6 +182,7 @@ export function MissionPrepScreen() {
         </Panel>
       )}
 
+      {!locked && (
       <Panel title="Contracts" aside={`${missions.length} posted`}>
         {missions.length === 0 ? (
           <Empty>Nothing is posted here right now.</Empty>
@@ -263,7 +267,9 @@ export function MissionPrepScreen() {
           </div>
         )}
       </Panel>
+      )}
 
+      {!locked && (
       <Panel title="Sites" aside={`${sites.length} known`}>
         {sites.length === 0 ? (
           <Empty>Nothing here is worth breaking into.</Empty>
@@ -311,6 +317,7 @@ export function MissionPrepScreen() {
           </div>
         )}
       </Panel>
+      )}
 
       {prep && rules && (selectedMission || selectedSite) && (
         <Panel

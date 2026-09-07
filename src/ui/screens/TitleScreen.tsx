@@ -61,31 +61,48 @@ export function TitleScreen() {
             <rect x={158} y={82} width={4} height={3} fill="var(--amber)" />
           </g>
 
+          {/*
+            THE RACE carries the title. "to face" is connective tissue, and
+            THE NEW FRONTIER supports underneath.
+          */}
           <text
             x={120}
-            y={31}
+            y={34}
             textAnchor="middle"
-            fontSize={11}
-            letterSpacing={3}
+            fontSize={30}
+            fontWeight={700}
+            letterSpacing={2}
             fontFamily="inherit"
             fill="var(--amber)"
           >
-            RACE TO FACE THE
+            THE RACE
           </text>
           <text
             x={120}
-            y={62}
+            y={49}
             textAnchor="middle"
-            fontSize={26}
+            fontSize={10}
+            letterSpacing={5}
+            fontFamily="inherit"
+            fill="var(--ink-faint)"
+          >
+            to face
+          </text>
+          <text
+            x={120}
+            y={68}
+            textAnchor="middle"
+            fontSize={17}
             fontWeight={700}
+            letterSpacing={1}
             fontFamily="inherit"
             fill="var(--ink-bright)"
           >
-            NEW FRONTIER
+            THE NEW FRONTIER
           </text>
           <text
             x={120}
-            y={78}
+            y={83}
             textAnchor="middle"
             fontSize={7}
             letterSpacing={4}

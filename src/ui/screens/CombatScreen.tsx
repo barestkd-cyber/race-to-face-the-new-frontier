@@ -16,7 +16,7 @@ import {
   livingEnemies,
   RANGE_LABELS,
 } from '../../engine/combat';
-import { conditionLabel, isIncapacitated } from '../../engine/wounds';
+import { conditionLabel, isIncapacitated, woundHeadline, woundTone } from '../../engine/wounds';
 import { COMBAT } from '../../engine/tuning';
 import type { CombatAction, Combatant } from '../../engine/types';
 import { Btn, Chip, Empty, Meter, Panel } from '../components';
@@ -115,7 +115,11 @@ export function CombatScreen() {
 
   return (
     <div className="stack">
-      <Panel title={combat.title} aside={`Round ${combat.round}`}>
+      {/*
+        Action meters, not synchronised rounds — a "Round 4" on your first turn
+        reads as though the game took three turns without you.
+      */}
+      <Panel title={combat.title} aside="In contact">
         <p className="tiny dim" style={{ margin: 0 }}>
           {active
             ? `${active.name} is ready.`
@@ -171,6 +175,8 @@ function CombatantCard({
 
   const down = !character.alive || isIncapacitated(character) || combatant.fled;
   const isActive = state.combat?.activeId === combatant.id;
+  const headline = woundHeadline(character);
+  const tone = woundTone(character);
 
   return (
     <div
@@ -190,6 +196,15 @@ function CombatantCard({
           <span className="tiny dim">{RANGE_LABELS[combatant.range]}</span>
         </div>
         <Meter value={character.health} max={character.maxHealth} />
+        {/*
+          What actually happened to them, said plainly. A health bar alone
+          teaches that combat is subtraction; this is the wound model talking.
+        */}
+        {headline && (
+          <div className={tone === 'red' ? 'tiny red' : 'tiny amber'} style={{ marginTop: 2 }}>
+            {headline}
+          </div>
+        )}
         <div className="split" style={{ marginTop: 2 }}>
           <span className="tiny dim">
             {combatant.fled ? 'Fled' : conditionLabel(character)}

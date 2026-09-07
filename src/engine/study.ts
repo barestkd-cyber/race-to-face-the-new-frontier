@@ -6,13 +6,16 @@
  * the exception: it is bought with hours, in a room, by somebody who could have
  * been doing something else.
  *
- * A focus opens at x1.05 on a craft already practised, and climbs one rung at a
- * time. The rungs above the entry tier are capped at two apiece, so advancement
- * is a queue rather than a shopping list: to start a third focus climbing you
- * must first promote one of the two ahead of it, which frees the rung.
+ * A specialization opens at x1.05 on a craft already practised, and climbs one
+ * rung at a time. The rungs above the entry tier are capped at two apiece, so
+ * advancement is a queue rather than a shopping list: to start a third climbing
+ * you must first promote one of the two ahead of it, which frees the rung.
+ *
+ * Specialization multiplies what a skill DELIVERS. It never raises how far the
+ * raw skill can be trained — potential alone governs that.
  */
 
-import { skillCap } from './check';
+import { effectiveSkill } from './check';
 import { pushLog } from './log';
 import { hasRoom } from './ship';
 import { SPEC } from './tuning';
@@ -89,7 +92,7 @@ export function studyOptions(character: Character): StudyOption[] {
 
     if (!target) {
       available = false;
-      reason = 'Already as far as devotion goes.';
+      reason = 'Fully specialised — there is no deeper study than this.';
     } else if (value < SPEC.placeMinSkill) {
       available = false;
       reason = `Needs ${SPEC.placeMinSkill} in the skill first — you cannot commit to what you have not done.`;
@@ -211,11 +214,12 @@ export function tickStudy(state: GameState, hours: number): string[] {
     };
     person.study = undefined;
 
-    const cap = skillCap(person, option.skill);
+    // Specialization moves what the skill delivers, not how far it trains.
+    const effective = Math.round(effectiveSkill(person, option.skill));
     const line =
       option.current === 1
-        ? `${person.name} commits to ${SKILL_LABELS[option.skill]}. Ceiling now ${cap}.`
-        : `${person.name} deepens ${SKILL_LABELS[option.skill]} to ×${option.target.toFixed(2)}. Ceiling now ${cap}.`;
+        ? `${person.name} specialises in ${SKILL_LABELS[option.skill]} — now performing at ${effective}.`
+        : `${person.name} deepens ${SKILL_LABELS[option.skill]} to ×${option.target.toFixed(2)} — now performing at ${effective}.`;
     lines.push(line);
     pushLog(state, 'milestone', line);
   }

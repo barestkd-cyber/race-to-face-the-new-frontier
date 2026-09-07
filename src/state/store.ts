@@ -428,7 +428,15 @@ class GameStore {
           const here = state.currentPlaceId ? state.places[state.currentPlaceId] : undefined;
           const ownSite = here?.isSite ? here.siteIds[0] : undefined;
           state.missionPrep = ownSite
-            ? { siteId: ownSite, kind: 'group', selectedIds: [], leaderId: null }
+            ? {
+                siteId: ownSite,
+                // Size is chosen on the prep screen; a lone scavenger is a solo
+                // expedition, not a group of one.
+                kind: 'solo',
+                selectedIds: [],
+                leaderId: null,
+                lockedToSite: true,
+              }
             : null;
           state.screen = 'missionPrep';
         });

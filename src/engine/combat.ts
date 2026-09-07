@@ -28,7 +28,7 @@ import {
 import { pushLog } from './log';
 import type { Rng } from './rng';
 import { applyStress, crewMembers, activeParty, isDependent, pruneDeadCrew } from './sim';
-import { COMBAT, SKILLS_TUNING, XP } from './tuning';
+import { COMBAT, POTENTIAL_CAP, XP } from './tuning';
 import { applyWound, isIncapacitated, rollHitRegion } from './wounds';
 import {
   ATTRIBUTE_KEYS,
@@ -842,9 +842,8 @@ function maybeGrowSkill(character: Character, skill: keyof SkillMap, rng: Rng): 
   if (character.skills[skill] >= XP.useGrowthCeiling) return;
   if (!rng.chance(XP.useGrowthChance)) return;
   const grade = character.potential[skill]?.grade ?? 'C';
-  const cap =
-    (grade === 'A' ? 100 : grade === 'B' ? 85 : 70) *
-    (SKILLS_TUNING.specializationRaisesCap ? (character.potential[skill]?.specialization ?? 1) : 1);
+  // Use-based growth trains the raw value, which potential alone bounds.
+  const cap = POTENTIAL_CAP[grade];
   if (character.skills[skill] < cap) character.skills[skill] += 1;
 }
 

@@ -484,6 +484,15 @@ export interface Character {
   spokenTo?: boolean;
   /** Set when the concern has been dealt with. */
   concernResolved?: boolean;
+  /**
+   * When a concern names another person — a partner they will not leave — this
+   * is that person. They are a real generated character standing somewhere,
+   * not a line of text, and boarding them is genuinely required.
+   */
+  concernPersonId?: CharacterId;
+
+  /** How this person is related to the protagonist, when they are family. */
+  familyRelation?: FamilyRelation;
 }
 
 // ---------------------------------------------------------------------------
@@ -764,7 +773,6 @@ export interface Resources {
   repairParts: number;
   medicine: number;
   credits: number;
-  dataCores: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1275,10 +1283,43 @@ export interface CombatAction {
 export type FamilyConcern =
   | 'ready'
   | 'needsTime'
-  | 'wontLeavePartner'
   | 'needsMedicine'
-  | 'hasDependent'
+  | 'wontLeaveKin'
   | 'owesDebt';
+
+/** How a family member is related to the protagonist, for display and logic. */
+export type FamilyRelation =
+  | 'mother'
+  | 'father'
+  | 'maternalGrandmother'
+  | 'maternalGrandfather'
+  | 'paternalGrandmother'
+  | 'paternalGrandfather'
+  | 'brother'
+  | 'sister'
+  | 'son'
+  | 'daughter'
+  | 'partner'
+  | 'cousin'
+  | 'niece'
+  | 'nephew';
+
+export const FAMILY_RELATION_LABELS: Record<FamilyRelation, string> = {
+  mother: 'Mother',
+  father: 'Father',
+  maternalGrandmother: 'Grandmother (maternal)',
+  maternalGrandfather: 'Grandfather (maternal)',
+  paternalGrandmother: 'Grandmother (paternal)',
+  paternalGrandfather: 'Grandfather (paternal)',
+  brother: 'Brother',
+  sister: 'Sister',
+  son: 'Son',
+  daughter: 'Daughter',
+  partner: 'Partner',
+  cousin: 'Cousin',
+  niece: 'Niece',
+  nephew: 'Nephew',
+};
 
 export interface FarewellEntry {
   characterId: CharacterId;
@@ -1575,6 +1616,12 @@ export interface GameState {
     kind: MissionKind;
     selectedIds: CharacterId[];
     leaderId: CharacterId | null;
+    /**
+     * Set when the player walked into the ruin itself rather than reading about
+     * it at a board or an office. Switching site from here would teleport the
+     * expedition across the district, so the choice is locked.
+     */
+    lockedToSite?: boolean;
   } | null;
 }
 

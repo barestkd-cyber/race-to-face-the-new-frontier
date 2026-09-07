@@ -10,7 +10,16 @@ import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
 import type { Rng } from './rng';
-import { ATTRIBUTE_GEN, HEALTH, INVENTORY, SKILLS_TUNING, SPEC, TRAITS_TUNING } from './tuning';
+import {
+  ATTRIBUTE_GEN,
+  HEALTH,
+  INVENTORY,
+  MIN_WORKING_AGE,
+  POTENTIAL_CAP,
+  SKILLS_TUNING,
+  SPEC,
+  TRAITS_TUNING,
+} from './tuning';
 import {
   ATTRIBUTE_KEYS,
   FACETS,
@@ -22,6 +31,7 @@ import {
   type CharacterId,
   type CharacterRole,
   type ExposureBand,
+  type FamilyRelation,
   type FacetKey,
   type LifeHistory,
   type PotentialGrade,
@@ -175,7 +185,7 @@ export function generatePotential(rng: Rng, bias: GenerationBias): SkillPotentia
     ]);
   }
 
-  // Knowledge specialization is NOT dealt here. Grades are fate; devotion is
+  // Knowledge specialization is NOT dealt here. Grades are fate; study is
   // will. Every character starts at x1.00 and marks are placed separately —
   // by the life already lived for people you meet, by the player for the
   // protagonist, one commitment at a time, along the way.
@@ -188,7 +198,7 @@ export function generatePotential(rng: Rng, bias: GenerationBias): SkillPotentia
 
 
 /**
- * Where a life would have pointed its devotion: strong bias and high ceilings
+ * Where a life would have pointed its study: strong bias and high ceilings
  * first, lightly shuffled so identical careers do not clone each other.
  */
 function rankSpecPreference(
@@ -206,7 +216,7 @@ function rankSpecPreference(
 
 /**
  * Auto-place part of the budget for a character who already lived their
- * commitments. Seniority decides how much of their devotion is spent: an old
+ * commitments. Seniority decides how much specialization is already earned: an old
  * professional arrives fully specialised, a young dockhand arrives with marks
  * still open — open marks the captain can later direct.
  */
@@ -241,15 +251,37 @@ export function autoPlaceSpecializations(
 // Skills
 // ---------------------------------------------------------------------------
 
-function rollExposure(rng: Rng, bias: number): ExposureBand {
-  const w = SKILLS_TUNING.exposureWeights;
+/**
+ * How much of a craft this person was ever exposed to.
+ *
+ * Two layers, in this order:
+ *
+ *   1. The population baseline for THAT skill — surgery is rare, cooking is
+ *      not, and nobody is truly at zero with people.
+ *   2. Their life history — career, upbringing and formative events push the
+ *      bands that fit the life they actually lived.
+ *
+ * Potential deliberately plays no part here. How far somebody could develop a
+ * craft says nothing about whether they were ever near one.
+ */
+function rollExposure(rng: Rng, skill: SkillKey, bias: number): ExposureBand {
+  const profile =
+    SKILLS_TUNING.exposureProfiles[skill] ??
+    ([
+      SKILLS_TUNING.exposureWeights.none,
+      SKILLS_TUNING.exposureWeights.familiar,
+      SKILLS_TUNING.exposureWeights.trained,
+      SKILLS_TUNING.exposureWeights.professional,
+      SKILLS_TUNING.exposureWeights.exceptional,
+    ] as [number, number, number, number, number]);
+
   const b = Math.max(0, bias);
   return rng.weighted<ExposureBand>([
-    { value: 'none', weight: w.none / (1 + b / 6) },
-    { value: 'familiar', weight: w.familiar * (1 + b / 40) },
-    { value: 'trained', weight: w.trained * (1 + b / 16) },
-    { value: 'professional', weight: w.professional * (1 + b / 10) },
-    { value: 'exceptional', weight: w.exceptional * (1 + b / 8) },
+    { value: 'none', weight: profile[0] / (1 + b / 6) },
+    { value: 'familiar', weight: profile[1] * (1 + b / 40) },
+    { value: 'trained', weight: profile[2] * (1 + b / 16) },
+    { value: 'professional', weight: profile[3] * (1 + b / 10) },
+    { value: 'exceptional', weight: profile[4] * (1 + b / 8) },
   ]);
 }
 
@@ -262,15 +294,18 @@ export function generateSkills(
   const exposure = {} as Record<SkillKey, ExposureBand>;
 
   for (const skill of SKILL_KEYS) {
-    const band = rollExposure(rng, bias.skill[skill] ?? 0);
+    const band = rollExposure(rng, skill, bias.skill[skill] ?? 0);
     exposure[skill] = band;
     const [lo, hi] = SKILLS_TUNING.exposureRanges[band];
-    const value = band === 'none' ? 0 : rng.taperedInt(lo, hi, 2);
-    const cap = Math.round(
-      (SKILLS_TUNING.specializationRaisesCap
-        ? potential[skill].specialization
-        : 1) * (potential[skill].grade === 'A' ? 100 : potential[skill].grade === 'B' ? 85 : 70),
-    );
+    // Potential does not decide whether they were exposed — only how well the
+    // exposure took. A natural sits higher inside the same band.
+    const gradeLift = potential[skill].grade === 'A' ? 0.18 : potential[skill].grade === 'B' ? 0.09 : 0;
+    const rolled = band === 'none' ? 0 : rng.taperedInt(lo, hi, 2);
+    const value =
+      rolled === 0 ? 0 : Math.round(rolled + (hi - rolled) * gradeLift);
+    // Raw training is bounded by potential alone; specialization multiplies
+    // performance later and never lifts this ceiling.
+    const cap = POTENTIAL_CAP[potential[skill].grade];
     skills[skill] = Math.max(0, Math.min(cap, value));
   }
 
@@ -509,7 +544,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   const ageRange = options.ageRange ?? [21, 56];
   const age = rng.taperedInt(ageRange[0], ageRange[1], 2);
 
-  // Devotion is earned, never dealt. The protagonist starts with nothing on
+  // Specialization is earned, never dealt. The protagonist starts with nothing on
   // the ladder and climbs it in play; people met along the way arrive with as
   // much of a career behind them as their age justifies. Skills roll AFTER
   // placement so a lifelong surgeon can sit above the plain grade cap.
@@ -639,53 +674,114 @@ export function generateProtagonistDraft(rng: Rng): ProtagonistDraft {
 // Family and recruits
 // ---------------------------------------------------------------------------
 
-export function generateFamily(
-  rng: Rng,
-  protagonist: Character,
-  count: number,
-): Character[] {
+/**
+ * Family, generated person by person.
+ *
+ * Each possible relative is asked separately: does this person exist at all?
+ * That produces a family that feels like a real one — some people have three
+ * siblings and no living grandparents, some have a large extended family, some
+ * have almost nobody left. Nothing is a fixed roster.
+ *
+ * MINIMUM AGE 13. This is a survival expedition, not a place for small
+ * children: anyone younger simply is not generated as a character. If younger
+ * children exist in the fiction, they are narration, never a Character.
+ */
+export function generateFamily(rng: Rng, protagonist: Character): Character[] {
   const family: Character[] = [];
-  const kinds: { kind: 'parent' | 'sibling' | 'child' | 'partner'; weight: number }[] = [
-    { kind: 'parent', weight: 26 },
-    { kind: 'sibling', weight: 40 },
-    { kind: 'partner', weight: 14 },
-    { kind: 'child', weight: 20 },
+  const age = protagonist.age;
+
+  /** One candidate relative: whether they exist, and how old they would be. */
+  interface Candidate {
+    relation: FamilyRelation;
+    chance: number;
+    ageRange: [number, number];
+    /** Skipped entirely when the age arithmetic does not work. */
+    plausible?: boolean;
+  }
+
+  // A child must be at least 13, so the protagonist has to be old enough to
+  // plausibly have one. Below that the relation simply does not come up.
+  const canHaveChild = age - 13 >= 17;
+  const childAgeHigh = Math.max(13, age - 17);
+
+  const candidates: Candidate[] = [
+    // Parents — likely, but this is a world that has been killing people.
+    { relation: 'mother', chance: 0.66, ageRange: [age + 19, age + 36] },
+    { relation: 'father', chance: 0.6, ageRange: [age + 21, age + 40] },
+
+    // Grandparents — progressively less likely with the protagonist's age.
+    { relation: 'maternalGrandmother', chance: age < 34 ? 0.34 : 0.16, ageRange: [age + 44, age + 62] },
+    { relation: 'maternalGrandfather', chance: age < 34 ? 0.26 : 0.11, ageRange: [age + 46, age + 66] },
+    { relation: 'paternalGrandmother', chance: age < 34 ? 0.3 : 0.14, ageRange: [age + 44, age + 62] },
+    { relation: 'paternalGrandfather', chance: age < 34 ? 0.22 : 0.09, ageRange: [age + 46, age + 66] },
+
+    // Siblings — the first is common, each further one less so.
+    { relation: 'brother', chance: 0.44, ageRange: [Math.max(13, age - 12), age + 12] },
+    { relation: 'brother', chance: 0.2, ageRange: [Math.max(13, age - 14), age + 14] },
+    { relation: 'brother', chance: 0.07, ageRange: [Math.max(13, age - 16), age + 16] },
+    { relation: 'sister', chance: 0.44, ageRange: [Math.max(13, age - 12), age + 12] },
+    { relation: 'sister', chance: 0.2, ageRange: [Math.max(13, age - 14), age + 14] },
+    { relation: 'sister', chance: 0.07, ageRange: [Math.max(13, age - 16), age + 16] },
+
+    // A partner, and children old enough to be their own person.
+    { relation: 'partner', chance: 0.34, ageRange: [Math.max(19, age - 8), age + 9] },
+    { relation: 'son', chance: 0.22, ageRange: [13, childAgeHigh], plausible: canHaveChild },
+    { relation: 'daughter', chance: 0.22, ageRange: [13, childAgeHigh], plausible: canHaveChild },
+
+    // Extended family — common to exist, less often close.
+    { relation: 'cousin', chance: 0.4, ageRange: [Math.max(13, age - 15), age + 15] },
+    { relation: 'cousin', chance: 0.24, ageRange: [Math.max(13, age - 18), age + 18] },
+    { relation: 'cousin', chance: 0.12, ageRange: [Math.max(13, age - 20), age + 20] },
+    { relation: 'niece', chance: 0.2, ageRange: [13, Math.max(13, age - 4)] },
+    { relation: 'nephew', chance: 0.2, ageRange: [13, Math.max(13, age - 4)] },
   ];
 
-  for (let i = 0; i < count; i++) {
-    const kind = rng.weighted(kinds.map((k) => ({ value: k.kind, weight: k.weight })));
-    const ageRange: [number, number] =
-      kind === 'parent'
-        ? [protagonist.age + 20, protagonist.age + 38]
-        : kind === 'child'
-          ? [1, Math.max(2, protagonist.age - 18)]
-          : kind === 'partner'
-            ? [Math.max(20, protagonist.age - 7), protagonist.age + 8]
-            : [Math.max(16, protagonist.age - 12), protagonist.age + 12];
+  for (const candidate of candidates) {
+    if (candidate.plausible === false) continue;
+    if (!rng.chance(candidate.chance)) continue;
+
+    const [lo, hi] = candidate.ageRange;
+    if (hi < MIN_WORKING_AGE) continue;
+    const ageRange: [number, number] = [Math.max(MIN_WORKING_AGE, lo), Math.max(MIN_WORKING_AGE + 1, hi)];
+
+    // A partner rarely shares the surname; blood relatives usually do.
+    const sharesName =
+      candidate.relation === 'partner' ? rng.chance(0.25) : rng.chance(0.82);
 
     const member = createCharacter({
       rng,
       ageRange,
-      surname: rng.chance(0.72) ? protagonist.surname : undefined,
+      surname: sharesName ? protagonist.surname : undefined,
       aboard: false,
       role: 'crew',
     });
 
     member.aboard = false;
+    member.familyRelation = candidate.relation;
 
-    const closeness = rng.int(28, 88);
+    // Closeness varies by how near the relation is — a cousin is not a sibling.
+    const closeBand: [number, number] =
+      candidate.relation === 'partner'
+        ? [55, 95]
+        : ['mother', 'father', 'son', 'daughter'].includes(candidate.relation)
+          ? [40, 90]
+          : ['brother', 'sister'].includes(candidate.relation)
+            ? [32, 85]
+            : [10, 60];
+
+    const closeness = rng.int(closeBand[0], closeBand[1]);
     member.relationships[protagonist.id] = {
       value: closeness,
-      familiarity: rng.int(70, 100),
-      kind: 'family',
+      familiarity: rng.int(60, 100),
+      kind: candidate.relation === 'partner' ? 'partner' : 'family',
     };
     protagonist.relationships[member.id] = {
       value: closeness,
-      familiarity: rng.int(70, 100),
-      kind: 'family',
+      familiarity: rng.int(60, 100),
+      kind: candidate.relation === 'partner' ? 'partner' : 'family',
     };
 
-    // Family members are known people — their traits start partly visible.
+    // Family are known people — their traits start partly visible.
     for (const tk of member.traitKnowledge) {
       tk.known = rng.chance(0.55) ? 2 : 1;
       tk.evidence = TRAITS_TUNING.evidenceForKnown;

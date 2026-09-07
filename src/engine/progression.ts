@@ -6,7 +6,7 @@
  * apply.
  */
 
-import { skillCap } from './check';
+import { effectiveSkill, skillCap } from './check';
 import { deriveMaxHealth } from './character';
 import { ATTRIBUTE_GEN, XP } from './tuning';
 import type { AttributeKey, Character, GameState, SkillKey } from './types';
@@ -157,11 +157,19 @@ export function spendableXp(state: GameState, character: Character): number {
 // Display helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * How a skill reads on a sheet: the raw ceiling potential allows, and — when
+ * the character has studied it — what that training actually delivers.
+ *
+ *   "C → 70"                 untrained specialisation
+ *   "C → 70 · ×1.20 = 84"    same cap, better output
+ */
 export function skillCapLabel(character: Character, skill: SkillKey): string {
   const potential = character.potential[skill];
   const cap = skillCap(character, skill);
-  const spec = potential.specialization > 1 ? ` ×${potential.specialization.toFixed(2)}` : '';
-  return `${potential.grade}${spec} → ${cap}`;
+  if (potential.specialization <= 1) return `${potential.grade} → ${cap}`;
+  const effective = Math.round(effectiveSkill(character, skill));
+  return `${potential.grade} → ${cap} · ×${potential.specialization.toFixed(2)} = ${effective}`;
 }
 
 /** How close a character is to their ceiling in a skill, 0..1. */

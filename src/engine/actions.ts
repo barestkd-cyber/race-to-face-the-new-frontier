@@ -943,20 +943,15 @@ export const CONCERN_INFO: Record<FamilyConcern, ConcernInfo> = {
     asks: 'A day to settle their affairs.',
     weight: 12,
   },
-  wontLeavePartner: {
-    said: 'They will not go without the person they live with. That is not negotiable to them.',
-    asks: 'A second berth, and the food to fill it.',
-    weight: 45,
+  wontLeaveKin: {
+    said: 'They will not go without somebody. That is not negotiable to them.',
+    asks: 'That person aboard first, in their own right.',
+    weight: 60,
   },
   needsMedicine: {
     said: 'Someone in the house is ill and will not survive the trip untreated.',
     asks: 'Medicine — enough to matter.',
     weight: 35,
-  },
-  hasDependent: {
-    said: 'There is a child with them. Where they go, the child goes.',
-    asks: 'Room for two, and one of them cannot work.',
-    weight: 30,
   },
   owesDebt: {
     said: 'They owe money to people who will notice them leaving.',
@@ -989,6 +984,24 @@ export function resolveConcern(state: GameState, id: string, rng: Rng): string[]
 
   const access = contactAccess(state, id);
   if (!access.ok) return [access.reason ?? 'You cannot reach them.'];
+
+  // Somebody they will not leave cannot be bought off — that person has to be
+  // aboard in their own right, found and convinced the same as anyone else.
+  if (person.concern === 'wontLeaveKin') {
+    const other = person.concernPersonId ? state.characters[person.concernPersonId] : undefined;
+    if (!other) return ['There is nothing you can settle for them.'];
+    if (other.aboard) {
+      person.concernResolved = true;
+      return [`${other.name} is aboard, so ${person.name} will come.`];
+    }
+    const place = other.placeId ? state.places[other.placeId] : undefined;
+    return [
+      `${person.name} will not leave without ${other.name} ${other.surname}.`,
+      other.placeKnown && place
+        ? `${other.name} is at ${place.name}. Get them aboard first.`
+        : `Nobody can tell you where ${other.name} is.`,
+    ];
+  }
 
   const price = concernPrice(person.concern);
   if (price.medicine && state.resources.medicine < price.medicine) {

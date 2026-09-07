@@ -10,13 +10,15 @@
 
 import { outcomeOdds, successChance, computeCheck, type CheckContext } from './check';
 import { ASSESSMENT } from './tuning';
-import type {
-  Assessment,
-  AssessmentQuality,
-  Character,
-  CheckOutcome,
-  CheckRequest,
-  SkillKey,
+import {
+  SKILL_KEYS,
+  SKILL_LABELS,
+  type Assessment,
+  type AssessmentQuality,
+  type Character,
+  type CheckOutcome,
+  type CheckRequest,
+  type SkillKey,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -321,5 +323,140 @@ export function scanCompletenessLabel(quality: AssessmentQuality): string {
       return 'SCAN GOOD';
     case 'excellent':
       return 'FULL SCAN';
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Reading a stranger's competence
+// ---------------------------------------------------------------------------
+
+export interface SkillRead {
+  skill: SkillKey;
+  /** What the player is told. Never a bare number unless the read is good. */
+  text: string;
+  /** True when this is the candidate's own claim rather than your judgement. */
+  selfReported: boolean;
+  /** 0..1, for a bar. Deliberately coarse at low fidelity. */
+  bar: number;
+}
+
+/** Band names that mean something to a person rather than a number. */
+function competenceBand(value: number): string {
+  if (value <= 0) return 'none';
+  if (value < 20) return 'familiar';
+  if (value < 45) return 'trained';
+  if (value < 70) return 'professional';
+  return 'exceptional';
+}
+
+/**
+ * How much you can tell about a stranger's skills before they join.
+ *
+ * You do not get a character sheet for somebody you met an hour ago. What you
+ * get is your own read on them, and how good that read is depends on your
+ * Evaluation, on having talked to them, and on whatever they have shown you.
+ * Once they are crew, you simply know.
+ */
+export function readCandidateSkills(
+  candidate: Character,
+  input: AssessorInput,
+  options: { talked?: boolean; aboard?: boolean } = {},
+): SkillRead[] {
+  const ranked = SKILL_KEYS.map((skill) => ({ skill, value: candidate.skills[skill] ?? 0 }))
+    .sort((a, b) => b.value - a.value);
+
+  // Crew are known quantities — you have watched them work.
+  if (options.aboard) {
+    return ranked.slice(0, 5).map(({ skill, value }) => ({
+      skill,
+      text: String(Math.round(value)),
+      selfReported: false,
+      bar: value / 100,
+    }));
+  }
+
+  let quality = assessmentQuality(input);
+  // Sitting down with somebody is itself evidence.
+  if (options.talked) {
+    const order: AssessmentQuality[] = ['veryPoor', 'poor', 'moderate', 'good', 'excellent'];
+    const index = order.indexOf(quality);
+    quality = order[Math.min(order.length - 1, index + 1)]!;
+  }
+
+  const top = ranked.slice(0, 5);
+
+  switch (quality) {
+    case 'veryPoor':
+      // You genuinely cannot tell. Saying so is more honest than a number.
+      return [
+        {
+          skill: top[0]!.skill,
+          text: 'nothing you would bet on',
+          selfReported: false,
+          bar: 0,
+        },
+      ];
+
+    case 'poor':
+      // Impressions only, and only about their strongest and weakest.
+      return top.slice(0, 2).map(({ skill, value }) => ({
+        skill,
+        text:
+          value >= 45
+            ? `seems to know their way around ${SKILL_LABELS[skill].toLowerCase()}`
+            : `some ${SKILL_LABELS[skill].toLowerCase()}, not much`,
+        selfReported: false,
+        bar: value >= 45 ? 0.6 : 0.3,
+      }));
+
+    case 'moderate':
+      return top.slice(0, 4).map(({ skill, value }) => ({
+        skill,
+        text: competenceBand(value),
+        selfReported: false,
+        bar: value / 100,
+      }));
+
+    case 'good': {
+      // A range you could plan around, not a certainty.
+      return top.map(({ skill, value }) => {
+        const spread = Math.max(6, Math.round(value * 0.18));
+        const lo = Math.max(0, Math.round(value - spread));
+        const hi = Math.min(100, Math.round(value + spread));
+        return { skill, text: `${lo}–${hi}`, selfReported: false, bar: value / 100 };
+      });
+    }
+
+    case 'excellent':
+    default:
+      return top.map(({ skill, value }) => ({
+        skill,
+        text: String(Math.round(value)),
+        selfReported: !options.talked,
+        bar: value / 100,
+      }));
+  }
+}
+
+/** One line explaining how much the read above is worth. */
+export function readConfidenceNote(
+  input: AssessorInput,
+  options: { talked?: boolean } = {},
+): string {
+  const quality = assessmentQuality(input);
+  switch (quality) {
+    case 'veryPoor':
+      return 'You cannot read this person at all. Anything you decide is a guess.';
+    case 'poor':
+      return options.talked
+        ? 'A conversation and an impression. Nothing you would stake the crew on.'
+        : 'You have barely spoken. Impressions only.';
+    case 'moderate':
+      return 'You can place them in broad bands. Precise numbers are beyond you.';
+    case 'good':
+      return 'Close enough to plan around, though not exact.';
+    default:
+      return 'You read people well enough that these are near enough the truth.';
   }
 }

@@ -240,7 +240,7 @@ function adjustResource(state: GameState, key: keyof GameState['resources'], del
   let next = before + delta;
   if (key === 'fuel') next = Math.min(next, state.resources.fuelCapacity);
   next = Math.max(0, next);
-  state.resources[key] = key === 'credits' || key === 'repairParts' || key === 'dataCores'
+  state.resources[key] = key === 'credits' || key === 'repairParts'
     ? Math.round(next)
     : next;
   const actual = state.resources[key] - before;
@@ -270,10 +270,21 @@ export function applyEffects(
   adjustResource(state, 'medicine', effects.medicine ?? 0, lines, 'medicine');
   adjustResource(state, 'repairParts', effects.repairParts ?? 0, lines, 'repair parts');
   adjustResource(state, 'credits', effects.credits ?? 0, lines, 'credits');
-  // Data cores are awarded by content but nothing consumes them yet, so they
-  // are banked silently rather than shown as a resource the player should be
-  // managing. Surface them again once they buy something.
-  if (effects.dataCores) state.resources.dataCores += effects.dataCores;
+  // Data cores are not a survival resource — they are objects. Authored events
+  // that award them now put actual data cores in the hold, where they can be
+  // sold, carried, or handed over like anything else.
+  if (effects.dataCores && effects.dataCores > 0) {
+    const container = state.ship && !state.ship.destroyed ? state.ship.cargo : null;
+    const target = container ?? activeParty(state)[0]?.backpack;
+    if (target) {
+      addItem(target, 'data_core', effects.dataCores, 100, rng);
+      lines.push(
+        effects.dataCores === 1
+          ? 'A data core, into the hold.'
+          : `${effects.dataCores} data cores, into the hold.`,
+      );
+    }
+  }
 
   if (effects.morale) {
     state.morale = clampMorale(state.morale + effects.morale);

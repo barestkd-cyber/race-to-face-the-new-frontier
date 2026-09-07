@@ -5,7 +5,7 @@
  * substitute for Skill. Roll low; five outcome bands; target clamps to 5..95.
  */
 
-import { CHECK, MORALE, POTENTIAL_CAP, SKILLS_TUNING } from './tuning';
+import { CHECK, MORALE, POTENTIAL_CAP } from './tuning';
 import type { Rng } from './rng';
 import {
   SKILL_PRIMARY_ATTRIBUTES,
@@ -24,21 +24,29 @@ import {
 // ---------------------------------------------------------------------------
 
 /** The highest this character can ever raise this skill. */
+/**
+ * How far the RAW skill can be trained. Potential alone decides this.
+ *
+ * Knowledge specialization deliberately does not appear here: studying a craft
+ * does not raise how far you can train it, it raises what you get out of what
+ * you have trained. The two axes stay separate.
+ */
 export function skillCap(character: Character, skill: SkillKey): number {
-  const potential = character.potential[skill];
-  const base = POTENTIAL_CAP[potential.grade];
-  if (!SKILLS_TUNING.specializationRaisesCap) return base;
-  return Math.round(base * potential.specialization);
+  return POTENTIAL_CAP[character.potential[skill].grade];
 }
 
 /**
- * Skill value as it enters a check. When specialization raises the cap it is
- * already baked into the stored value's ceiling, so nothing is added here.
- * When it does not, it becomes a proportional roll bonus instead.
+ * Skill as it actually performs: raw training multiplied by how deeply the
+ * character has studied it.
+ *
+ *   Raw 70, potential C (cap 70), specialization x1.20  ->  effective 84
+ *   Raw 85, specialization x1.20                        ->  effective 102
+ *   Raw 100 at x1.20                                    ->  effective 120
+ *
+ * The raw value is still capped by potential; only the output moves.
  */
 export function effectiveSkill(character: Character, skill: SkillKey): number {
   const raw = character.skills[skill] ?? 0;
-  if (SKILLS_TUNING.specializationRaisesCap) return raw;
   return raw * character.potential[skill].specialization;
 }
 

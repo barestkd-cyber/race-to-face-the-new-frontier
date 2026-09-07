@@ -127,9 +127,17 @@ export function PlaceScreen() {
   const crew = crewMembers(state);
   const missions = missionsHere(state).length;
 
-  // Only offer what this place actually has. Depart is handled separately so it
-  // never competes for attention with the real choices.
-  const actions = place.actions.filter((a) => a !== 'depart');
+  // Only offer what this place actually has, and only when it can actually be
+  // done. An action that answers "there is nobody here" while a person stands
+  // on the same screen is the game lying to the player.
+  const reachable = people.filter((p) => contactAccess(state, p.id).ok);
+  const canSocialise = crew.length >= 2 || reachable.length > 0;
+
+  const actions = place.actions.filter((a) => {
+    if (a === 'depart') return false;
+    if (a === 'social') return canSocialise;
+    return true;
+  });
 
   return (
     <div className="stack">

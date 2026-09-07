@@ -5,6 +5,11 @@
  * deliberately vague, and the screen does not dress it up as anything sharper.
  */
 
+import {
+  bestAssessor,
+  readCandidateSkills,
+  readConfidenceNote,
+} from '../../engine/assess';
 import { canMeetTerms, availableBeats } from '../../engine/recruit';
 import { safeCrewCapacity } from '../../engine/ship';
 import { crewMembers } from '../../engine/sim';
@@ -13,13 +18,12 @@ import {
   ASSESSMENT_LABELS,
   CHECK_OUTCOME_LABELS,
   RECRUIT_VENUE_LABELS,
-  SKILL_KEYS,
   SKILL_LABELS,
   type CheckOutcome,
   type GameState,
   type RecruitCandidate,
 } from '../../engine/types';
-import { Btn, Chip, Empty, Fold, KV, Meter, Panel, Row, StatLine } from '../components';
+import { Btn, Chip, Empty, Fold, KV, Panel, Row } from '../components';
 import { Portrait } from '../Portrait';
 import { focuses } from '../../engine/study';
 import { SPEC } from '../../engine/tuning';
@@ -155,9 +159,18 @@ export function RecruitCandidateScreen() {
   const shortfall = termsShortfall(state, candidate);
   const canPay = canMeetTerms(state, candidate);
 
-  const topSkills = SKILL_KEYS.map((key) => ({ key, value: person.skills[key] }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+  // What the crew can actually tell, given who is doing the looking.
+  const assessor = bestAssessor(crewMembers(state));
+  const reads = readCandidateSkills(
+    person,
+    { assessor, relevantSkill: 'persuasion' },
+    { talked: candidate.talkedTo, aboard: person.aboard },
+  );
+  const confidence = readConfidenceNote(
+    { assessor, relevantSkill: 'persuasion' },
+    { talked: candidate.talkedTo },
+  );
+
 
   return (
     <div className="stack">
@@ -251,25 +264,30 @@ export function RecruitCandidateScreen() {
         )}
       </Panel>
 
-      <Panel title="What they can do">
-        {topSkills.map((entry) => (
-          <StatLine
-            key={entry.key}
-            name={SKILL_LABELS[entry.key]}
-            value={entry.value}
-            right={
-              <span style={{ width: 56, display: 'inline-block' }}>
-                <Meter value={entry.value} max={100} />
+      <Panel title="What you can tell about them">
+        {/*
+          A stranger does not hand over a character sheet. What is shown here is
+          the crew's read on them, and it degrades honestly with Evaluation.
+        */}
+        <div className="rows">
+          {reads.map((entry) => (
+            <div key={entry.skill} className="split" style={{ gap: 8 }}>
+              <span className="row__main">
+                <span className="row__title">{SKILL_LABELS[entry.skill]}</span>
+                {entry.selfReported && <span className="tiny faint"> · their own claim</span>}
               </span>
-            }
-          />
-        ))}
-        <p className="tiny faint">
-          Their five strongest skills. Everything else they have is weaker than these.
+              <span className="tiny" style={{ textAlign: 'right', minWidth: 120 }}>
+                {entry.text}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="tiny faint" style={{ marginTop: 8 }}>
+          {confidence}
           {focuses(candidate.character).length < SPEC.maxFocuses &&
-            ` ${SPEC.maxFocuses - focuses(candidate.character).length} focus${
-              SPEC.maxFocuses - focuses(candidate.character).length === 1 ? '' : 'es'
-            } still open — room to grow, if you give them somewhere to study.`}
+            ` ${SPEC.maxFocuses - focuses(candidate.character).length} specialisation${
+              SPEC.maxFocuses - focuses(candidate.character).length === 1 ? '' : 's'
+            } unstudied — room to grow, if you give them somewhere to study.`}
         </p>
       </Panel>
 

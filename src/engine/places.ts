@@ -797,14 +797,28 @@ export function placeKnownCharacters(state: GameState, rng: Rng): void {
 
     // What is holding them here. Hidden until the player goes and asks.
     person.concern = rng.weighted([
-      { value: 'ready' as const, weight: 26 },
-      { value: 'needsTime' as const, weight: 20 },
-      { value: 'needsMedicine' as const, weight: 16 },
-      { value: 'owesDebt' as const, weight: 14 },
-      { value: 'hasDependent' as const, weight: 13 },
-      { value: 'wontLeavePartner' as const, weight: 11 },
+      { value: 'ready' as const, weight: 28 },
+      { value: 'needsTime' as const, weight: 22 },
+      { value: 'needsMedicine' as const, weight: 18 },
+      { value: 'owesDebt' as const, weight: 16 },
+      { value: 'wontLeaveKin' as const, weight: 16 },
     ]);
   });
+
+  // A concern that names another person must point at a real one. Anyone who
+  // will not leave somebody behind is bound here to an actual generated
+  // relative standing somewhere in the world — never to a line of text.
+  const eligible = family.filter((c) => c.concern !== 'wontLeaveKin');
+  for (const person of family) {
+    if (person.concern !== 'wontLeaveKin') continue;
+    const others = eligible.filter((c) => c.id !== person.id);
+    if (others.length === 0) {
+      // Nobody to refuse to leave. They simply need time instead.
+      person.concern = 'needsTime';
+      continue;
+    }
+    person.concernPersonId = rng.pick(others).id;
+  }
 }
 
 /** Reveal where somebody is, once the player has asked the right people. */

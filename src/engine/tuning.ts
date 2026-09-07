@@ -165,19 +165,15 @@ export const POTENTIAL_CAP: Record<PotentialGrade, number> = {
 export const SKILLS_TUNING = {
   /** Distribution of potential grades across a character's 25 skills. */
   gradeWeights: { C: 62, B: 28, A: 10 },
-  /** Knowledge specialization allowance: 2 at x1.20, 2 at x1.15, 2 at x1.10. */
+  /**
+   * Knowledge specialization allowance: 2 at x1.20, 2 at x1.15, 2 at x1.10.
+   * These multiply effective performance; they never raise the raw cap.
+   */
   specializationAllowance: [
     { multiplier: 1.2, count: 2 },
     { multiplier: 1.15, count: 2 },
     { multiplier: 1.1, count: 2 },
   ],
-  /**
-   * V1 PROVISIONAL: specialization raises the usable ceiling rather than
-   * multiplying every roll, keeping "Skill is base capability" intact.
-   * Set false to treat specialization as a flat check bonus instead.
-   */
-  specializationRaisesCap: true,
-
   /** Skill value ranges rolled for each exposure band. */
   exposureRanges: {
     none: [0, 0],
@@ -187,7 +183,7 @@ export const SKILLS_TUNING = {
     exceptional: [65, 92],
   } as Record<ExposureBand, [number, number]>,
 
-  /** Base probability of each exposure band before life-history bias. */
+  /** Fallback distribution, used only if a skill is missing a profile below. */
   exposureWeights: {
     none: 52,
     familiar: 26,
@@ -195,6 +191,57 @@ export const SKILLS_TUNING = {
     professional: 7,
     exceptional: 2,
   } as Record<ExposureBand, number>,
+
+  /**
+   * PER-SKILL POPULATION BASELINE — how common each craft is in the general
+   * population, before any life history is applied.
+   *
+   * This is what makes a generated stranger read as a real person from a real
+   * society: almost everyone can hold a conversation and cook something, most
+   * people have never touched a scalpel, and virtually nobody has flown a ship
+   * or set a charge. Life history then biases on top of this, so a surgeon is
+   * rare in general but near-certain among people whose career was surgery.
+   *
+   * Columns are [none, familiar, trained, professional, exceptional].
+   */
+  exposureProfiles: {
+    // Combat — brawling is common, disciplined skill at arms is not.
+    striking: [46, 34, 14, 5, 1],
+    brawling: [40, 38, 16, 5, 1],
+    meleeWeapons: [62, 26, 9, 2.5, 0.5],
+    firearms: [50, 30, 14, 5, 1],
+    energyWeapons: [82, 12, 4, 1.6, 0.4],
+    shipWeapons: [88, 8, 3, 0.9, 0.1],
+    closeQuarters: [78, 15, 5, 1.7, 0.3],
+
+    // Technical — everyone has fixed something; few are engineers.
+    mechanicalEngineering: [40, 36, 16, 7, 1],
+    electricalEngineering: [48, 32, 14, 5.2, 0.8],
+    weaponsmithing: [80, 13, 5, 1.7, 0.3],
+    piloting: [74, 15, 7, 3.4, 0.6],
+    navigation: [70, 19, 8, 2.7, 0.3],
+
+    // Medical — first aid is taught widely; surgery almost never.
+    firstAid: [30, 44, 18, 7, 1],
+    medicalDiagnostics: [72, 17, 7, 3.4, 0.6],
+    surgery: [93, 4, 2, 0.9, 0.1],
+    medicalResearch: [88, 7, 3, 1.7, 0.3],
+
+    // Survival — scavenging is a fact of life on a failing world.
+    scavenging: [34, 40, 18, 7, 1],
+    exploration: [50, 32, 13, 4.2, 0.8],
+
+    // Social — nobody is truly at zero with people.
+    persuasion: [12, 50, 26, 10, 2],
+    negotiation: [26, 44, 21, 8, 1],
+
+    // Utility — daily competences, and a few specialist trades.
+    lockpicking: [76, 16, 6, 1.7, 0.3],
+    computers: [24, 46, 21, 8, 1],
+    stealth: [64, 25, 8, 2.7, 0.3],
+    explosives: [86, 9, 3.5, 1.3, 0.2],
+    cooking: [18, 52, 22, 7, 1],
+  } as Record<string, [number, number, number, number, number]>,
 
   /** Free points the protagonist allocates after generation. */
   protagonistFreeSkillPoints: 25,
@@ -940,7 +987,6 @@ export const START = {
   medicine: [2, 12] as [number, number],
   repairParts: [12, 90] as [number, number],
   credits: [380, 2200] as [number, number],
-  dataCores: [0, 3] as [number, number],
 
   /**
    * Guaranteed starting kit, so a new run is never unplayable. The knife and
@@ -982,6 +1028,7 @@ export const START = {
     'painkillers',
     'preserved_meal',
     'salvage_scrap',
+    'data_core',
     'heirloom_watch',
     'personal_effects',
   ],
@@ -991,14 +1038,14 @@ export const START = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Knowledge specialization — devotion is placed, not dealt
+// Knowledge specialization — earned by study, never dealt
 // ---------------------------------------------------------------------------
 
 /**
  * Everything else about a person is rolled. Specialization marks are the one
  * lever that is pure will: the protagonist starts with the whole budget
  * unplaced and commits marks during the run. People met along the way arrive
- * with some or all of their devotion already spent, scaled by seniority.
+ * with some or all of their specialization already earned, scaled by seniority.
  */
 /**
  * Below this age a person is a dependent: they can be saved, take a berth, eat,
