@@ -1427,6 +1427,37 @@ textarea {
 }
 
 /* ------------------------------------------------------------------ */
+/* Allocation rows — a readable column, not a stretched table          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * On a phone these rows were fine because the screen was the column. On a
+ * desktop they stretched the full width of the viewport, leaving a stat name
+ * on the far left and its own plus and minus buttons on the far right. The
+ * fix is a maximum width, not a different layout: the mobile arrangement was
+ * already the right one, it just needed to stop growing.
+ */
+.allocrows {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.allocrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+/* The glossary line belongs under the whole row, not squeezed beside it. */
+.allocrow__info {
+  grid-column: 1 / -1;
+  display: block;
+  margin: 0 0 4px;
+}
+
+/* ------------------------------------------------------------------ */
 /* The situation — what matters right now, said in sentences           */
 /* ------------------------------------------------------------------ */
 

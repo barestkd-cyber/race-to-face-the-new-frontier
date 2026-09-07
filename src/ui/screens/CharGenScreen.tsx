@@ -212,14 +212,14 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
           roll gave them. Tap a name to see what it does.
         </p>
         <div className="divider" />
-        <div className="stack">
+        <div className="stack allocrows">
           {(Object.keys(FACETS) as FacetKey[]).map((facet) => (
             <div key={facet} className="stack stack--tight">
               <span className="label">{FACETS[facet].label}</span>
               {FACETS[facet].attributes.map((key) => (
-                <div key={key} className="split" style={{ gap: 8 }}>
+                <div key={key} className="allocrow">
                   <div
-                    style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    style={{ minWidth: 0, cursor: 'pointer' }}
                     onClick={() => toggleInfo(key)}
                     role="button"
                     tabIndex={0}
@@ -230,9 +230,6 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
                       value={attributes[key]}
                       max={ATTRIBUTE_MAX}
                     />
-                    {infoKey === key && (
-                      <span className="tiny cyan">{ATTRIBUTE_INFO[key]}</span>
-                    )}
                   </div>
                   <div className="btn-row" style={{ flexWrap: 'nowrap' }}>
                     <Btn
@@ -250,6 +247,9 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
                       +
                     </Btn>
                   </div>
+                  {infoKey === key && (
+                    <span className="tiny cyan allocrow__info">{ATTRIBUTE_INFO[key]}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -265,16 +265,16 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
           back below the value the life history produced.
         </p>
         <div className="divider" />
-        <div className="stack">
+        <div className="stack allocrows">
           {(Object.keys(SKILL_GROUPS) as SkillGroupKey[]).map((group) => (
             <div key={group} className="stack stack--tight">
               <span className="label">{SKILL_GROUPS[group].label}</span>
               {SKILL_GROUPS[group].skills.map((key) => {
                 const cap = skillCap(character, key);
                 return (
-                  <div key={key} className="split" style={{ gap: 8 }}>
+                  <div key={key} className="allocrow">
                     <div
-                      style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                      style={{ minWidth: 0, cursor: 'pointer' }}
                       onClick={() => toggleInfo(key)}
                       role="button"
                       tabIndex={0}
@@ -282,11 +282,6 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
                     >
                       <StatLine name={SKILL_LABELS[key]} value={skills[key]} />
                       <span className="tiny faint">{skillCapLabel(character, key)}</span>
-                      {infoKey === key && (
-                        <span className="tiny cyan" style={{ display: 'block' }}>
-                          {SKILL_INFO[key]}
-                        </span>
-                      )}
                     </div>
                     <div className="btn-row" style={{ flexWrap: 'nowrap' }}>
                       <Btn
@@ -304,6 +299,9 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
                         +
                       </Btn>
                     </div>
+                    {infoKey === key && (
+                      <span className="tiny cyan allocrow__info">{SKILL_INFO[key]}</span>
+                    )}
                   </div>
                 );
               })}

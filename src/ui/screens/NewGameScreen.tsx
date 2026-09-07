@@ -63,10 +63,10 @@ export function NewGameScreen() {
           <span className="row__main" style={{ marginLeft: 10 }}>
             <span className="label">Captain</span>
             <span className="value" style={{ display: 'block' }}>
-              {character.name} {character.surname}
-            </span>
-            <span className="tiny dim" style={{ display: 'block' }}>
-              Age {character.age} · {sexLabel(character)}
+              {character.name} {character.surname}{' '}
+              <span className="tiny dim">
+                · {character.age} · {sexLabel(character)}
+              </span>
             </span>
             <span className="label" style={{ marginTop: 6 }}>
               Background
@@ -142,8 +142,8 @@ export function NewGameScreen() {
       </Btn>
 
       <p className="tiny faint" style={{ textAlign: 'center', margin: '2px 12px 0' }}>
-        Each seed builds the same world, captain, ship and starting conditions. What you do with
-        them is still yours.
+        Each seed builds its own unique world, captain, ship and starting conditions. Your
+        choices determine what happens next.
       </p>
     </div>
   );
