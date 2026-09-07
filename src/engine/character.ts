@@ -7,6 +7,7 @@
  */
 
 import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
+import { EARTH_FEMALE_GIVEN, EARTH_MALE_GIVEN, EARTH_SURNAMES } from '../content/names';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
 import type { Rng } from './rng';
@@ -539,8 +540,11 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   const { attributes, playerPoints } = generateAttributes(rng, bias, options.attributeTotal);
   const potential = generatePotential(rng, bias);
 
-  const given = rng.pick(NAME_TABLES.given);
-  const surname = options.surname ?? rng.pick(NAME_TABLES.surnames);
+  // Sex first, so the name can match the person rather than being drawn from
+  // one undifferentiated pool and landing wherever.
+  const sex: 'male' | 'female' = rng.chance(0.5) ? 'male' : 'female';
+  const given = rng.pick(sex === 'male' ? EARTH_MALE_GIVEN : EARTH_FEMALE_GIVEN);
+  const surname = options.surname ?? rng.pick(EARTH_SURNAMES);
   const ageRange = options.ageRange ?? [21, 56];
   const age = rng.taperedInt(ageRange[0], ageRange[1], 2);
 
@@ -562,7 +566,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     name: given,
     surname,
     age,
-    sex: rng.chance(0.5) ? ('male' as const) : ('female' as const),
+    sex,
     portraitSeed: rng.int(0, 0xffffff),
     role: options.role ?? career.role,
     attributes,
