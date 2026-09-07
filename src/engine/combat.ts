@@ -27,7 +27,7 @@ import {
 } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
-import { applyStress, crewMembers, activeParty, pruneDeadCrew } from './sim';
+import { applyStress, crewMembers, activeParty, isDependent, pruneDeadCrew } from './sim';
 import { COMBAT, SKILLS_TUNING, XP } from './tuning';
 import { applyWound, isIncapacitated, rollHitRegion } from './wounds';
 import {
@@ -151,7 +151,6 @@ function makeHostileCharacter(
     backpack: [],
     isPlayer: false,
     aboard: false,
-    specSlots: [],
   };
 
   // Potential is never consulted for hostiles, but the map must exist so any
@@ -223,7 +222,10 @@ export function startCombat(
   const template: EncounterTemplate | undefined = ENCOUNTER_INDEX.get(encounterId);
   if (!template) return null;
 
-  const party = activeParty(state).filter((c) => c.alive && !isIncapacitated(c));
+  // Dependents are aboard, not combatants.
+  const party = activeParty(state).filter(
+    (c) => c.alive && !isIncapacitated(c) && !isDependent(c),
+  );
   if (party.length === 0) return null;
 
   const combatants: Combatant[] = [];

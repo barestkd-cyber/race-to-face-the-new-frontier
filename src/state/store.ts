@@ -16,6 +16,7 @@ import {
   decantFuel,
   negotiatePrices,
   offerPassage,
+  resolveConcern,
   performRepair,
   performTreatment,
   rest as restAction,
@@ -44,10 +45,12 @@ import {
   unequip,
 } from '../engine/inventory';
 import { pushLog } from '../engine/log';
-import { boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
+import { bindSitesToPlaces, boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
+import { canAccessHold, canEquipFromHold, canUseRepairYard, canWorkOnShip } from '../engine/access';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
 import { beginNewRun, checkRunEnded, createGame, rerollProtagonist, type NewRunDraft } from '../engine/newGame';
-import { placeSpecialization, upgradeAttribute, upgradeSkill } from '../engine/progression';
+import { upgradeAttribute, upgradeSkill } from '../engine/progression';
+import { beginStudy, stopStudy } from '../engine/study';
 import {
   negotiate as negotiateRecruit,
   offerBerth,
@@ -415,9 +418,20 @@ class GameStore {
       case 'scavenge':
         this.mutate((state) => {
           const location = state.currentLocationId ? state.locations[state.currentLocationId] : undefined;
-          if (location) ensureSites(state, location);
+          if (!location) return;
+          ensureSites(state, location);
+          bindSitesToPlaces(state, location.id);
+
+          // Standing in a ruin means preparing for THAT ruin. A general board
+          // of every site in the district belongs behind asking around, not
+          // behind a door you walked to.
+          const here = state.currentPlaceId ? state.places[state.currentPlaceId] : undefined;
+          const ownSite = here?.isSite ? here.siteIds[0] : undefined;
+          state.missionPrep = ownSite
+            ? { siteId: ownSite, kind: 'group', selectedIds: [], leaderId: null }
+            : null;
+          state.screen = 'missionPrep';
         });
-        this.setScreen('missionPrep');
         break;
       case 'repair':
         this.setScreen('ship');
@@ -429,6 +443,14 @@ class GameStore {
         this.mutate((state) => {
           this.pushToast(socialise(state, this.rng), 'Time spent');
         });
+        break;
+      case 'study':
+        // Being in a library is what makes the hours count; the assignment
+        // itself is made on the character sheet.
+        this.pushToast(
+          ['Quiet, and shelves. Anyone you have set to study is getting proper work done here.'],
+          'The reading room',
+        );
         break;
       case 'askForecast':
         this.mutate((state) => {
@@ -718,6 +740,13 @@ class GameStore {
 
   repair = (target: RepairTarget, points: number, payYard: boolean): void => {
     this.mutate((state) => {
+      // Paying a yard still means being there to arrange it and leaving the
+      // ship in their hands; doing it yourself means holding the spanner.
+      const access = payYard ? canUseRepairYard(state) : canWorkOnShip(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
       this.pushToast(performRepair(state, target, points, payYard, this.rng), 'Repair');
     });
     void this.autosave();
@@ -742,18 +771,32 @@ class GameStore {
   /** Hand out the best gear in the hold across the whole crew. */
   equipBest = (): void => {
     this.mutate((state) => {
+      const access = canEquipFromHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
       autoEquipParty(crewMembers(state), state.ship);
       this.pushToast(['Crew equipped from the hold.']);
     });
   };
 
-  /** Commit a specialization mark. Permanent, by design. */
-  placeSpec = (characterId: string, skill: SkillKey, multiplier: number): void => {
+  /** Put somebody to work learning a craft, or take them off it. */
+  studySkill = (characterId: string, skill: SkillKey): void => {
     this.mutate((state) => {
       const person = state.characters[characterId];
       if (!person) return;
-      const result = placeSpecialization(state, person, skill, multiplier);
-      this.pushToast([result.message], result.ok ? 'Devotion' : undefined);
+      const result = beginStudy(person, skill);
+      this.pushToast([result.message], result.ok ? 'Study' : undefined);
+    });
+    void this.autosave();
+  };
+
+  stopStudying = (characterId: string): void => {
+    this.mutate((state) => {
+      const person = state.characters[characterId];
+      if (!person) return;
+      this.pushToast([stopStudy(person).message]);
     });
     void this.autosave();
   };
@@ -761,6 +804,11 @@ class GameStore {
   /** Equip just the selected party — used from mission prep. */
   equipSelected = (ids: string[]): void => {
     this.mutate((state) => {
+      const access = canEquipFromHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
       const party = ids
         .map((id) => state.characters[id])
         .filter((c): c is Character => Boolean(c) && c.alive);
@@ -778,6 +826,11 @@ class GameStore {
 
   takeFromHold = (characterId: string, uid: string): void => {
     this.mutate((state) => {
+      const access = canAccessHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
       const character = state.characters[characterId];
       if (!character || !state.ship) return;
       const error = moveToBackpack(state.ship, character, uid);
@@ -787,6 +840,11 @@ class GameStore {
 
   stowInHold = (characterId: string, uid: string): void => {
     this.mutate((state) => {
+      const access = canAccessHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
       const character = state.characters[characterId];
       if (!character || !state.ship) return;
       const error = moveToCargo(state.ship, character, uid);
@@ -795,14 +853,36 @@ class GameStore {
   };
 
   decant = (): void => {
-    this.mutate((state) => this.pushToast(decantFuel(state)));
+    this.mutate((state) => {
+      const access = canAccessHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
+      this.pushToast(decantFuel(state));
+    });
   };
 
   strip = (uid: string): void => {
-    this.mutate((state) => this.pushToast(breakDownForParts(state, uid)));
+    this.mutate((state) => {
+      const access = canAccessHold(state);
+      if (!access.ok) {
+        this.pushToast([access.reason ?? 'Not from here.']);
+        return;
+      }
+      this.pushToast(breakDownForParts(state, uid));
+    });
   };
 
   // -- Family and contacts ------------------------------------------------
+
+  /** Settle whatever is keeping somebody on the ground, where money can. */
+  settleConcern = (id: string): void => {
+    this.mutate((state) => {
+      this.pushToast(resolveConcern(state, id, this.rng), 'Settled');
+    });
+    void this.autosave();
+  };
 
   visitContact = (id: string): void => {
     this.mutate((state) => {

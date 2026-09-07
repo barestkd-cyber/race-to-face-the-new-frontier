@@ -147,8 +147,7 @@ export function TradeScreen() {
           <>
             Range <Duration hours={fuelNow.hoursRemaining} /> → <Duration hours={after.hoursRemaining} />
             {' · '}
-            {after.jumpsRemaining} jumps · tank {Math.round(state.resources.fuel)}/
-            {Math.round(state.resources.fuelCapacity)}
+            tank {Math.round(state.resources.fuel)}/{Math.round(state.resources.fuelCapacity)}
           </>
         );
       },

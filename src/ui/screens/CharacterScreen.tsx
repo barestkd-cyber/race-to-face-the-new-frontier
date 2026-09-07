@@ -18,9 +18,9 @@ import {
   slotsUsed,
   type EquipSlot,
 } from '../../engine/inventory';
-import { useState } from 'react';
-import { placeableSkills, quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../engine/progression';
-import { POTENTIAL_CAP, SPEC } from '../../engine/tuning';
+import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel } from '../../engine/progression';
+import { focuses, isStudying, studyOptions, studyVenue } from '../../engine/study';
+import { SPEC } from '../../engine/tuning';
 import { WOUNDS } from '../../engine/tuning';
 import { conditionLabel, SEVERITY_LABELS } from '../../engine/wounds';
 import {
@@ -132,7 +132,7 @@ export function CharacterScreen() {
 
   const surfaced = character.traitKnowledge.filter((k) => k.known > 0);
 
-  const [armedMark, setArmedMark] = useState<number | null>(null);
+  const venue = studyVenue(state);
 
   const attrsRaisable = ATTRIBUTE_KEYS.filter(
     (key) => quoteAttributeUpgrade(state, character, key).affordable,
@@ -360,8 +360,8 @@ export function CharacterScreen() {
       {/* -- Skills -------------------------------------------------------- */}
       <Fold
         title={
-          character.specSlots.length > 0
-            ? `Skills · ${character.specSlots.length} mark${character.specSlots.length === 1 ? '' : 's'} to devote`
+          isStudying(character)
+            ? `Skills · studying ${SKILL_LABELS[character.study!.skill]}`
             : skillsRaisable > 0
               ? `Skills · ${skillsRaisable} can raise`
               : 'Skills'
@@ -373,63 +373,96 @@ export function CharacterScreen() {
           permanently — the one part of a person that grows by pure will.
         </p>
 
-        {character.specSlots.length > 0 && (
-          <div className="panel panel--inset" style={{ marginTop: 8 }}>
-            <div className="panel__body panel__body--tight">
-              <div className="split">
-                <span className="label">Devotion</span>
-                <span className="tiny dim">
-                  {character.specSlots.length} unplaced · permanent once placed
-                </span>
-              </div>
+        {/*
+          Study. The one lever that is not dealt: hours in a room, spent by
+          somebody who could have been doing something else.
+        */}
+        <div className="panel panel--inset" style={{ marginTop: 8 }}>
+          <div className="panel__body panel__body--tight">
+            <div className="split">
+              <span className="label">Focus</span>
+              <span className="tiny dim">
+                {focuses(character).length} of {SPEC.maxFocuses} committed
+              </span>
+            </div>
+
+            {focuses(character).length > 0 && (
               <div className="chips" style={{ marginTop: 6 }}>
-                {character.specSlots.map((mark, index) => (
-                  <button
-                    key={`${mark}-${index}`}
-                    type="button"
-                    className={armedMark === mark ? 'btn btn--sm btn--primary' : 'btn btn--sm'}
-                    onClick={() => setArmedMark((cur) => (cur === mark ? null : mark))}
-                  >
-                    ×{mark.toFixed(2)}
-                  </button>
+                {focuses(character).map((f) => (
+                  <Chip key={f.skill} tone="amber">
+                    {SKILL_LABELS[f.skill]} ×{f.tier.toFixed(2)}
+                  </Chip>
                 ))}
               </div>
-              {armedMark === null ? (
-                <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>
-                  Pick a mark, then choose the craft it commits to. A skill must have
-                  reached {SPEC.placeMinSkill} first — devotion follows practice.
-                </p>
-              ) : placeableSkills(character).length === 0 ? (
-                <p className="tiny amber" style={{ marginTop: 6, marginBottom: 0 }}>
-                  Nothing has reached {SPEC.placeMinSkill} yet. Practice first; commit
-                  after.
-                </p>
-              ) : (
-                <div className="rows" style={{ marginTop: 6 }}>
-                  {placeableSkills(character)
-                    .sort((a, b) => (character.skills[b] ?? 0) - (character.skills[a] ?? 0))
-                    .map((skill) => {
-                      const grade = character.potential[skill].grade;
-                      const capNow = POTENTIAL_CAP[grade];
-                      const capAfter = Math.round(capNow * armedMark);
-                      return (
-                        <Row
-                          key={skill}
-                          title={`${SKILL_LABELS[skill]} — ${character.skills[skill]}`}
-                          sub={`Ceiling ${capNow} → ${capAfter}, for good`}
-                          onClick={() => {
-                            store.placeSpec(character.id, skill, armedMark);
-                            setArmedMark(null);
-                          }}
-                          right={<Chip tone="amber">Commit</Chip>}
-                        />
-                      );
-                    })}
-                </div>
-              )}
+            )}
+
+            <p className="tiny faint" style={{ marginTop: 6 }}>
+              {venue.ok ? venue.where : venue.where}
+            </p>
+
+            {isStudying(character) ? (
+              <>
+                {(() => {
+                  const current = studyOptions(character).find(
+                    (o) => o.skill === character.study!.skill,
+                  );
+                  const pct = current?.hoursNeeded
+                    ? Math.min(100, (character.study!.hours / current.hoursNeeded) * 100)
+                    : 0;
+                  return (
+                    <>
+                      <div className="split" style={{ marginTop: 6 }}>
+                        <span className="value">{SKILL_LABELS[character.study!.skill]}</span>
+                        <span className="tiny dim">
+                          {Math.floor(character.study!.hours)} / {current?.hoursNeeded ?? 0} hours
+                          {current?.target ? ` → ×${current.target.toFixed(2)}` : ''}
+                        </span>
+                      </div>
+                      <Meter value={pct} color="var(--cyan)" />
+                    </>
+                  );
+                })()}
+                <Btn small block tone="ghost" onClick={() => store.stopStudying(character.id)}>
+                  Put It Down
+                </Btn>
+              </>
+            ) : (
+              <p className="tiny faint" style={{ marginTop: 4, marginBottom: 6 }}>
+                Not studying anything. Pick a craft below — it must already be at{' '}
+                {SPEC.placeMinSkill}, because you cannot commit to what you have never done.
+              </p>
+            )}
+
+            <div className="rows" style={{ marginTop: 6 }}>
+              {studyOptions(character)
+                .filter((o) => o.target !== null && (o.available || o.current > 1))
+                .sort((a, b) => (character.skills[b.skill] ?? 0) - (character.skills[a.skill] ?? 0))
+                .slice(0, 8)
+                .map((option) => (
+                  <Row
+                    key={option.skill}
+                    title={`${SKILL_LABELS[option.skill]} — ${character.skills[option.skill]}`}
+                    sub={
+                      option.available
+                        ? `×${option.current > 1 ? option.current.toFixed(2) : '—'} → ×${option.target!.toFixed(2)} · about ${option.hoursNeeded} hours`
+                        : option.reason
+                    }
+                    onClick={
+                      option.available ? () => store.studySkill(character.id, option.skill) : undefined
+                    }
+                    right={
+                      option.available ? (
+                        <Chip tone="cyan">Study</Chip>
+                      ) : (
+                        <Chip>Blocked</Chip>
+                      )
+                    }
+                  />
+                ))}
             </div>
           </div>
-        )}
+        </div>
+
         {Object.entries(SKILL_GROUPS).map(([groupKey, group]) => (
           <div key={groupKey} style={{ marginTop: 10 }}>
             <span className="label">{group.label}</span>

@@ -556,7 +556,6 @@ export const FUEL = {
   /** Emergency reserve below which warnings show. */
   lowFuelWarning: 0.18,
   /** Travel hours per displayed "jump" on the cockpit fuel gauge. */
-  hoursPerJump: 12,
 } as const;
 
 export const FOOD = {
@@ -1001,9 +1000,52 @@ export const START = {
  * unplaced and commits marks during the run. People met along the way arrive
  * with some or all of their devotion already spent, scaled by seniority.
  */
+/**
+ * Below this age a person is a dependent: they can be saved, take a berth, eat,
+ * and matter to everyone aboard — but they are not crew and are never sent out
+ * to work or fight.
+ */
+export const MIN_WORKING_AGE = 13;
+
 export const SPEC = {
-  /** A mark can only be placed on a craft actually begun. */
+  /**
+   * A mark can only be placed on a craft actually begun.
+   *
+   * This is a player-protection rule as much as a fictional one: it stops
+   * somebody permanently committing their scarcest resource to a skill they
+   * have never used and cannot yet judge the value of.
+   */
   placeMinSkill: 20,
+
+  /** The ladder a focus climbs. Every focus opens at the first rung. */
+  tiers: [1.05, 1.1, 1.15, 1.2] as const,
+
+  /**
+   * How many focuses may sit at each tier at once. The entry tier is
+   * uncapped, so a focus can always be opened; the rungs above it are not,
+   * which is what turns advancement into a queue — to start a third focus at
+   * x1.10 you must first promote one of the two already there.
+   */
+  tierCaps: { 1.05: Infinity, 1.1: 2, 1.15: 2, 1.2: 2 } as Record<number, number>,
+
+  /** Total focuses one person may ever open. */
+  maxFocuses: 6,
+
+  /**
+   * Study hours to climb from one rung to the next, before Learning and the
+   * quality of the room are applied. Deliberately steep at the top: two
+   * masteries should represent most of a career.
+   */
+  hoursToTier: { 1.05: 12, 1.1: 40, 1.15: 90, 1.2: 170 } as Record<number, number>,
+
+  /** Learning 0-15 scales study speed across this range. */
+  learningSpeed: [0.6, 1.9] as [number, number],
+
+  /** Multiplier on study speed by where the work is done. */
+  venueSpeed: { ship: 1, world: 1.6 } as const,
+
+  /** A studying crew member contributes this much less to shipboard events. */
+  distraction: 0.5,
   /** Age at which an NPC starts having placed anything. */
   autoAgeFloor: 18,
   /** Years from floor to a fully-placed life. */

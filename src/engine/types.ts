@@ -454,11 +454,11 @@ export interface Character {
   isPlayer: boolean;
 
   /**
-   * Unplaced knowledge-specialization marks (e.g. [1.2, 1.15]), strongest
-   * first. Placing one onto a skill is permanent and raises that skill's
-   * ceiling; the budget never refills. The protagonist starts with all six.
+   * What this person is currently putting hours into, and how many they have
+   * banked toward the next rung. Cleared when the rung is reached. Nobody
+   * studies while deployed, and switching subject loses the partial work.
    */
-  specSlots: number[];
+  study?: { skill: SkillKey; hours: number };
   /** Non-crew characters (family, contacts) live in the roster but are not aboard. */
   aboard: boolean;
   /** Recruitment terms still owed, if any. */
@@ -473,6 +473,17 @@ export interface Character {
   placeKnown?: boolean;
   /** Why they cannot talk right now, if they cannot. */
   availability?: 'available' | 'working' | 'unreachable';
+
+  /**
+   * What is actually keeping this person here, revealed by talking to them.
+   * Undefined until you have had the conversation — you do not know what a
+   * relative needs until you go and ask.
+   */
+  concern?: FamilyConcern;
+  /** True once the player has genuinely spoken with them at least once. */
+  spokenTo?: boolean;
+  /** Set when the concern has been dealt with. */
+  concernResolved?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -790,6 +801,8 @@ export type LocationActionKind =
   | 'rest'
   /** Work the crowd for a sharper read on the extinction clocks. */
   | 'askForecast'
+  /** Somewhere with the books and the quiet to actually learn something. */
+  | 'study'
   | 'depart';
 
 export interface MarketState {
@@ -879,6 +892,7 @@ export type PlaceKind =
   | 'fuelDepot'
   | 'shipMarket'
   | 'transitHub'
+  | 'library'
   | 'bar'
   | 'government'
   | 'lodging'
@@ -906,6 +920,13 @@ export interface Place {
   recruitVenue?: RecruitVenue;
   /** Scavenge sites reachable from here. */
   siteIds: string[];
+  /**
+   * True when this place IS an expedition site rather than somewhere that
+   * merely knows about them. Walking to a ruin and choosing to search it must
+   * prepare a party for THAT ruin, not open a board of every ruin in the
+   * district.
+   */
+  isSite?: boolean;
   danger: number;
   /** True where the ship is physically parked. */
   shipHere?: boolean;
@@ -1245,6 +1266,19 @@ export interface CombatAction {
   available: boolean;
   reason?: string;
 }
+
+/**
+ * What a person says when you finally sit down with them. These are the reason
+ * family are a journey rather than a button: each one is a condition on the
+ * berth, and you cannot see it from the ship.
+ */
+export type FamilyConcern =
+  | 'ready'
+  | 'needsTime'
+  | 'wontLeavePartner'
+  | 'needsMedicine'
+  | 'hasDependent'
+  | 'owesDebt';
 
 export interface FarewellEntry {
   characterId: CharacterId;

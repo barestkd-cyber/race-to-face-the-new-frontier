@@ -20,11 +20,12 @@ import { applyRawWound, computeSeverityScore, severityFromScore, tickWounds } fr
 import { childPlaces, districtsAt, shipPlace, walkTo } from './places';
 import { endCombat } from './combat';
 import type { GameState } from './types';
-import { offerPassage } from './actions';
-import { skillUpgradeCost, attributeUpgradeCost, placeSpecialization } from './progression';
+import { offerPassage, visitContact } from './actions';
+import { skillUpgradeCost, attributeUpgradeCost } from './progression';
+import { beginStudy, countAtTier, focuses, studyOptions, tickStudy } from './study';
 import { Rng, streamRng } from './rng';
 import { generateShip, safeCrewCapacity } from './ship';
-import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP } from './tuning';
+import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
 import { createGame } from './newGame';
 import { simulateRun } from './simulate';
@@ -154,62 +155,33 @@ describe('character generation', () => {
     }
   });
 
-  it('conserves the devotion budget: placed marks plus open slots always total six', () => {
-    for (let seed = 0; seed < 60; seed++) {
-      const character = createCharacter({ rng: new Rng(`spec-${seed}`) });
-      const placed = SKILL_KEYS.map((k) => character.potential[k].specialization).filter((m) => m > 1);
-      const all = [...placed, ...character.specSlots].sort((a, b) => b - a);
-      expect(all).toEqual([1.2, 1.2, 1.15, 1.15, 1.1, 1.1]);
-      // One craft per mark, never stacked.
-      expect(new Set(placed.map((m, i) => `${m}:${i}`)).size).toBe(placed.length);
-    }
-  });
-
   it('deals no devotion to the protagonist — that lever is the player’s alone', () => {
     for (let seed = 0; seed < 30; seed++) {
       const draft = generateProtagonistDraft(streamRng(`pspec-${seed}`, 'protagonist'));
       const placed = SKILL_KEYS.filter((k) => draft.character.potential[k].specialization > 1);
       expect(placed).toEqual([]);
-      expect([...draft.character.specSlots].sort((a, b) => b - a)).toEqual([
-        1.2, 1.2, 1.15, 1.15, 1.1, 1.1,
-      ]);
     }
   });
 
-  it('lets an old professional arrive more devoted than a young recruit, on average', () => {
+  it('never exceeds the tier caps when dealing a life already lived', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const person = createCharacter({ rng: new Rng(`spec-${seed}`) });
+      for (const tier of [1.1, 1.15, 1.2]) {
+        expect(countAtTier(person, tier)).toBeLessThanOrEqual(2);
+      }
+      expect(focuses(person).length).toBeLessThanOrEqual(SPEC.maxFocuses);
+    }
+  });
+
+  it('lets an old professional arrive more devoted than a young recruit', () => {
     let young = 0;
     let old = 0;
     const runs = 80;
     for (let seed = 0; seed < runs; seed++) {
-      const kid = createCharacter({ rng: new Rng(`young-${seed}`), ageRange: [18, 22] });
-      const vet = createCharacter({ rng: new Rng(`old-${seed}`), ageRange: [48, 56] });
-      young += 6 - kid.specSlots.length;
-      old += 6 - vet.specSlots.length;
+      young += focuses(createCharacter({ rng: new Rng(`young-${seed}`), ageRange: [18, 22] })).length;
+      old += focuses(createCharacter({ rng: new Rng(`old-${seed}`), ageRange: [48, 56] })).length;
     }
     expect(old / runs).toBeGreaterThan(young / runs);
-  });
-
-  it('places devotion only where practice has been, permanently', () => {
-    const draft = generateProtagonistDraft(streamRng('place-1', 'protagonist'));
-    const state = createGame('place-1', draft.character);
-    const captain = state.characters[state.playerId]!;
-
-    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= 20)!;
-    const raw = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) < 20)!;
-
-    // A craft not yet begun refuses the mark.
-    expect(placeSpecialization(state, captain, raw, 1.2).ok).toBe(false);
-
-    // A practised one takes it, and the ceiling moves.
-    const capBefore = POTENTIAL_CAP[captain.potential[practised].grade];
-    const result = placeSpecialization(state, captain, practised, 1.2);
-    expect(result.ok).toBe(true);
-    expect(captain.specSlots.filter((m) => m === 1.2)).toHaveLength(1);
-    expect(captain.potential[practised].specialization).toBe(1.2);
-    expect(result.message).toContain(`${Math.round(capBefore * 1.2)}`);
-
-    // Never twice on the same craft, even with marks left.
-    expect(placeSpecialization(state, captain, practised, 1.15).ok).toBe(false);
   });
 
   it('gives every character two or three hidden traits', () => {
@@ -588,12 +560,21 @@ describe('places', () => {
     offerPassage(state, relative.id, rng);
     expect(state.crewIds.length, 'cannot recruit across the city').toBe(crewBefore);
 
-    // Standing where they actually are: now it can work.
+    // Standing where they are, but without having spoken: still refused. You
+    // do not ask somebody to abandon their world before you have talked to them.
     state.currentPlaceId = relative.placeId!;
     const player = state.characters[state.playerId]!;
     player.relationships[relative.id] = { value: 60, familiarity: 80, kind: 'family' };
     offerPassage(state, relative.id, rng);
-    expect(state.crewIds.length, 'standing with them should work').toBe(crewBefore + 1);
+    expect(state.crewIds.length, 'must talk before asking').toBe(crewBefore);
+
+    // Talk first, settle whatever they raise, and it can work.
+    visitContact(state, relative.id, rng);
+    expect(relative.spokenTo).toBe(true);
+    relative.concernResolved = true;
+    player.relationships[relative.id] = { value: 90, familiarity: 90, kind: 'family' };
+    offerPassage(state, relative.id, rng);
+    expect(state.crewIds.length, 'talked to and willing should work').toBe(crewBefore + 1);
   });
 
   it('charges time for walking around', () => {
@@ -713,6 +694,102 @@ describe('combat resolution', () => {
     expect(state.resources.credits).toBe(credits + 300);
     expect(combat.casualties).toEqual([`${extra.name} ${extra.surname}`]);
     expect(state.crewIds.includes(extra.id), 'dead crew leave the roster').toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Study — devotion is earned, and the rungs above the first are a queue
+// ---------------------------------------------------------------------------
+
+describe('study', () => {
+  it('refuses a craft that has not been practised', () => {
+    const draft = generateProtagonistDraft(streamRng('study-1', 'protagonist'));
+    const state = createGame('study-1', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const raw = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) < SPEC.placeMinSkill);
+    if (!raw) return;
+    const result = beginStudy(captain, raw);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain(String(SPEC.placeMinSkill));
+  });
+
+  it('opens a focus at the first rung and climbs one at a time', () => {
+    const draft = generateProtagonistDraft(streamRng('study-2', 'protagonist'));
+    const state = createGame('study-2', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (!practised) return;
+
+    expect(studyOptions(captain).find((o) => o.skill === practised)?.target).toBe(1.05);
+    expect(beginStudy(captain, practised).ok).toBe(true);
+    expect(captain.study?.skill).toBe(practised);
+
+    // Give them somewhere to work and enough time to finish the first rung.
+    state.ship!.rooms.push({
+      id: 'room_study_test',
+      kind: 'study',
+      quality: 'solid',
+      qualityPotential: 'solid',
+      condition: 90,
+    });
+    tickStudy(state, SPEC.hoursToTier[1.05]! * 20);
+    expect(captain.potential[practised].specialization).toBe(1.05);
+    // Reaching a rung clears the assignment; the next one is a fresh decision.
+    expect(captain.study).toBeUndefined();
+  });
+
+  it('holds the middle rungs to two, so advancement queues', () => {
+    const draft = generateProtagonistDraft(streamRng('study-3', 'protagonist'));
+    const state = createGame('study-3', draft.character);
+    const captain = state.characters[state.playerId]!;
+
+    const eligible = SKILL_KEYS.filter((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (eligible.length < 3) return;
+
+    for (const skill of eligible.slice(0, 2)) {
+      captain.potential[skill] = { ...captain.potential[skill], specialization: 1.1 };
+    }
+    captain.potential[eligible[2]!] = { ...captain.potential[eligible[2]!], specialization: 1.05 };
+
+    const blocked = studyOptions(captain).find((o) => o.skill === eligible[2]);
+    expect(blocked?.available).toBe(false);
+    expect(blocked?.reason).toContain('promote');
+
+    // Promote one out of the rung and the queue moves.
+    captain.potential[eligible[0]!] = { ...captain.potential[eligible[0]!], specialization: 1.15 };
+    expect(studyOptions(captain).find((o) => o.skill === eligible[2])?.available).toBe(true);
+  });
+
+  it('does not let a deployed party study', () => {
+    const draft = generateProtagonistDraft(streamRng('study-4', 'protagonist'));
+    const state = createGame('study-4', draft.character);
+    const captain = state.characters[state.playerId]!;
+    const practised = SKILL_KEYS.find((k) => (captain.skills[k] ?? 0) >= SPEC.placeMinSkill);
+    if (!practised) return;
+
+    state.ship!.rooms.push({
+      id: 'room_study_test2',
+      kind: 'study',
+      quality: 'solid',
+      qualityPotential: 'solid',
+      condition: 90,
+    });
+    beginStudy(captain, practised);
+    state.expedition = {
+      siteId: 'nowhere',
+      partyIds: [captain.id],
+      leaderId: captain.id,
+      currentNodeId: 'x',
+      visited: [],
+      carried: [],
+      carriedCredits: 0,
+      startedAtHours: 0,
+    };
+
+    tickStudy(state, 5000);
+    expect(captain.potential[practised].specialization).toBe(1);
   });
 });
 

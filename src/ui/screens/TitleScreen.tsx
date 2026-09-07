@@ -105,9 +105,10 @@ export function TitleScreen() {
           that claim otherwise are guessing.
         </p>
         <p className="prose prose--dim">
-          You inherit a ship you did not choose, a crew you did not pick, and a route that ends at
-          the Travel Center on the far frontier. Every leg costs fuel, food, and people. Get there
-          before the clocks run out, captain.
+          You inherit a ship you did not choose, and you leave alone. Everyone who flies with you
+          is somebody you found and talked into it. The route ends at the Travel Center on the far
+          frontier, and every leg costs fuel, food, and people. Get there before the clocks run out,
+          captain.
         </p>
       </Panel>
 

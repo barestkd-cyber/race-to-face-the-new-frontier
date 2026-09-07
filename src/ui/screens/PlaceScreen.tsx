@@ -6,7 +6,14 @@
  * passage who is on the other side of the city.
  */
 
-import { contactAccess, contactsHere, isFamily, relationshipLabel } from '../../engine/actions';
+import {
+  concernPrice,
+  contactAccess,
+  contactsHere,
+  CONCERN_INFO,
+  isFamily,
+  relationshipLabel,
+} from '../../engine/actions';
 import { safeCrewCapacity } from '../../engine/ship';
 import { formatDuration } from '../../engine/log';
 import { childPlaces, currentPlace, PLACE_KIND_LABELS } from '../../engine/places';
@@ -70,6 +77,12 @@ const ACTIONS: Record<LocationActionKind, ActionSpec> = {
     description: 'Eight, sixteen, or twenty-four hours.',
     time: '8–24 hours',
   },
+  study: {
+    label: 'Use the Reading Room',
+    description:
+      'Shelves, terminals, and quiet. Anyone you have set to study learns markedly faster here.',
+    time: 'while you are here',
+  },
   askForecast: {
     label: 'Ask About the Forecasts',
     description:
@@ -82,6 +95,15 @@ const ACTIONS: Record<LocationActionKind, ActionSpec> = {
     time: '—',
   },
 };
+
+/** Turn a concern's price into something the player reads as a cost. */
+function describePrice(price: { credits?: number; medicine?: number; hours?: number }): string {
+  const parts: string[] = [];
+  if (price.credits) parts.push(`${price.credits} credits`);
+  if (price.medicine) parts.push(`${price.medicine} medicine`);
+  if (price.hours) parts.push(`${price.hours} hours`);
+  return parts.join(' · ');
+}
 
 export function PlaceScreen() {
   const state = useGame();
@@ -167,19 +189,46 @@ export function PlaceScreen() {
                           Passage fills {aboardAfter} of {capacity} berths, adds one mouth —{' '}
                           {likelihood}.
                         </p>
+                        {/*
+                          What they told you when you sat down, and what it
+                          would take. None of this is visible until you talk.
+                        */}
+                        {person.spokenTo && person.concern && !person.concernResolved && (
+                          <p className="tiny amber" style={{ margin: '6px 0 0' }}>
+                            {CONCERN_INFO[person.concern].said}
+                            {CONCERN_INFO[person.concern].asks
+                              ? ` Needs: ${CONCERN_INFO[person.concern].asks}`
+                              : ''}
+                          </p>
+                        )}
                         <div className="btn-row" style={{ marginTop: 6 }}>
                           <Btn small wide onClick={() => store.visitContact(person.id)} sub="2–5 hours">
-                            Talk
+                            {person.spokenTo ? 'Talk Again' : 'Talk'}
                           </Btn>
                           <Btn
                             small
                             wide
                             tone="primary"
+                            disabled={!person.spokenTo}
                             onClick={() => store.offerPassage(person.id)}
+                            sub={person.spokenTo ? undefined : 'Talk to them first'}
                           >
                             Offer Passage
                           </Btn>
                         </div>
+                        {person.spokenTo &&
+                          person.concern &&
+                          !person.concernResolved &&
+                          Object.keys(concernPrice(person.concern)).length > 0 && (
+                            <Btn
+                              small
+                              block
+                              onClick={() => store.settleConcern(person.id)}
+                              sub={describePrice(concernPrice(person.concern))}
+                            >
+                              Settle What Is Holding Them
+                            </Btn>
+                          )}
                       </>
                     ) : (
                       <p className="tiny faint" style={{ marginTop: 6, marginBottom: 0 }}>

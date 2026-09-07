@@ -186,14 +186,6 @@ export function generatePotential(rng: Rng, bias: GenerationBias): SkillPotentia
   return map;
 }
 
-/** The full budget of unplaced marks, strongest first. */
-export function specializationBudget(): number[] {
-  const budget: number[] = [];
-  for (const tier of SKILLS_TUNING.specializationAllowance) {
-    for (let i = 0; i < tier.count; i++) budget.push(tier.multiplier);
-  }
-  return budget.sort((a, b) => b - a);
-}
 
 /**
  * Where a life would have pointed its devotion: strong bias and high ceilings
@@ -223,24 +215,26 @@ export function autoPlaceSpecializations(
   potential: SkillPotentialMap,
   bias: GenerationBias,
   age: number,
-): { placedInto: SkillPotentialMap; remaining: number[] } {
-  const budget = specializationBudget();
+): void {
   const seniority = Math.max(0, Math.min(1, (age - SPEC.autoAgeFloor) / SPEC.autoAgeSpan));
-  const fraction = Math.max(
+  const depth = Math.max(
     0,
     Math.min(1, SPEC.autoBaseFraction + seniority * (1 - SPEC.autoBaseFraction) + rng.float(-0.15, 0.15)),
   );
-  const placeCount = Math.round(budget.length * fraction);
+
+  // A career's worth of study, expressed as rungs climbed. Six focuses fully
+  // developed is 2/2/2 across the top three rungs.
+  const ladder: number[] = [1.2, 1.2, 1.15, 1.15, 1.1, 1.1];
+  const climbed = Math.round(ladder.length * depth);
 
   const preference = rankSpecPreference(rng, bias, potential);
   let placed = 0;
   for (const skill of preference) {
-    if (placed >= placeCount) break;
+    if (placed >= climbed) break;
     if (potential[skill].specialization > 1) continue;
-    potential[skill] = { ...potential[skill], specialization: budget[placed]! };
+    potential[skill] = { ...potential[skill], specialization: ladder[placed]! };
     placed += 1;
   }
-  return { placedInto: potential, remaining: budget.slice(placed) };
 }
 
 // ---------------------------------------------------------------------------
@@ -515,14 +509,12 @@ export function createCharacter(options: CreateCharacterOptions): Character {
   const ageRange = options.ageRange ?? [21, 56];
   const age = rng.taperedInt(ageRange[0], ageRange[1], 2);
 
-  // Devotion: dealt for the lives already lived, unspent for the one the
-  // player is about to live. Skills roll AFTER placement so an NPC's craft can
-  // sit above the plain grade cap the way a life of practice would put it.
-  let specSlots: number[];
-  if (options.isPlayer) {
-    specSlots = specializationBudget();
-  } else {
-    specSlots = autoPlaceSpecializations(rng, potential, bias, age).remaining;
+  // Devotion is earned, never dealt. The protagonist starts with nothing on
+  // the ladder and climbs it in play; people met along the way arrive with as
+  // much of a career behind them as their age justifies. Skills roll AFTER
+  // placement so a lifelong surgeon can sit above the plain grade cap.
+  if (!options.isPlayer) {
+    autoPlaceSpecializations(rng, potential, bias, age);
   }
 
   const { skills } = generateSkills(rng, potential, bias);
@@ -562,7 +554,6 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     backpack: [],
     isPlayer: options.isPlayer ?? false,
     aboard: options.aboard ?? true,
-    specSlots,
   };
 
   // The protagonist keeps their allocation pool for the character-gen screen;

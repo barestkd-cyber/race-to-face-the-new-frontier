@@ -9,7 +9,8 @@
 import { bestAt } from './check';
 import type { Rng } from './rng';
 import { hasRoom, overcrowding, quartersQuality, roomsOfKind } from './ship';
-import { FOOD, MORALE, REST, STRESS } from './tuning';
+import { FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
+import { tickStudy } from './study';
 import { tickWounds } from './wounds';
 import { advanceHomeworldClock } from './world';
 import type { Character, GameState, ShipQuality } from './types';
@@ -37,6 +38,19 @@ export function livingCrewCount(state: GameState): number {
  * a character dead in place, and the roster has to follow or the crew count
  * silently disagrees with who is actually alive.
  */
+/**
+ * A dependent is aboard and cared for, but does no work. Children evacuated
+ * with their family are people, not labour.
+ */
+export function isDependent(character: Character): boolean {
+  return character.age < MIN_WORKING_AGE;
+}
+
+/** Crew who can actually be assigned to anything. */
+export function workingCrew(state: GameState): Character[] {
+  return crewMembers(state).filter((c) => !isDependent(c));
+}
+
 export function pruneDeadCrew(state: GameState): Character[] {
   const dead = state.crewIds
     .map((id) => state.characters[id])
@@ -124,6 +138,11 @@ export function advanceTime(
   const resting = options.resting ?? false;
 
   state.hours += hours;
+
+  // Study is paid for in hours, so it advances wherever hours do — travelling,
+  // waiting, resting, working. tickStudy decides whether there is anywhere to
+  // actually do it.
+  lines.push(...tickStudy(state, hours));
 
   // --- Food -------------------------------------------------------------
   const consumption = foodConsumptionPerDay(state) * days;

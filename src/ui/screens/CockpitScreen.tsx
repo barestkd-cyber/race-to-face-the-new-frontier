@@ -229,7 +229,7 @@ export function CockpitScreen() {
           crewCount={crew.length}
           crewCapacity={capacity}
           foodDays={daysOfFoodRemaining(state)}
-          fuelJumps={fuel.jumpsRemaining}
+          fuelDays={fuel.daysRemaining}
         />
 
         {inHomeRegion && (

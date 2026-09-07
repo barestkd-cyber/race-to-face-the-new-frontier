@@ -281,10 +281,11 @@ const BASE_ACTIONS: Record<LocationKind, LocationActionKind[]> = {
     'social',
     'rest',
     'askForecast',
+    'study',
     'depart',
   ],
   moon: ['trade', 'recruit', 'findWork', 'missions', 'scavenge', 'repair', 'rest', 'depart'],
-  tradeStation: ['trade', 'recruit', 'findWork', 'missions', 'repair', 'medical', 'rest', 'depart'],
+  tradeStation: ['trade', 'recruit', 'findWork', 'missions', 'repair', 'medical', 'rest', 'study', 'depart'],
   inhabitedPlanet: [
     'trade',
     'recruit',

@@ -41,7 +41,7 @@ export function TravelCenterScreen() {
 
   const perDay = foodConsumptionPerDay(state);
   const foodDays = perDay > 0 ? state.resources.food / perDay : Infinity;
-  const fuelJumps = ship ? estimateFuel(ship, crew, state.resources.fuel).jumpsRemaining : 0;
+  const fuelDays = ship ? estimateFuel(ship, crew, state.resources.fuel).daysRemaining : 0;
   const capacity = ship ? safeCrewCapacity(ship) : 0;
 
   return (
@@ -80,7 +80,7 @@ export function TravelCenterScreen() {
           crewCount={crew.length}
           crewCapacity={capacity}
           foodDays={foodDays}
-          fuelJumps={fuelJumps}
+          fuelDays={fuelDays}
         />
       </Panel>
 

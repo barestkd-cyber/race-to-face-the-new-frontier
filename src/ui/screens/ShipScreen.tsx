@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { Btn, Chip, Duration, Empty, Fold, KV, Meter, Panel, Row, Segments, Stepper } from '../components';
+import { canUseRepairYard, canWorkOnShip } from '../../engine/access';
 import { store, useGame } from '../useStore';
 import {
   bestEngineerLabel,
@@ -45,9 +46,12 @@ export function ShipScreen() {
   }
 
   const ship = state.ship;
-  // Management needs hands aboard; while a party is deployed this is a status
-  // board, not a workshop.
-  const deployed = Boolean(state.expedition);
+  // Always a status board; a workshop only when you are actually at the ship
+  // with hands free. Standing in another district must not let you turn a
+  // spanner on an engine parked across town.
+  const workAccess = canWorkOnShip(state);
+  const yardAccess = canUseRepairYard(state);
+  const cannotWork = !workAccess.ok;
   if (!ship) {
     return <Empty>You have no ship. There is nothing to inspect.</Empty>;
   }
@@ -136,7 +140,6 @@ export function ShipScreen() {
             items={[
               ['Burn', <span className="readout">{fuel.unitsPerHour.toFixed(2)} per hour</span>],
               ['Range', <Duration hours={fuel.hoursRemaining} />],
-              ['Jumps left', <span className="readout">{fuel.jumpsRemaining}</span>],
               [
                 'Cost of burn',
                 <span className="readout">{Math.round(fuel.creditsPerHour)} cr per hour</span>,
@@ -153,7 +156,7 @@ export function ShipScreen() {
           <Btn
             block
             onClick={() => store.decant()}
-            disabled={deployed || !canistersAboard || tanksFull || ship.destroyed}
+            disabled={cannotWork || !canistersAboard || tanksFull || ship.destroyed}
             sub={
               !canistersAboard
                 ? 'No canisters in the hold'
@@ -338,27 +341,31 @@ export function ShipScreen() {
               </p>
             )}
 
-            {deployed && (
-              <p className="tiny amber">
-                A party is away. Nobody is aboard to swing a wrench until they are back.
-              </p>
-            )}
+            {!workAccess.ok && <p className="tiny amber">{workAccess.reason}</p>}
             <div className="btn-row" style={{ marginTop: 8 }}>
               <Btn
                 tone="go"
                 wide
-                disabled={deployed || !selfQuote.canAfford}
+                disabled={cannotWork || !selfQuote.canAfford}
                 onClick={() => store.repair(target, points, false)}
-                sub={deployed ? 'Party away' : `${selfQuote.parts} parts · ${formatDuration(selfQuote.hours)}`}
+                sub={
+                  !workAccess.ok
+                    ? workAccess.reason
+                    : `${selfQuote.parts} parts · ${formatDuration(selfQuote.hours)}`
+                }
               >
                 Repair Ourselves
               </Btn>
               <Btn
                 tone="primary"
                 wide
-                disabled={deployed || !yardAvailable || !yardQuote.canAfford}
+                disabled={!yardAccess.ok || !yardAvailable || !yardQuote.canAfford}
                 onClick={() => store.repair(target, points, true)}
-                sub={deployed ? 'Party away' : `${yardQuote.credits} cr · ${formatDuration(yardQuote.hours)}`}
+                sub={
+                  !yardAccess.ok
+                    ? yardAccess.reason
+                    : `${yardQuote.credits} cr · ${formatDuration(yardQuote.hours)}`
+                }
               >
                 Pay The Yard
               </Btn>

@@ -27,6 +27,7 @@ import { requiresSurgery, treatWound } from './wounds';
 import { estimateTerminalDay } from './world';
 import type {
   Character,
+  FamilyConcern,
   GameState,
   ItemId,
   LocationState,
@@ -640,13 +641,41 @@ export function breakDownForParts(state: GameState, uid: string): string[] {
 // Social — spending time with the crew
 // ---------------------------------------------------------------------------
 
+/**
+ * Spend time where you are standing.
+ *
+ * "People" means everyone actually present: your crew, and anyone you know who
+ * is physically in this place. Ignoring the latter produced the worst kind of
+ * bug — the game telling you there was nobody to talk to while your brother
+ * stood in the room.
+ */
 export function socialise(state: GameState, rng: Rng): string[] {
   const lines: string[] = [];
   const crew = crewMembers(state);
-  if (crew.length < 2) return ['There is nobody to talk to.'];
+  const locals = contactsHere(state).filter((c) => contactAccess(state, c.id).ok);
+
+  if (crew.length < 2 && locals.length === 0) {
+    return ['There is nobody here to spend time with.'];
+  }
 
   const advance = advanceTime(state, rng.float(1.5, 3.5), rng);
   lines.push(...advance.lines);
+
+  // Time with people you know but who are not aboard still counts — it is how
+  // a relative decides whether to trust you with their life.
+  const player = state.characters[state.playerId];
+  for (const person of locals) {
+    if (!player) break;
+    const rel = player.relationships[person.id] ?? {
+      value: 0,
+      familiarity: 0,
+      kind: 'friend' as const,
+    };
+    rel.familiarity = Math.min(100, rel.familiarity + rng.int(3, 8));
+    rel.value = Math.max(-100, Math.min(100, rel.value + rng.int(1, 5)));
+    player.relationships[person.id] = rel;
+    lines.push(`You spend a while with ${person.name}.`);
+  }
 
   // Time together builds familiarity, which is how hidden traits surface.
   for (const a of crew) {
@@ -680,9 +709,15 @@ export function socialise(state: GameState, rng: Rng): string[] {
 
   for (const member of crew) applyStress(member, -rng.float(2, 6));
   state.morale = clampMorale(state.morale + rng.int(1, 4));
-  lines.push('The crew spends some time not working.');
+  if (crew.length >= 2) lines.push('The crew spends some time not working.');
 
-  pushLog(state, 'crew', 'Time spent with the crew.');
+  pushLog(
+    state,
+    'crew',
+    locals.length > 0 && crew.length < 2
+      ? `Time spent with ${locals.map((c) => c.name).join(', ')}.`
+      : 'Time spent with the crew.',
+  );
   return lines;
 }
 
@@ -810,6 +845,16 @@ export function visitContact(state: GameState, id: string, rng: Rng): string[] {
   const advance = advanceTime(state, rng.float(2, 5), rng);
   lines.push(...advance.lines);
 
+  // The first real conversation is where you learn what is actually keeping
+  // them here. Until then, a berth is an abstraction to both of you.
+  const firstTime = !contact.spokenTo;
+  contact.spokenTo = true;
+  if (firstTime && contact.concern) {
+    lines.push(CONCERN_INFO[contact.concern].said);
+    const asks = CONCERN_INFO[contact.concern].asks;
+    if (asks && !contact.concernResolved) lines.push(`What they need: ${asks}`);
+  }
+
   const rel = player.relationships[id] ?? { value: 0, familiarity: 0, kind: 'friend' as const };
   rel.value = Math.max(-100, Math.min(100, rel.value + rng.int(2, 8)));
   rel.familiarity = Math.min(100, rel.familiarity + rng.int(3, 9));
@@ -867,6 +912,121 @@ export function relationshipLabel(value: number, familiarity: number): string {
  * Offer someone a berth. Family will generally come if the relationship is
  * there; whether the ship can carry them is the player's problem.
  */
+
+// ---------------------------------------------------------------------------
+// What is keeping them here
+// ---------------------------------------------------------------------------
+
+/**
+ * A concern is the reason a berth is not simply accepted. You cannot see it
+ * from the ship, or from the Crew screen, or from across the city — only by
+ * going to the person and asking. That is the whole point of family being a
+ * journey.
+ */
+export interface ConcernInfo {
+  /** What they say when it comes up. */
+  said: string;
+  /** What it would take, in the player's terms. Empty when nothing is needed. */
+  asks: string;
+  /** Willingness cost while unresolved. Some are refusals, not haggling. */
+  weight: number;
+}
+
+export const CONCERN_INFO: Record<FamilyConcern, ConcernInfo> = {
+  ready: {
+    said: 'They have been packed for a week. They are waiting on you.',
+    asks: '',
+    weight: 0,
+  },
+  needsTime: {
+    said: 'They will come, but there are things here they cannot simply walk away from.',
+    asks: 'A day to settle their affairs.',
+    weight: 12,
+  },
+  wontLeavePartner: {
+    said: 'They will not go without the person they live with. That is not negotiable to them.',
+    asks: 'A second berth, and the food to fill it.',
+    weight: 45,
+  },
+  needsMedicine: {
+    said: 'Someone in the house is ill and will not survive the trip untreated.',
+    asks: 'Medicine — enough to matter.',
+    weight: 35,
+  },
+  hasDependent: {
+    said: 'There is a child with them. Where they go, the child goes.',
+    asks: 'Room for two, and one of them cannot work.',
+    weight: 30,
+  },
+  owesDebt: {
+    said: 'They owe money to people who will notice them leaving.',
+    asks: 'Credits, paid to somebody unpleasant.',
+    weight: 28,
+  },
+};
+
+/** Cost in resources to settle a concern, if it can be bought off at all. */
+export function concernPrice(concern: FamilyConcern): { credits?: number; medicine?: number; hours?: number } {
+  switch (concern) {
+    case 'needsMedicine':
+      return { medicine: 4 };
+    case 'owesDebt':
+      return { credits: 400 };
+    case 'needsTime':
+      return { hours: 24 };
+    default:
+      return {};
+  }
+}
+
+/**
+ * Settle whatever is holding somebody back, where money or supplies can do it.
+ * A partner or a child cannot be paid off — those simply cost you berths.
+ */
+export function resolveConcern(state: GameState, id: string, rng: Rng): string[] {
+  const person = state.characters[id];
+  if (!person?.concern) return ['There is nothing outstanding.'];
+
+  const access = contactAccess(state, id);
+  if (!access.ok) return [access.reason ?? 'You cannot reach them.'];
+
+  const price = concernPrice(person.concern);
+  if (price.medicine && state.resources.medicine < price.medicine) {
+    return [`That needs ${price.medicine} medicine and you have ${state.resources.medicine}.`];
+  }
+  if (price.credits && state.resources.credits < price.credits) {
+    return [`That needs ${price.credits} credits and you have ${Math.floor(state.resources.credits)}.`];
+  }
+  if (!price.medicine && !price.credits && !price.hours) {
+    return ['This is not something you can settle for them.'];
+  }
+
+  const lines: string[] = [];
+  if (price.medicine) {
+    state.resources.medicine -= price.medicine;
+    lines.push(`Handed over ${price.medicine} medicine.`);
+  }
+  if (price.credits) {
+    state.resources.credits -= price.credits;
+    lines.push(`Paid ${price.credits} credits.`);
+  }
+  if (price.hours) {
+    const advance = advanceTime(state, price.hours, rng);
+    lines.push(...advance.lines);
+    lines.push('You give them the day.');
+  }
+
+  person.concernResolved = true;
+  const player = state.characters[state.playerId];
+  if (player) {
+    const rel = player.relationships[id];
+    if (rel) rel.value = Math.min(100, rel.value + 15);
+  }
+  lines.push(`${person.name} has nothing holding them here now.`);
+  pushLog(state, 'crew', `Settled what was keeping ${person.name} on the ground.`);
+  return lines;
+}
+
 export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
   const lines: string[] = [];
   const contact = state.characters[id];
@@ -878,16 +1038,32 @@ export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
   const access = contactAccess(state, id);
   if (!access.ok) return [access.reason ?? 'You cannot reach them.'];
 
+  // You do not ask somebody to abandon their world without having spoken to
+  // them first. This is what makes family a journey instead of a button.
+  if (!contact.spokenTo) {
+    return [`Talk to ${contact.name} first. You do not even know what they would be leaving.`];
+  }
+
   const rel = player.relationships[id];
   const closeness = rel?.value ?? 0;
   const family = isFamily(state, id);
 
+  // An unsettled concern is weight against the offer — sometimes a flat no.
+  const concernWeight =
+    contact.concern && !contact.concernResolved ? CONCERN_INFO[contact.concern].weight : 0;
+
   // Someone who barely knows you will not abandon their life on your word.
-  const threshold = family ? 10 : 45;
+  const threshold = (family ? 10 : 45) + concernWeight;
   if (closeness < threshold) {
     const advance = advanceTime(state, 1, rng);
     lines.push(...advance.lines);
-    lines.push(`${contact.name} will not go with you. Not yet.`);
+    if (concernWeight > 0 && contact.concern) {
+      lines.push(`${contact.name} cannot leave yet. ${CONCERN_INFO[contact.concern].said}`);
+      const asks = CONCERN_INFO[contact.concern].asks;
+      if (asks) lines.push(`What they need: ${asks}`);
+    } else {
+      lines.push(`${contact.name} will not go with you. Not yet.`);
+    }
     return lines;
   }
 

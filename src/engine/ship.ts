@@ -300,7 +300,8 @@ export function quartersQuality(ship: Ship | null): ShipQuality | undefined {
 export interface FuelEstimate {
   unitsPerHour: number;
   hoursRemaining: number;
-  jumpsRemaining: number;
+  /** Days of travel the tanks buy at the current burn rate. */
+  daysRemaining: number;
   /** Credits of fuel burned per travel hour at Normal pricing. */
   creditsPerHour: number;
 }
@@ -339,9 +340,8 @@ export function estimateFuel(
   return {
     unitsPerHour,
     hoursRemaining,
-    // A "jump" is a display unit of half a day's burn, so the cockpit readout
     // lands in the tens rather than the hundreds.
-    jumpsRemaining: Math.floor(hoursRemaining / FUEL.hoursPerJump),
+    daysRemaining: hoursRemaining / 24,
     creditsPerHour: unitsPerHour * FUEL.creditsPerUnit,
   };
 }

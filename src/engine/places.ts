@@ -39,6 +39,8 @@ interface VenueTemplate {
   actions: LocationActionKind[];
   recruitVenue?: RecruitVenue;
   danger?: number;
+  /** This place is itself a ruin to be worked, not an office that knows of them. */
+  isSite?: boolean;
 }
 
 interface DistrictTemplate {
@@ -113,6 +115,15 @@ const HOMEWORLD_DISTRICTS: DistrictTemplate[] = [
           'Cots in rows under a roof meant for something else. Everyone here is waiting for a number to be called.',
         actions: ['recruit', 'social'],
         recruitVenue: 'shelter',
+      },
+      {
+        key: 'library',
+        name: 'Central Library',
+        kind: 'library',
+        subtitle: 'Reading rooms, mostly empty now',
+        description:
+          'Terminals, stacks, and study carrels that nobody is queueing for any more. The staff will let anyone sit as long as they like.',
+        actions: ['study'],
       },
       {
         key: 'transit',
@@ -209,6 +220,7 @@ const HOMEWORLD_DISTRICTS: DistrictTemplate[] = [
           'A plant that shut mid-shift when the contracts stopped. The gate is chained. The fence is not.',
         actions: ['scavenge'],
         danger: 38,
+        isSite: true,
       },
     ],
   },
@@ -275,6 +287,7 @@ const HOMEWORLD_DISTRICTS: DistrictTemplate[] = [
         description: 'Cut faces, collapsed adits, and equipment nobody bothered to recover.',
         actions: ['scavenge'],
         danger: 44,
+        isSite: true,
       },
     ],
   },
@@ -387,6 +400,15 @@ const GENERIC_DISTRICTS: Record<string, DistrictTemplate[]> = {
       subtitle: 'Proper facilities, proper prices',
       description: 'Cradles, gantries, and engineers who do this every day. There is a waiting list.',
       actions: ['repair'],
+      venues: [],
+    },
+    {
+      key: 'archive',
+      name: 'Station Archive',
+      kind: 'library',
+      subtitle: 'Records, manuals, and quiet',
+      description: 'Technical libraries kept for the crews who dock here. Anyone may use them.',
+      actions: ['study'],
       venues: [],
     },
     {
@@ -561,12 +583,39 @@ export function generatePlacesForLocation(seed: string, location: LocationState)
         visited: false,
         recruitVenue: venue.recruitVenue,
         siteIds: [],
+        isSite: venue.isSite,
         danger: venue.danger ?? Math.round(location.danger * 0.7),
       });
     }
   }
 
   return places;
+}
+
+/**
+ * Give every place that IS a ruin its own site, so choosing to search it
+ * prepares a party for that specific ground.
+ */
+export function bindSitesToPlaces(state: GameState, locationId: LocationId): void {
+  const sitePlaces = Object.values(state.places).filter(
+    (p) => p.locationId === locationId && p.isSite && p.siteIds.length === 0,
+  );
+  if (sitePlaces.length === 0) return;
+
+  const unclaimed = Object.values(state.sites).filter(
+    (site) =>
+      site.locationId === locationId &&
+      !Object.values(state.places).some((p) => p.siteIds.includes(site.id)),
+  );
+
+  for (const place of sitePlaces) {
+    const site = unclaimed.shift();
+    if (!site) break;
+    place.siteIds.push(site.id);
+    // The ruin takes the name of the place you walked to.
+    site.name = place.name;
+    site.description = place.description;
+  }
 }
 
 /** Generate a location's places the first time the player needs them. */
@@ -745,6 +794,16 @@ export function placeKnownCharacters(state: GameState, rng: Rng): void {
       { value: 'working' as const, weight: 25 },
       { value: 'unreachable' as const, weight: 5 },
     ]);
+
+    // What is holding them here. Hidden until the player goes and asks.
+    person.concern = rng.weighted([
+      { value: 'ready' as const, weight: 26 },
+      { value: 'needsTime' as const, weight: 20 },
+      { value: 'needsMedicine' as const, weight: 16 },
+      { value: 'owesDebt' as const, weight: 14 },
+      { value: 'hasDependent' as const, weight: 13 },
+      { value: 'wontLeavePartner' as const, weight: 11 },
+    ]);
   });
 }
 
@@ -772,6 +831,7 @@ export const PLACE_KIND_LABELS: Record<PlaceKind, string> = {
   fuelDepot: 'Fuel',
   shipMarket: 'Ship Market',
   transitHub: 'Transit',
+  library: 'Library',
   bar: 'Bar',
   government: 'Administration',
   lodging: 'Lodging',

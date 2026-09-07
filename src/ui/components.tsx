@@ -301,7 +301,8 @@ export interface ResourceStripProps {
   crewCount: number;
   crewCapacity: number;
   foodDays: number;
-  fuelJumps: number;
+  /** Days of travel the tanks will actually buy at current burn. */
+  fuelDays: number;
 }
 
 export function ResourceStrip({
@@ -309,7 +310,7 @@ export function ResourceStrip({
   crewCount,
   crewCapacity,
   foodDays,
-  fuelJumps,
+  fuelDays,
 }: ResourceStripProps) {
   const fuelPct = resources.fuelCapacity > 0 ? resources.fuel / resources.fuelCapacity : 0;
 
@@ -324,7 +325,7 @@ export function ResourceStrip({
       <ResourceCell
         label="Fuel"
         value={`${Math.round(fuelPct * 100)}%`}
-        sub={`${fuelJumps} jumps`}
+        sub={fuelDays >= 99 ? 'ample' : `~${fuelDays.toFixed(1)}d range`}
         tone={fuelPct < 0.12 ? 'crit' : fuelPct < 0.25 ? 'warn' : 'ok'}
       />
       <ResourceCell
@@ -344,12 +345,7 @@ export function ResourceStrip({
         tone={resources.medicine <= 1 ? 'warn' : 'ok'}
       />
       <ResourceCell label="Credits" value={Math.round(resources.credits).toLocaleString()} />
-      <ResourceCell label="Cores" value={resources.dataCores.toString()} />
-      <ResourceCell
-        label="Tank"
-        value={Math.round(resources.fuel).toString()}
-        sub={`/${resources.fuelCapacity}`}
-      />
+      
     </div>
   );
 }

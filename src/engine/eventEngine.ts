@@ -270,7 +270,10 @@ export function applyEffects(
   adjustResource(state, 'medicine', effects.medicine ?? 0, lines, 'medicine');
   adjustResource(state, 'repairParts', effects.repairParts ?? 0, lines, 'repair parts');
   adjustResource(state, 'credits', effects.credits ?? 0, lines, 'credits');
-  adjustResource(state, 'dataCores', effects.dataCores ?? 0, lines, 'data cores');
+  // Data cores are awarded by content but nothing consumes them yet, so they
+  // are banked silently rather than shown as a resource the player should be
+  // managing. Surface them again once they buy something.
+  if (effects.dataCores) state.resources.dataCores += effects.dataCores;
 
   if (effects.morale) {
     state.morale = clampMorale(state.morale + effects.morale);

@@ -8,6 +8,7 @@
 import { useEffect, useMemo } from 'react';
 import { assessDanger, bestAssessor } from '../../engine/assess';
 import { availableAttacks } from '../../engine/inventory';
+import { MISSIONS } from '../../engine/tuning';
 import {
   canRunMission,
   missionPrimarySkill,
@@ -16,7 +17,7 @@ import {
   validateParty,
 } from '../../engine/missions';
 import { briefSite } from '../../engine/scavenge';
-import { crewMembers } from '../../engine/sim';
+import { workingCrew } from '../../engine/sim';
 import {
   SKILL_LABELS,
   type Character,
@@ -57,7 +58,7 @@ export function MissionPrepScreen() {
     );
   }
 
-  const crew = crewMembers(state);
+  const crew = workingCrew(state);
   const assessor = bestAssessor(crew);
   const missions = missionsHere(state);
   const sites = location.siteIds
@@ -102,11 +103,13 @@ export function MissionPrepScreen() {
     : selectedSite
       ? {
           min: 1,
-          max: Math.max(1, crew.length),
+          // Scavenging is still an away party and obeys the same ceiling as
+          // any other; it must not become a second party-size system.
+          max: Math.min(MISSIONS.groupMaxCapacity, Math.max(1, crew.length)),
           label:
             crew.length <= 1
               ? 'One person, because there is only one of you.'
-              : `Between 1 and ${crew.length} people.`,
+              : `Between 1 and ${Math.min(MISSIONS.groupMaxCapacity, crew.length)} people.`,
         }
       : null;
 

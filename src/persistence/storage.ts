@@ -289,10 +289,14 @@ function migrate(state: GameState): GameState {
   if (patched.onboardingStep === undefined) patched.onboardingStep = 99;
   if (!patched.pendingFarewells) patched.pendingFarewells = [];
 
-  // Saves from before devotion became placeable: their specs were dealt at
-  // generation, so they simply have nothing left to place.
-  for (const person of Object.values(patched.characters as Record<string, { specSlots?: number[] }>)) {
-    if (!person.specSlots) person.specSlots = [];
+  // Saves from before study existed carry an obsolete pool of unplaced marks
+  // and no study assignment. Their placed specialisations are already on the
+  // ladder, so dropping the pool is the whole migration.
+  for (const person of Object.values(
+    patched.characters as Record<string, { specSlots?: number[]; study?: unknown }>,
+  )) {
+    delete person.specSlots;
+    if (person.study === null) delete person.study;
   }
 
   // A place id that no longer exists would strand the player outside the ship.

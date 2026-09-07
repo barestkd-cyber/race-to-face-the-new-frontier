@@ -38,7 +38,7 @@ import {
   exitExpedition,
 } from './scavenge';
 import { crewMembers, daysOfFoodRemaining, pruneDeadCrew, shipboardCrew } from './sim';
-import { placeSpecialization, placeableSkills } from './progression';
+import { beginStudy, isStudying, studyOptions } from './study';
 import { estimateFuel } from './ship';
 import { beginTravel, estimateLeg, stepTravel } from './travel';
 import { runAutonomousShip } from './captain';
@@ -119,14 +119,15 @@ export function simulateRun(seed: string, options: SimulateOptions = {}): Simula
 
     pruneDeadCrew(state);
 
-    // The sim exercises devotion the way a deliberate player would: when a
-    // mark can land, put the strongest mark on the strongest eligible craft.
+    // The sim studies the way a deliberate player would: anyone idle picks up
+    // their strongest available craft, so campaign numbers reflect a crew that
+    // actually uses the study room rather than one that never opens it.
     for (const member of crewMembers(state)) {
-      if (member.specSlots.length === 0) continue;
-      const eligible = placeableSkills(member).sort(
-        (a, b) => (member.skills[b] ?? 0) - (member.skills[a] ?? 0),
-      )[0];
-      if (eligible) placeSpecialization(state, member, eligible, member.specSlots[0]!);
+      if (isStudying(member)) continue;
+      const best = studyOptions(member)
+        .filter((o) => o.available)
+        .sort((a, b) => (member.skills[b.skill] ?? 0) - (member.skills[a.skill] ?? 0))[0];
+      if (best) beginStudy(member, best.skill);
     }
 
     if (state.ending) break;

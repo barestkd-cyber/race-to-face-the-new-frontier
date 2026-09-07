@@ -8,6 +8,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { Btn, Chip, Empty, Meter, Panel, Row } from '../components';
+import { canAccessHold } from '../../engine/access';
 import { store, useGame } from '../useStore';
 import {
   backpackFree,
@@ -209,6 +210,8 @@ export function InventoryScreen() {
   const selected: Character | undefined = crew.find((c) => c.id === selectedId) ?? crew[0];
   const ship = state.ship;
   const holdUsable = Boolean(ship && !ship.destroyed);
+  // The hold is a room on a ship. Reaching into it means being at the ship.
+  const holdAccess = canAccessHold(state);
 
   const packUsed = selected ? slotsUsed(selected.backpack) : 0;
   const packFree = selected ? backpackFree(selected) : 0;
@@ -272,6 +275,11 @@ export function InventoryScreen() {
           title="Ship's hold"
           aside={holdUsable && ship ? `${ship.cargo.length} stacks` : 'None'}
         >
+          {holdUsable && !holdAccess.ok && (
+            <p className="tiny amber" style={{ marginTop: 0 }}>
+              {holdAccess.reason} You can see what is in it from here, but not reach it.
+            </p>
+          )}
           {!holdUsable || !ship ? (
             <Empty>You have no working hold. Everything has to be carried.</Empty>
           ) : ship.cargo.length === 0 ? (
@@ -283,7 +291,7 @@ export function InventoryScreen() {
                 const bulky = isBulky(stack.itemId);
                 const equippable = slotFor(stack.itemId) !== null;
                 const strippable = (def?.repairParts ?? 0) > 0;
-                const takeBlocked = !selected || bulky || packFree <= 0;
+                const takeBlocked = !selected || bulky || packFree <= 0 || !holdAccess.ok;
                 return (
                   <StackCard
                     key={stack.uid}
@@ -294,13 +302,15 @@ export function InventoryScreen() {
                           wide
                           disabled={takeBlocked}
                           title={
-                            !selected
-                              ? 'Nobody is selected.'
-                              : bulky
-                                ? 'Too bulky to backpack.'
-                                : packFree <= 0
-                                  ? 'That pack is full.'
-                                  : undefined
+                            !holdAccess.ok
+                              ? holdAccess.reason
+                              : !selected
+                                ? 'Nobody is selected.'
+                                : bulky
+                                  ? 'Too bulky to backpack.'
+                                  : packFree <= 0
+                                    ? 'That pack is full.'
+                                    : undefined
                           }
                           onClick={() => selected && store.takeFromHold(selected.id, stack.uid)}
                         >
@@ -310,7 +320,8 @@ export function InventoryScreen() {
                           <Btn
                             wide
                             tone="go"
-                            disabled={!selected}
+                            disabled={!selected || !holdAccess.ok}
+                            title={!holdAccess.ok ? holdAccess.reason : undefined}
                             onClick={() => selected && store.equipStack(selected.id, stack.uid)}
                           >
                             Equip
@@ -320,6 +331,8 @@ export function InventoryScreen() {
                           <Btn
                             wide
                             tone="danger"
+                            disabled={!holdAccess.ok}
+                            title={!holdAccess.ok ? holdAccess.reason : undefined}
                             onClick={() => store.strip(stack.uid)}
                             sub={`about ${Math.round((def?.repairParts ?? 0) * stack.qty)} parts`}
                           >
@@ -356,8 +369,14 @@ export function InventoryScreen() {
                       <>
                         <Btn
                           wide
-                          disabled={!holdUsable}
-                          title={holdUsable ? undefined : 'There is no hold to stow it in.'}
+                          disabled={!holdUsable || !holdAccess.ok}
+                          title={
+                            !holdUsable
+                              ? 'There is no hold to stow it in.'
+                              : !holdAccess.ok
+                                ? holdAccess.reason
+                                : undefined
+                          }
                           onClick={() => store.stowInHold(selected.id, stack.uid)}
                         >
                           Stow

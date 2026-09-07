@@ -21,6 +21,8 @@ import {
 } from '../../engine/types';
 import { Btn, Chip, Empty, Fold, KV, Meter, Panel, Row, StatLine } from '../components';
 import { Portrait } from '../Portrait';
+import { focuses } from '../../engine/study';
+import { SPEC } from '../../engine/tuning';
 import { store, useGame } from '../useStore';
 
 const OUTCOME_ORDER: CheckOutcome[] = [
@@ -264,10 +266,10 @@ export function RecruitCandidateScreen() {
         ))}
         <p className="tiny faint">
           Their five strongest skills. Everything else they have is weaker than these.
-          {candidate.character.specSlots.length > 0 &&
-            ` ${candidate.character.specSlots.length} devotion mark${
-              candidate.character.specSlots.length === 1 ? '' : 's'
-            } still unplaced — room to grow, under your direction.`}
+          {focuses(candidate.character).length < SPEC.maxFocuses &&
+            ` ${SPEC.maxFocuses - focuses(candidate.character).length} focus${
+              SPEC.maxFocuses - focuses(candidate.character).length === 1 ? '' : 'es'
+            } still open — room to grow, if you give them somewhere to study.`}
         </p>
       </Panel>
 
