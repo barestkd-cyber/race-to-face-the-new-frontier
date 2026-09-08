@@ -7,18 +7,16 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Btn, Chip, Empty, Meter, Panel, Row } from '../components';
+import { Btn, Chip, Empty, Panel, Row } from '../components';
 import { canAccessHold } from '../../engine/access';
 import { store, useGame } from '../useStore';
 import {
-  backpackFree,
   conditionLabel,
   describeAttack,
   equippedStack,
   getItem,
   isBulky,
   slotFor,
-  slotsUsed,
   stackWeight,
 } from '../../engine/inventory';
 import { crewMembers } from '../../engine/sim';
@@ -219,8 +217,7 @@ export function InventoryScreen() {
   // The hold is a room on a ship. Reaching into it means being at the ship.
   const holdAccess = canAccessHold(state);
 
-  const packUsed = selected ? slotsUsed(selected.backpack) : 0;
-  const packFree = selected ? backpackFree(selected) : 0;
+  const carrying = selected ? selected.gear.length : 0;
 
   return (
     <div className="stack">
@@ -244,7 +241,7 @@ export function InventoryScreen() {
         </Btn>
       )}
 
-      <Panel title="Whose pack" aside={selected ? `${packUsed}/${selected.backpackSlots}` : 'None'}>
+      <Panel title="Who is carrying what" aside={selected ? `${carrying} items` : 'None'}>
         {crew.length === 0 ? (
           <Empty>There is nobody aboard to carry anything.</Empty>
         ) : (
@@ -256,7 +253,7 @@ export function InventoryScreen() {
                     key={member.id}
                     tone={member.id === selected?.id ? 'primary' : 'ghost'}
                     onClick={() => setSelectedId(member.id)}
-                    sub={`${slotsUsed(member.backpack)}/${member.backpackSlots}`}
+                    sub={`${member.gear.length} carried`}
                   >
                     {member.name}
                   </Btn>
@@ -264,25 +261,11 @@ export function InventoryScreen() {
               </div>
             </div>
             {selected && (
-              <>
-                <div className="split" style={{ marginTop: 8 }}>
-                  <span className="label">Pack slots used</span>
-                  <span className="value readout">
-                    {packUsed} / {selected.backpackSlots}
-                  </span>
-                </div>
-                <div style={{ marginTop: 4 }}>
-                  <Meter
-                    value={packUsed}
-                    max={Math.max(1, selected.backpackSlots)}
-                    color={packFree === 0 ? 'var(--red)' : 'var(--green)'}
-                  />
-                </div>
-                <p className="tiny faint" style={{ marginTop: 4 }}>
-                  A stack takes one slot however many are in it. Bulky items cannot be
-                  packed at all.
-                </p>
-              </>
+              <p className="tiny faint" style={{ marginTop: 8 }}>
+                People carry their weapon, their sidearm, their armour and a tool.
+                Everything the crew lives on — food, medicine, parts, trade goods —
+                is shared, and it stays in the hold.
+              </p>
             )}
           </>
         )}
@@ -314,34 +297,14 @@ export function InventoryScreen() {
             <div className="stack stack--tight" style={{ maxHeight: 520, overflowY: 'auto' }}>
               {ship.cargo.map((stack) => {
                 const def = getItem(stack.itemId);
-                const bulky = isBulky(stack.itemId);
                 const equippable = slotFor(stack.itemId) !== null;
                 const strippable = (def?.repairParts ?? 0) > 0;
-                const takeBlocked = !selected || bulky || packFree <= 0 || !holdAccess.ok;
                 return (
                   <StackCard
                     key={stack.uid}
                     stack={stack}
                     actions={
                       <>
-                        <Btn
-                          wide
-                          disabled={takeBlocked}
-                          title={
-                            !holdAccess.ok
-                              ? holdAccess.reason
-                              : !selected
-                                ? 'Nobody is selected.'
-                                : bulky
-                                  ? 'Too bulky to backpack.'
-                                  : packFree <= 0
-                                    ? 'That pack is full.'
-                                    : undefined
-                          }
-                          onClick={() => selected && store.takeFromHold(selected.id, stack.uid)}
-                        >
-                          Take
-                        </Btn>
                         {equippable && (
                           <Btn
                             wide
@@ -374,18 +337,18 @@ export function InventoryScreen() {
           )}
         </Panel>
 
-        {/* -- The pack ---------------------------------------------------- */}
+        {/* -- What they carry --------------------------------------------- */}
         <Panel
-          title={selected ? `${selected.name}'s pack` : 'Pack'}
-          aside={selected ? `${packUsed}/${selected.backpackSlots}` : '—'}
+          title={selected ? `${selected.name} is carrying` : 'Carried'}
+          aside={selected ? `${carrying}` : '—'}
         >
           {!selected ? (
             <Empty>Select a crew member to see what they are carrying.</Empty>
-          ) : selected.backpack.length === 0 ? (
-            <Empty>The pack is empty.</Empty>
+          ) : selected.gear.length === 0 ? (
+            <Empty>They are carrying nothing of their own.</Empty>
           ) : (
             <div className="stack stack--tight" style={{ maxHeight: 520, overflowY: 'auto' }}>
-              {selected.backpack.map((stack) => {
+              {selected.gear.map((stack) => {
                 const equippable = slotFor(stack.itemId) !== null;
                 return (
                   <StackCard

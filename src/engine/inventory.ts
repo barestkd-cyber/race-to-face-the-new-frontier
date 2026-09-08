@@ -1,5 +1,5 @@
 /**
- * Item lookup, stacks, backpacks, and equipment.
+ * Item lookup, stacks, shared stores, and personal equipment.
  *
  * Core rule: a physical item should not enter meaningful inventory unless
  * possession interacts with at least one gameplay system.
@@ -151,42 +151,11 @@ export function isBulky(itemId: ItemId): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Backpacks
-// ---------------------------------------------------------------------------
-
-export function backpackFree(character: Character): number {
-  return Math.max(0, character.backpackSlots - slotsUsed(character.backpack));
-}
-
-export function canBackpack(character: Character, itemId: ItemId): boolean {
-  if (isBulky(itemId)) return false;
-  const def = getItem(itemId);
-  if (!def) return false;
-  if (def.stackable && character.backpack.some((s) => s.itemId === itemId)) return true;
-  return backpackFree(character) > 0;
-}
-
-/** Move a stack from ship cargo into a character's backpack. */
-export function moveToBackpack(ship: Ship, character: Character, uid: string): string | null {
-  const stack = findStack(ship.cargo, uid);
-  if (!stack) return 'That is not in the hold.';
-  if (isBulky(stack.itemId)) return `${itemName(stack.itemId)} is too bulky to backpack.`;
-  if (backpackFree(character) <= 0) return `${character.name}'s pack is full.`;
-  removeStackByUid(ship.cargo, uid);
-  character.backpack.push(stack);
-  return null;
-}
-
-export function moveToCargo(ship: Ship, character: Character, uid: string): string | null {
-  const stack = findStack(character.backpack, uid);
-  if (!stack) return 'That is not in the pack.';
-  removeStackByUid(character.backpack, uid);
-  ship.cargo.push(stack);
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Equipment
+//
+// Combat gear belongs to people. Ordinary survival stores — food, medicine,
+// parts, trade goods — belong to the crew and live in the ship's hold. There
+// is no personal backpack, and nobody carries a private pile of supplies.
 // ---------------------------------------------------------------------------
 
 export type EquipSlot = 'weapon' | 'sidearm' | 'armor' | 'tool';
@@ -207,7 +176,7 @@ export function slotFor(itemId: ItemId): EquipSlot | null {
   return null;
 }
 
-/** Look an equipped stack up wherever it lives — backpack or ship hold. */
+/** What is in this slot. Equipped gear is held on the person, not in the hold. */
 export function equippedStack(
   character: Character,
   slot: EquipSlot,
@@ -215,22 +184,50 @@ export function equippedStack(
 ): ItemStack | undefined {
   const uid = character.equipment[slot];
   if (!uid) return undefined;
-  return (
-    findStack(character.backpack, uid) ?? (ship ? findStack(ship.cargo, uid) : undefined)
-  );
+  return findStack(character.gear, uid) ?? (ship ? findStack(ship.cargo, uid) : undefined);
 }
 
+/**
+ * Take something out of the hold and put it on. The stack moves onto the
+ * person, so it is still theirs if the ship is lost. Whatever was in that slot
+ * goes back to the crew's stores.
+ */
 export function equip(character: Character, uid: string, ship: Ship | null): string | null {
-  const stack = findStack(character.backpack, uid) ?? (ship ? findStack(ship.cargo, uid) : undefined);
+  const stack =
+    findStack(character.gear, uid) ?? (ship ? findStack(ship.cargo, uid) : undefined);
   if (!stack) return 'That item is not available.';
   const slot = slotFor(stack.itemId);
   if (!slot) return `${itemName(stack.itemId)} cannot be equipped.`;
+
+  if (character.equipment[slot] && character.equipment[slot] !== uid) {
+    unequip(character, slot, ship);
+  }
+
+  if (ship && findStack(ship.cargo, uid)) {
+    removeStackByUid(ship.cargo, uid);
+    character.gear.push(stack);
+  }
   character.equipment[slot] = uid;
   return null;
 }
 
-export function unequip(character: Character, slot: EquipSlot): void {
+/** Put it back in the hold. With no ship to put it in, they keep holding it. */
+export function unequip(character: Character, slot: EquipSlot, ship?: Ship | null): void {
+  const uid = character.equipment[slot];
   delete character.equipment[slot];
+  if (!uid) return;
+  const stack = findStack(character.gear, uid);
+  if (!stack) return;
+  if (ship && !ship.destroyed) {
+    removeStackByUid(character.gear, uid);
+    ship.cargo.push(stack);
+  }
+}
+
+/** Everything this person is carrying that is not in a slot. Should be empty. */
+export function strayGear(character: Character): ItemStack[] {
+  const equipped = new Set(Object.values(character.equipment).filter(Boolean));
+  return character.gear.filter((s) => !equipped.has(s.uid));
 }
 
 /**
@@ -294,7 +291,7 @@ export function autoEquipParty(party: Character[], ship: Ship | null): void {
       let best: ItemStack | null = null;
       let bestScore = floor;
 
-      for (const stack of [...member.backpack, ...ship.cargo]) {
+      for (const stack of [...member.gear, ...ship.cargo]) {
         if (claimed.has(stack.uid)) continue;
         if (slotFor(stack.itemId) !== slot) continue;
         const score = rate(stack, member);
@@ -305,6 +302,11 @@ export function autoEquipParty(party: Character[], ship: Ship | null): void {
       }
 
       if (best) {
+        // The stack moves onto the person, out of the shared hold.
+        if (findStack(ship.cargo, best.uid)) {
+          removeStackByUid(ship.cargo, best.uid);
+          member.gear.push(best);
+        }
         member.equipment[slot] = best.uid;
         claimed.add(best.uid);
       }
@@ -367,8 +369,8 @@ export function availableAttacks(character: Character, ship: Ship | null): Attac
     for (const attack of def.attacks) attacks.push(attack);
   }
 
-  // Thrown one-use weapons still in the pack are available without equipping.
-  for (const stack of character.backpack) {
+  // Thrown one-use weapons the crew is carrying are available unequipped.
+  for (const stack of character.gear) {
     const def = getItem(stack.itemId);
     if (!def?.attacks) continue;
     if (!def.properties?.includes('Thrown')) continue;
@@ -425,7 +427,10 @@ export interface AmmoSource {
   label: string;
 }
 
-/** Consume ammo for an attack from the character's pack, then the ship's hold. */
+/**
+ * Spend ammunition. Rounds are a crew store, not a private pile: they come off
+ * whatever the person is carrying first, then out of the ship's hold.
+ */
 export function consumeAmmo(
   attack: AttackProfile,
   character: Character,
@@ -434,8 +439,8 @@ export function consumeAmmo(
   if (!attack.ammoId) return true;
   const need = attack.ammoPerShot ?? 1;
 
-  if (countItem(character.backpack, attack.ammoId) >= need) {
-    removeItem(character.backpack, attack.ammoId, need);
+  if (countItem(character.gear, attack.ammoId) >= need) {
+    removeItem(character.gear, attack.ammoId, need);
     return true;
   }
   if (ship && countItem(ship.cargo, attack.ammoId) >= need) {
@@ -449,7 +454,7 @@ export function hasAmmo(attack: AttackProfile, character: Character, ship: Ship 
   if (!attack.ammoId) return true;
   const need = attack.ammoPerShot ?? 1;
   return (
-    countItem(character.backpack, attack.ammoId) >= need ||
+    countItem(character.gear, attack.ammoId) >= need ||
     (ship ? countItem(ship.cargo, attack.ammoId) >= need : false)
   );
 }

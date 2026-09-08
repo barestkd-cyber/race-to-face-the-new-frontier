@@ -344,6 +344,25 @@ export interface Wound {
 // Characters
 // ---------------------------------------------------------------------------
 
+/**
+ * Authored exceptions in a life. Each one is read by the content it belongs
+ * to and nowhere else — no hook creates a universal stat, and none of them is
+ * a substitute for the character's actual Skills and Attributes.
+ */
+export type CharacterHookId =
+  | 'earthMap'
+  | 'mercenaryKit'
+  | 'unhoused'
+  | 'valuablePossession'
+  | 'childhoodFriend'
+  | 'almostDrowned'
+  | 'prosthetic'
+  | 'fearOfGhosts'
+  | 'chess'
+  | 'famousSinger'
+  | 'prejudicedSurgeon'
+  | 'aceEasterEgg';
+
 export type CharacterRole =
   | 'captain'
   | 'navigator'
@@ -355,12 +374,48 @@ export type CharacterRole =
   | 'technician'
   | 'crew';
 
+/**
+ * Where a pair stands with each other. Derived from `value`, never stored, so
+ * there is one number to move and one ladder to read it on. Ordinary crew
+ * start at Peer: normal respect, functional cooperation, no particular warmth.
+ */
+export type RelationshipStanding = 'disregarded' | 'acquaintance' | 'peer' | 'friend';
+
+export const RELATIONSHIP_STANDINGS: RelationshipStanding[] = [
+  'disregarded',
+  'acquaintance',
+  'peer',
+  'friend',
+];
+
+export const STANDING_LABELS: Record<RelationshipStanding, string> = {
+  disregarded: 'Disregarded',
+  acquaintance: 'Acquaintance',
+  peer: 'Peer',
+  friend: 'Friend',
+};
+
+/**
+ * A bond that is not simply a degree of closeness. Overlays standing rather
+ * than replacing it: two people can be Mentor and Student and also Friends,
+ * and family can sit at any standing on the ladder including a bad one.
+ */
+export type RelationshipRole = 'family' | 'mentor' | 'student' | 'romantic';
+
+export const ROLE_LABELS: Record<RelationshipRole, string> = {
+  family: 'Family',
+  mentor: 'Mentor',
+  student: 'Student',
+  romantic: 'Partner',
+};
+
 export interface Relationship {
-  /** -100 hostile .. 0 neutral .. +100 devoted */
+  /** -100 hostile .. 0 neutral .. +100 devoted. Standing reads off this. */
   value: number;
   /** How well they know each other, 0..100; gates trait discovery. */
   familiarity: number;
-  kind: 'family' | 'friend' | 'crew' | 'rival' | 'stranger' | 'partner';
+  /** Overlays, not standings. Usually empty. */
+  roles: RelationshipRole[];
 }
 
 /** One influential event, as it was rolled onto a character. */
@@ -418,7 +473,11 @@ export interface Character {
   lifeHistory: LifeHistory;
   relationships: Record<CharacterId, Relationship>;
 
-  /** Equipment slots referencing inventory item instance ids. */
+  /**
+   * The four slots, referencing stacks in `gear`. Combat gear belongs to
+   * people; ordinary survival stores belong to the crew and live in the
+   * ship's hold. There is no personal backpack.
+   */
   equipment: {
     weapon?: string;
     sidearm?: string;
@@ -426,9 +485,20 @@ export interface Character {
     tool?: string;
   };
 
-  /** Backpack capacity in slots, 3..15. */
-  backpackSlots: number;
-  backpack: ItemStack[];
+  /**
+   * The items actually in those slots, and nothing else — no food, no
+   * medicine, no salvage. Held on the person so that losing the ship does not
+   * leave the survivors unarmed.
+   */
+  gear: ItemStack[];
+
+  /**
+   * Authored life-history hooks this person carries. Flags, not stats — each
+   * one is read by the specific content it belongs to.
+   */
+  hooks?: CharacterHookId[];
+  /** Who this person's prejudice is aimed at, when they carry one. */
+  prejudiceTarget?: string;
 
   /** True for the protagonist. */
   isPlayer: boolean;
@@ -660,17 +730,17 @@ export interface ItemStack {
 // Ships
 // ---------------------------------------------------------------------------
 
-export type ShipQuality = 'makeshift' | 'basic' | 'solid' | 'premium' | 'luxury';
+/**
+ * Trim is ship-wide and permanent. It is the hull's capability ceiling and it
+ * does exactly two things: it sets Quarters capacity, and it caps what the
+ * rooms and core systems can do. There is no Quality Potential, no per-room
+ * quality, and no way to upgrade it.
+ */
+export type ShipTrim = 'makeshift' | 'basic' | 'solid' | 'premium' | 'luxury';
 
-export const SHIP_QUALITIES: ShipQuality[] = [
-  'makeshift',
-  'basic',
-  'solid',
-  'premium',
-  'luxury',
-];
+export const SHIP_TRIMS: ShipTrim[] = ['makeshift', 'basic', 'solid', 'premium', 'luxury'];
 
-export const SHIP_QUALITY_LABELS: Record<ShipQuality, string> = {
+export const SHIP_TRIM_LABELS: Record<ShipTrim, string> = {
   makeshift: 'Makeshift',
   basic: 'Basic',
   solid: 'Solid',
@@ -678,9 +748,22 @@ export const SHIP_QUALITY_LABELS: Record<ShipQuality, string> = {
   luxury: 'Luxury',
 };
 
-export type ShipSize = 'compact' | 'small' | 'medium' | 'large' | 'massive' | 'capital';
+/**
+ * Class is permanent too. A Small never becomes a Medium. All a hull can do is
+ * fill the rooms it was built with space for.
+ */
+export type ShipClass = 'compact' | 'small' | 'medium' | 'large' | 'massive' | 'capital';
 
-export const SHIP_SIZE_LABELS: Record<ShipSize, string> = {
+export const SHIP_CLASSES: ShipClass[] = [
+  'compact',
+  'small',
+  'medium',
+  'large',
+  'massive',
+  'capital',
+];
+
+export const SHIP_CLASS_LABELS: Record<ShipClass, string> = {
   compact: 'Compact',
   small: 'Small',
   medium: 'Medium',
@@ -710,13 +793,14 @@ export type RoomKind =
   | 'therapy'
   | 'hangar';
 
+/**
+ * A room is a functional space, nothing more. It inherits the ship's Trim, it
+ * has no quality of its own, and it has no Condition — reliability lives on
+ * the core systems a room depends on, not on the walls.
+ */
 export interface ShipRoom {
   id: string;
   kind: RoomKind;
-  quality: ShipQuality;
-  qualityPotential: ShipQuality;
-  /** 0..100, separate from quality. */
-  condition: number;
 }
 
 export type ShipSystemKind = 'engines' | 'power' | 'lifeSupport' | 'hull' | 'sensors' | 'shields';
@@ -730,28 +814,73 @@ export const SHIP_SYSTEM_KINDS: ShipSystemKind[] = [
   'shields',
 ];
 
+/**
+ * Core systems carry Condition, and Condition means reliability — how likely
+ * this system is to fail when it is actually leaned on. It is never multiplied
+ * against Trim. Capability is Trim; reliability is Condition.
+ */
 export interface ShipSystem {
   kind: ShipSystemKind;
-  quality: ShipQuality;
   condition: number;
   /** Some systems can be absent entirely (shields on a junker). */
   installed: boolean;
+  /**
+   * Set when Condition has actually cost this system a capability. Named out
+   * loud rather than hidden in arithmetic. Distinct from the Condition band
+   * called "Degraded": a band is a description, a fault is a consequence.
+   */
+  faulted?: boolean;
+}
+
+/**
+ * A permanent oddity belonging to this hull. Authored exceptions, generated
+ * once and carried for the life of the ship. None of them is a subsystem.
+ */
+export type ShipQuirkId =
+  | 'alignmentPull'
+  | 'hyperbaricChamber'
+  | 'hiddenCompartment'
+  | 'engineStall'
+  | 'stealthTint'
+  | 'overdrive'
+  | 'lemon'
+  | 'scooter';
+
+export interface ShipQuirk {
+  id: ShipQuirkId;
+  /** Hidden compartments exist from the day the hull was built, unfound. */
+  revealed: boolean;
 }
 
 export interface Ship {
   id: string;
+  /** The vessel name. Personal to this hull. */
   name: string;
-  size: ShipSize;
-  quality: ShipQuality;
+  /** Who built it. Recognisable on its own. */
+  manufacturer: string;
+  /** The product family. Also recognisable on its own. */
+  model: string;
+  /** Permanent. Sets the room range and nothing else can change it. */
+  shipClass: ShipClass;
+  /** Permanent, ship-wide capability ceiling. */
+  trim: ShipTrim;
   rooms: ShipRoom[];
+  /**
+   * The most rooms this hull will ever hold. Permanent, always inside the
+   * Class range, and never below the rooms currently fitted.
+   */
+  maxRooms: number;
   systems: Record<ShipSystemKind, ShipSystem>;
   /** Installed weapon equipment ids. */
   weapons: ItemStack[];
-  /** Ship-stored cargo, separate from personal backpacks. */
+  /** Ship-stored cargo — the crew's shared stores live here. */
   cargo: ItemStack[];
-  /** Derived, but cached for display. */
+  /** Derived from Quarters and Trim, cached for display. */
   quartersCapacity: number;
-  lifeSupportCapacity: number;
+  /** Permanent oddities belonging to this hull. */
+  quirks: ShipQuirk[];
+  /** What people say about this particular hull, when anyone recognises it. */
+  history?: string;
   /** Cosmetic hull silhouette variant index. */
   hullVariant: number;
   destroyed: boolean;
@@ -857,7 +986,27 @@ export interface LocationState {
   populationTier: number;
   /** Recruitment venues available here. */
   recruitVenues: RecruitVenue[];
+  /**
+   * Worlds get one primary biome and zero to three environmental modifiers.
+   * Stations and the like get neither. Ids into the planet library.
+   */
+  biome?: string;
+  modifiers?: string[];
+  /** An authored special world layered on top of the ordinary generation. */
+  specialWorld?: SpecialWorldId;
 }
+
+/**
+ * Authored worlds. Each one is a hand-written exception on top of the ordinary
+ * biome-and-modifier roll, not a new generator.
+ */
+export type SpecialWorldId =
+  | 'ghostPlanet'
+  | 'gravityLockdown'
+  | 'underwaterCity'
+  | 'dirtValuing'
+  | 'obelisk'
+  | 'goldenDiamond';
 
 export type RecruitVenue =
   | 'workerCamp'
@@ -1023,6 +1172,11 @@ export interface EventEffect {
   flag?: { key: string; value: number | string | boolean };
   /** Recruit a generated character into the crew. */
   recruit?: boolean;
+  /**
+   * Turn one of the hull's hidden features into a known one. It was always
+   * there; the event only finds it.
+   */
+  revealQuirk?: ShipQuirkId;
   /** Lose the named crew member (chosen by the engine). */
   loseCrew?: boolean;
   /** XP awards. */
@@ -1096,6 +1250,11 @@ export interface GameEventDef {
     once?: boolean;
     flag?: string;
     notFlag?: string;
+    /**
+     * Only fire on a hull that actually has this oddity. `revealed: false`
+     * asks for one nobody has found yet.
+     */
+    shipQuirk?: { id: ShipQuirkId; revealed?: boolean };
   };
   choices: EventChoice[];
   /** Tags used by the generator to avoid repeating similar beats. */
@@ -1527,6 +1686,36 @@ export interface PendingRest {
   startedAtHours: number;
 }
 
+/**
+ * The galaxy the seed decided on, generated lazily. V1 plays out inside the
+ * Meridian system, so almost all of this is a promise rather than a place you
+ * can fly to yet. Earth is the exception worth naming: it exists in every
+ * seed, its position varies, and neither civilisation knows the other is out
+ * there unless one particular life event has already told the captain.
+ */
+export interface GalaxyState {
+  /** Total star systems the seed decided the playable galaxy holds. */
+  systemCount: number;
+  earth: EarthState;
+}
+
+export interface EarthState {
+  /** Stable system id. The system's own detail generates when it is reached. */
+  systemId: string;
+  /** Distance from the Meridian system, in light years. */
+  distanceLy: number;
+  /** Rough direction, for a star map that does not exist yet. */
+  bearing: number;
+  /** True only when something has told the captain where Earth is. */
+  known: boolean;
+  /**
+   * The ship waiting in the grandfather's garage, generated once the captain
+   * turns out to have inherited the map. Medium or Large, Premium or Luxury —
+   * everything else about it is rolled.
+   */
+  garageShip?: Ship;
+}
+
 export interface GameState {
   /** Save schema version. */
   version: number;
@@ -1571,6 +1760,9 @@ export interface GameState {
   routeIds: LocationId[];
   currentLocationId: LocationId | null;
   travel: TravelState | null;
+
+  /** The wider galaxy this run was seeded with. Earth is always in it. */
+  galaxy: GalaxyState;
 
   /** Every walkable place across every location, keyed by id. */
   places: Record<PlaceId, Place>;

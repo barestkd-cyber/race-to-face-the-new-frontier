@@ -13,7 +13,8 @@ import { autoEquipParty } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
 import { advanceTime, clampMorale, crewMembers } from './sim';
-import { safeCrewCapacity } from './ship';
+import { crewCapacity } from './ship';
+import { ensurePair } from './relationships';
 import { MORALE, RECRUIT } from './tuning';
 import type {
   Assessment,
@@ -503,7 +504,7 @@ export function offerBerth(state: GameState, candidate: RecruitCandidate, rng: R
     return { joined: false, lines: ['They already told you no.'] };
   }
 
-  const capacity = state.ship ? safeCrewCapacity(state.ship) : 0;
+  const capacity = state.ship ? crewCapacity(state.ship) : 0;
   const crew = crewMembers(state);
   if (crew.length >= capacity) {
     lines.push(
@@ -535,8 +536,8 @@ export function offerBerth(state: GameState, candidate: RecruitCandidate, rng: R
 
   // Everyone aboard now knows of each other, faintly.
   for (const member of crew) {
-    member.relationships[character.id] = { value: 0, familiarity: 5, kind: 'crew' };
-    character.relationships[member.id] = { value: 0, familiarity: 5, kind: 'crew' };
+    // Peer, both directions. Everything after this has to be earned.
+    ensurePair(member, character, 5);
   }
 
   // A new hand gets kitted out from the hold rather than walking around empty.
@@ -558,11 +559,11 @@ export function offerBerth(state: GameState, candidate: RecruitCandidate, rng: R
     dependent.aboard = true;
     dependent.role = 'crew';
 
-    dependent.relationships[character.id] = { value: 70, familiarity: 95, kind: 'family' };
-    character.relationships[dependent.id] = { value: 70, familiarity: 95, kind: 'family' };
+    ensurePair(dependent, character, 95, ['family']);
+    dependent.relationships[character.id]!.value = 70;
+    character.relationships[dependent.id]!.value = 70;
     for (const member of crew) {
-      member.relationships[dependent.id] = { value: 0, familiarity: 3, kind: 'crew' };
-      dependent.relationships[member.id] = { value: 0, familiarity: 3, kind: 'crew' };
+      ensurePair(member, dependent, 3);
     }
 
     state.characters[dependent.id] = dependent;

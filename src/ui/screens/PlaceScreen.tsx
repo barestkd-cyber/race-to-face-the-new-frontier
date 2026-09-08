@@ -15,7 +15,7 @@ import {
   relationshipLabel,
   shiftEndLabel,
 } from '../../engine/actions';
-import { safeCrewCapacity } from '../../engine/ship';
+import { crewCapacity } from '../../engine/ship';
 import { formatDuration } from '../../engine/log';
 import { childPlaces, currentPlace, PLACE_KIND_LABELS } from '../../engine/places';
 import { missionsHere } from '../../engine/missions';
@@ -171,7 +171,7 @@ export function PlaceScreen() {
 
               // The offer is a decision, so its costs and its odds sit right
               // on it: a berth, a mouth, and how likely they are to say yes.
-              const capacity = state.ship && !state.ship.destroyed ? safeCrewCapacity(state.ship) : 0;
+              const capacity = state.ship && !state.ship.destroyed ? crewCapacity(state.ship) : 0;
               const aboardAfter = crew.length + 1;
               const likelihood =
                 (rel?.value ?? 0) >= 40

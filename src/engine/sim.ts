@@ -8,7 +8,7 @@
 
 import { bestAt } from './check';
 import type { Rng } from './rng';
-import { hasRoom, overcrowding, quartersQuality, roomsOfKind } from './ship';
+import { hasRoom, overcrowding, quartersTrim, roomsOfKind, trimCeiling } from './ship';
 import { COMMAND, FOOD, MIN_WORKING_AGE, MORALE, REST, STRESS } from './tuning';
 import { tickStudy } from './study';
 import { autoDevelop } from './development';
@@ -17,7 +17,7 @@ import { TAGS_CREW_DEATH, TAGS_REST } from './tags';
 import { isFlyable } from './ship';
 import { tickWounds } from './wounds';
 import { advanceHomeworldClock } from './world';
-import type { Character, GameState, ShipQuality } from './types';
+import type { Character, GameState } from './types';
 
 // ---------------------------------------------------------------------------
 // Crew queries
@@ -105,8 +105,9 @@ export function foodConsumptionPerDay(state: GameState): number {
 /** Hydroponics slowly offsets consumption. */
 export function foodProductionPerDay(state: GameState): number {
   if (!state.ship || state.ship.destroyed) return 0;
-  const bays = roomsOfKind(state.ship, 'hydroponics').filter((r) => r.condition > 20);
-  return bays.reduce((sum, r) => sum + 0.25 * (r.condition / 100), 0);
+  const bays = roomsOfKind(state.ship, 'hydroponics');
+  const ceiling = trimCeiling(state.ship.trim) / 100;
+  return bays.length * 0.25 * ceiling;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +195,7 @@ export function advanceTime(
   const fed = state.resources.food > 0 || crew.every((c) => c.hungerDays <= FOOD.hungerGraceDays);
 
   // --- Rest and stress ---------------------------------------------------
-  const quarters = quartersQuality(state.ship);
+  const quarters = quartersTrim(state.ship);
   const facilityRecovery = computeFacilityRecovery(state);
 
   for (const member of crew) {
@@ -236,7 +237,7 @@ export function advanceTime(
         hours,
         fed,
         resting,
-        quartersQuality: quarters as ShipQuality | undefined,
+        quartersTrim: quarters,
       },
       rng,
     );
@@ -310,8 +311,7 @@ function computeFacilityRecovery(state: GameState): number {
   if (!state.ship || state.ship.destroyed) return 0;
   let total = 0;
   for (const [kind, rate] of Object.entries(STRESS.facilityRecoveryPerHour)) {
-    const rooms = roomsOfKind(state.ship, kind as never).filter((r) => r.condition > 25);
-    if (rooms.length > 0) total += rate;
+    if (hasRoom(state.ship, kind as never)) total += rate;
   }
   return total;
 }

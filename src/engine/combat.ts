@@ -28,6 +28,7 @@ import {
 } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
+import { checkReliability } from './reliability';
 import { applyStress, crewMembers, activeParty, isDependent, pruneDeadCrew } from './sim';
 import { reactTo } from './personality';
 import { tagsForCombat } from './tags';
@@ -150,8 +151,7 @@ function makeHostileCharacter(
     lifeHistory: { origin: '', upbringing: '', career: '', formativeEvent: '', notes: [] },
     relationships: {},
     equipment: {},
-    backpackSlots: 0,
-    backpack: [],
+    gear: [],
     isPlayer: false,
     aboard: false,
   };
@@ -230,6 +230,12 @@ export function startCombat(
     (c) => c.alive && !isIncapacitated(c) && !isDependent(c),
   );
   if (party.length === 0) return null;
+
+  // Fighting is a stress point. What the ship does about that is decided at
+  // the top of the fight rather than trickled through every exchange.
+  for (const line of checkReliability(state, 'combat', rng).lines) {
+    pushLog(state, 'warning', line);
+  }
 
   const combatants: Combatant[] = [];
   const hostiles: Record<CharacterId, Character> = {};
@@ -1009,7 +1015,7 @@ export function endCombat(
       if (character?.alive && isActive(state, combatant)) continue;
       credits += combatant.creditDrop ?? 0;
       for (const drop of combatant.drops ?? []) {
-        const target = container ?? activeParty(state)[0]?.backpack;
+        const target = container ?? activeParty(state)[0]?.gear;
         if (target) addItem(target, drop.itemId, drop.qty, rng.int(25, 80), rng);
       }
     }

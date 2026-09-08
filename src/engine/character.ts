@@ -6,17 +6,17 @@
  * and exposure bands, then hidden traits. There is no Attribute Potential.
  */
 
-import { LIFE_PATHS, NAME_TABLES } from '../content/lifepaths';
+import { LIFE_PATHS } from '../content/lifepaths';
 import { EARTH_FEMALE_GIVEN, EARTH_MALE_GIVEN, EARTH_SURNAMES } from '../content/names';
 import type { CareerEntry, LifePathEntry } from '../content/contentTypes';
 import { skillCap } from './check';
 import { rollCaptainAge, rollLifeStory } from './lifeStory';
 import { rollPersonality } from './personality';
 import type { Rng } from './rng';
+import { rollCaptainHooks, rollCrewHooks } from './hooks';
 import {
   ATTRIBUTE_GEN,
   HEALTH,
-  INVENTORY,
   MIN_WORKING_AGE,
   POTENTIAL_CAP,
   SKILLS_TUNING,
@@ -38,6 +38,7 @@ import {
   type LifeHistory,
   type PotentialGrade,
   type RecruitVenue,
+  type RelationshipRole,
   type SkillKey,
   type SkillMap,
   type SkillPotentialMap,
@@ -370,13 +371,6 @@ export function deriveMaxHealth(attributes: Attributes): number {
   );
 }
 
-export function rollBackpackSlots(rng: Rng): number {
-  const band = rng.weighted(
-    INVENTORY.slotWeights.map((b) => ({ value: b, weight: b.weight })),
-  );
-  return rng.int(band.min, band.max);
-}
-
 // ---------------------------------------------------------------------------
 // Life history
 // ---------------------------------------------------------------------------
@@ -538,8 +532,7 @@ export function createCharacter(options: CreateCharacterOptions): Character {
       : {}),
     relationships: {},
     equipment: {},
-    backpackSlots: rollBackpackSlots(rng),
-    backpack: [],
+    gear: [],
     isPlayer: options.isPlayer ?? false,
     aboard: options.aboard ?? true,
   };
@@ -565,6 +558,14 @@ export function createCharacter(options: CreateCharacterOptions): Character {
     known: 0 as const,
     evidence: 0,
   }));
+
+  // Authored hooks last of all. The prosthetic caps Agility permanently, and
+  // it has to land on the number this person actually ended up with.
+  if (options.isPlayer) {
+    rollCaptainHooks(character, rng, story?.profession.id);
+  } else {
+    rollCrewHooks(character, rng, story?.profession.id);
+  }
 
   return character;
 }
@@ -739,15 +740,19 @@ export function generateFamily(rng: Rng, protagonist: Character): Character[] {
             : [10, 60];
 
     const closeness = rng.int(closeBand[0], closeBand[1]);
+    // Family is a role, never a standing. Being someone's brother says who
+    // you are to them, not how the two of you actually get on.
+    const roles: RelationshipRole[] =
+      candidate.relation === 'partner' ? ['family', 'romantic'] : ['family'];
     member.relationships[protagonist.id] = {
       value: closeness,
       familiarity: rng.int(60, 100),
-      kind: candidate.relation === 'partner' ? 'partner' : 'family',
+      roles: [...roles],
     };
     protagonist.relationships[member.id] = {
       value: closeness,
       familiarity: rng.int(60, 100),
-      kind: candidate.relation === 'partner' ? 'partner' : 'family',
+      roles: [...roles],
     };
 
     // Family are known people — their traits start partly visible.
@@ -809,10 +814,6 @@ export function isAre(_character: Character): string {
 /** How a character's sex reads on a sheet. */
 export function sexLabel(character: Character): string {
   return character.sex === 'female' ? 'Female' : 'Male';
-}
-
-export function generateShipName(rng: Rng): string {
-  return `${rng.pick(NAME_TABLES.shipPrefixes)} ${rng.pick(NAME_TABLES.shipNouns)}`;
 }
 
 // ---------------------------------------------------------------------------

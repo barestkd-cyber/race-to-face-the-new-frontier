@@ -13,8 +13,8 @@ import type {
   CheckOutcome,
   ExposureBand,
   PotentialGrade,
-  ShipQuality,
-  ShipSize,
+  ShipClass,
+  ShipTrim,
   WoundSeverity,
 } from './types';
 
@@ -462,7 +462,7 @@ export const MEDICINE = {
     solid: 9,
     premium: 14,
     luxury: 20,
-  } as Record<ShipQuality, number>,
+  } as Record<ShipTrim, number>,
   /** Surgery is required at and above this severity. */
   surgeryRequiredFrom: 'critical' as WoundSeverity,
   /** Natural health regeneration per hour when rested and fed. */
@@ -474,7 +474,7 @@ export const MEDICINE = {
     solid: 1,
     premium: 1.2,
     luxury: 1.4,
-  } as Record<ShipQuality, number>,
+  } as Record<ShipTrim, number>,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -529,15 +529,28 @@ export const COMBAT = {
 // ---------------------------------------------------------------------------
 
 export const SHIPS = {
+  /** Beds per fitted Quarters, by Trim. Multiple Quarters add together. */
   quartersCapacity: {
     makeshift: 1,
     basic: 2,
     solid: 3,
     premium: 4,
     luxury: 5,
-  } as Record<ShipQuality, number>,
+  } as Record<ShipTrim, number>,
 
-  /** Functional room counts per size class. */
+  /**
+   * Operational ceiling by Trim. This is what a room or system can do at its
+   * best — never multiplied against Condition, which is reliability.
+   */
+  trimCeiling: {
+    makeshift: 60,
+    basic: 70,
+    solid: 80,
+    premium: 90,
+    luxury: 100,
+  } as Record<ShipTrim, number>,
+
+  /** Permanent room range per Class. maxRooms is rolled inside this. */
   roomCounts: {
     compact: [3, 3],
     small: [4, 5],
@@ -545,39 +558,63 @@ export const SHIPS = {
     large: [9, 12],
     massive: [13, 20],
     capital: [21, 40],
-  } as Record<ShipSize, [number, number]>,
+  } as Record<ShipClass, [number, number]>,
 
   mandatoryRooms: ['cockpit', 'quarters', 'engineBay'] as const,
 
-  /** Life support capacity by system quality. */
-  lifeSupportCapacity: {
-    makeshift: 2,
-    basic: 3,
-    solid: 5,
-    premium: 7,
-    luxury: 9,
-  } as Record<ShipQuality, number>,
-
-  /** Overcrowding penalties applied per crew member above safe capacity. */
+  /** Overcrowding penalties applied per crew member above Quarters capacity. */
   overcrowdMoralePerHead: 4,
   overcrowdStressPerDayPerHead: 1.5,
 
-  /** Starting ship size split. */
-  startingSizeWeights: { compact: 45, small: 55 },
+  /** Starting ship Class split. */
+  startingClassWeights: { compact: 45, small: 55 },
 
-  /** Starting quality distribution per size. */
-  startingQualityWeights: {
+  /** Starting Trim distribution per Class. */
+  startingTrimWeights: {
     compact: { makeshift: 8, basic: 22, solid: 38, premium: 24, luxury: 8 },
     small: { makeshift: 18, basic: 32, solid: 35, premium: 12, luxury: 3 },
-  } as Record<'compact' | 'small', Record<ShipQuality, number>>,
+  } as Record<'compact' | 'small', Record<ShipTrim, number>>,
 
   /** Small ships get 1-2 flex rooms beyond the mandatory three. */
   smallFlexRooms: [1, 2] as [number, number],
 
-  /** Condition roll ranges — quality is coherent, condition can be chaotic. */
+  /** Core-system Condition roll range at generation. */
   startingConditionRange: [28, 96] as [number, number],
 
-  /** Base fuel capacity by size. Sized so a full tank clears the final leg. */
+  /**
+   * Condition bands. Reliability language, shared by every screen so no two
+   * of them can describe the same hull differently.
+   */
+  conditionBands: [
+    { min: 80, id: 'reliable', label: 'Reliable' },
+    { min: 60, id: 'worn', label: 'Worn' },
+    { min: 40, id: 'degraded', label: 'Degraded' },
+    { min: 20, id: 'critical', label: 'Critical' },
+    { min: 1, id: 'barely', label: 'Barely Operational' },
+    { min: 0, id: 'inoperable', label: 'Inoperable' },
+  ] as const,
+
+  /**
+   * V1 PROVISIONAL. Chance a system actually fails when it is meaningfully
+   * stressed — a launch, a hard burn, combat, a demanding procedure. Nothing
+   * rolls outside those moments; there are no nuisance failures.
+   */
+  reliability: {
+    /** Condition at or above this never rolls at all. */
+    safeAbove: 80,
+    /** Failure chance at Condition 0, falling linearly to zero at safeAbove. */
+    maxFailureChance: 0.22,
+    /** A lemon hull multiplies that chance. */
+    lemonMultiplier: 2.2,
+    /**
+     * Below this Condition the system carries an explicit fault — a named
+     * capability it has actually lost. Set at the bottom of the Degraded band
+     * so a fault means Critical or worse, not merely worn.
+     */
+    faultedBelow: 40,
+  },
+
+  /** Base fuel capacity by Class. Sized so a full tank clears the final leg. */
   fuelCapacity: {
     compact: 120,
     small: 180,
@@ -585,7 +622,7 @@ export const SHIPS = {
     large: 520,
     massive: 950,
     capital: 1900,
-  } as Record<ShipSize, number>,
+  } as Record<ShipClass, number>,
 
   /** Mass factor feeding fuel burn. */
   massFactor: {
@@ -595,19 +632,59 @@ export const SHIPS = {
     large: 2.4,
     massive: 4,
     capital: 7,
-  } as Record<ShipSize, number>,
+  } as Record<ShipClass, number>,
 
-  /** Engine quality efficiency multiplier (lower burns less). */
+  /** Engine efficiency by Trim (lower burns less). */
   engineEfficiency: {
     makeshift: 1.35,
     basic: 1.15,
     solid: 1,
     premium: 0.87,
     luxury: 0.74,
-  } as Record<ShipQuality, number>,
+  } as Record<ShipTrim, number>,
 
-  /** Hangar can carry a compact mission vessel only at this size and above. */
-  hangarMissionVesselMinSize: 'large' as ShipSize,
+  /** Hangar can carry a compact mission vessel only at this Class and above. */
+  hangarMissionVesselMinClass: 'large' as ShipClass,
+
+  /**
+   * Repair throughput. Without an Engineering Bay exactly one person works a
+   * major repair. With one, several can, and the rate follows the count while
+   * the quality follows their average — three people at 90/80/70 work at the
+   * capability of 80, roughly three times as fast as the 90 alone.
+   */
+  repairWorkers: {
+    withoutEngineeringBay: 1,
+    withEngineeringBay: 4,
+    /** Each extra worker adds this much of a full share to the rate. */
+    additionalWorkerRate: 1,
+  },
+
+  /**
+   * V1 PROVISIONAL rarities for authored hull quirks. Each is rolled once at
+   * generation and carried for the life of the ship.
+   */
+  quirkChance: {
+    /** A slight permanent pull. Cannot ever be fully repaired. */
+    alignmentPull: 0.07,
+    /** Only a few were ever made, and only an old Makeshift hull has one. */
+    hyperbaricChamber: 0.012,
+    /** Built in, unfound. An event reveals it later. */
+    hiddenCompartment: 0.14,
+    /** Illegal sensor-dark treatment. Good for hiding, bad for being seen. */
+    stealthTint: 0.04,
+    /** Very fast, and it opens the hull up over time. */
+    overdrive: 0.03,
+    /** This particular hull is simply a lemon. */
+    lemon: 0.035,
+    /** Somebody left a scooter aboard, if there is anywhere to put it. */
+    scooter: 0.05,
+  },
+
+  /** The alignment pull's actual cost. */
+  alignmentPull: {
+    fuelPenalty: 0.01,
+    pilotingPenalty: -2,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -807,18 +884,13 @@ export const XP = {
 // Inventory
 // ---------------------------------------------------------------------------
 
+/**
+ * There is no personal backpack and no slot allowance. People carry their
+ * weapon, sidearm, armour and tool; everything the crew lives on is shared and
+ * lives in the ship's hold. What is left here is about the items themselves.
+ */
 export const INVENTORY = {
-  minSlots: 3,
-  maxSlots: 15,
-  /** Backpack slot distribution from the spec. */
-  slotWeights: [
-    { min: 3, max: 5, weight: 15 },
-    { min: 6, max: 8, weight: 33 },
-    { min: 9, max: 11, weight: 39 },
-    { min: 12, max: 14, weight: 10 },
-    { min: 15, max: 15, weight: 3 },
-  ],
-  /** Above this weight an item cannot be backpacked. */
+  /** Above this weight an item has to be hauled rather than carried. */
   bulkyWeight: 12,
   /** Default stack ceiling for stackable items. */
   maxStack: 99,
@@ -1266,6 +1338,154 @@ export const ONBOARDING = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Pairwise relationships
+// ---------------------------------------------------------------------------
+
+export const RELATIONSHIPS = {
+  /** Every ordinary non-family pairing begins here: Peer. */
+  startingValue: 0,
+
+  /**
+   * V1 PROVISIONAL ladder edges on the -100..100 axis. Peer is deliberately
+   * wide: most working relationships are neither warm nor cold, and moving off
+   * Peer should take something actually happening.
+   */
+  friendAt: 30,
+  acquaintanceAt: -12,
+  disregardedAt: -40,
+
+  /** What a standing is worth when somebody is deciding whether to stay. */
+  friendAttachment: 10,
+  disregardAttachment: 6,
+  familyAttachment: 18,
+  romanticAttachment: 22,
+  mentorAttachment: 8,
+
+  /** How hard a death lands, by what the mourner thought of them. */
+  grief: {
+    close: 1,
+    friend: 0.75,
+    peer: 0.4,
+    acquaintance: 0.22,
+    disregarded: 0.1,
+    stranger: 0.15,
+  },
+
+  /** Mentorship forms on its own, between the right two people. */
+  mentorSkillGap: 30,
+  mentorMinSkill: 55,
+  mentorMinFamiliarity: 45,
+
+  /** How far one meaningful event moves a pairing. */
+  shift: {
+    rescued: 14,
+    abandoned: -22,
+    sentIntoDanger: -6,
+    choseThemOverMe: -8,
+    backedMePublicly: 10,
+    workedTogether: 2,
+    sharedGrief: 6,
+    sharedVictory: 5,
+    betrayed: -30,
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// The galaxy beyond the Meridian system
+// ---------------------------------------------------------------------------
+
+export const GALAXY = {
+  /** V1 PROVISIONAL. The seed decides how big the playable galaxy is. */
+  systemCount: [30, 250] as [number, number],
+  /** How far Earth can land from the Meridian system, in light years. */
+  earthDistanceLy: [40, 900] as [number, number],
+} as const;
+
+// ---------------------------------------------------------------------------
+// Authored character hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * V1 PROVISIONAL rarities. Design locked none of these, so every number here
+ * is a first guess chosen to make the hook feel like an event rather than a
+ * feature. A captain rolls against this table once, at generation, and takes
+ * at most one hook from it.
+ */
+export const HOOKS = {
+  /**
+   * The grandfather who reached Earth. Rare enough that most players will
+   * hear about it before they see it.
+   */
+  earthMap: 0.012,
+  /** Grew up unhoused. Reads a rough settlement the way locals do. */
+  unhoused: 0.05,
+  /** Something expensive, kept for reasons that are not financial. */
+  valuablePossession: 0.07,
+  /** A best friend from childhood, out there somewhere. */
+  childhoodFriend: 0.09,
+  /** Went under once and did not come up on their own. */
+  almostDrowned: 0.05,
+  /** Lost a leg. Agility is capped lower for the rest of their life. */
+  prosthetic: 0.035,
+  /** Afraid of ghosts, and not embarrassed enough about it to hide it. */
+  fearOfGhosts: 0.05,
+  /** Plays chess. Mostly nothing, occasionally everything. */
+  chess: 0.06,
+  /** Was famous for singing, once. People still recognise the face. */
+  famousSinger: 0.02,
+  /** Ultra-rare Easter egg: an implausibly good pilot with a silly name. */
+  aceEasterEgg: 0.0008,
+
+  /** Agility ceiling for someone with a prosthetic leg. */
+  prostheticAgilityCap: 12,
+  /** Piloting floor for the Easter-egg captain. */
+  aceMinimumPiloting: 92,
+
+  /**
+   * Recruited crew can carry a hook too, but far more rarely — this is the
+   * chance that any given generated stranger has one at all.
+   */
+  crewHookChance: 0.14,
+  /**
+   * The dark one. A surgeon who is extremely good and will not hurry for
+   * someone they have decided against. Never a hard refusal, never applied to
+   * a character the player controls.
+   */
+  prejudicedSurgeon: 0.03,
+  prejudicedSurgeonMinSkill: 55,
+  /** How much less willing they are, as a check modifier on autonomous care. */
+  prejudiceWillingnessPenalty: -18,
+
+  /**
+   * What an authored fear costs, at zero Will. Scaled down by Composure and
+   * Resilience, so a steady person carries it and a fragile one does not.
+   */
+  fearStress: 14,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Authored special worlds
+// ---------------------------------------------------------------------------
+
+export const SPECIAL_WORLDS = {
+  /**
+   * V1 PROVISIONAL. Design discussed a rough 15-50% band for the Ghost Planet
+   * and explicitly did not want it vanishingly rare. 30% is the middle of that
+   * band: common enough that players will compare notes about it, rare enough
+   * that finding one still means something.
+   */
+  ghostPlanetChance: 0.3,
+  /** The others are rarer, and only one special world attaches to a body. */
+  gravityLockdownChance: 0.1,
+  underwaterCityChance: 0.12,
+  dirtValuingChance: 0.08,
+  obeliskChance: 0.07,
+  goldenDiamondChance: 0.04,
+  /** How many nearby systems an obelisk puts on the map. */
+  obeliskRevealCount: 5,
+} as const;
+
+// ---------------------------------------------------------------------------
 // Local travel — moving around inside a location, on foot
 // ---------------------------------------------------------------------------
 
@@ -1283,7 +1503,7 @@ export const LOCAL = {
 // ---------------------------------------------------------------------------
 
 export const SAVE = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   dbName: 'rtftnf-v1',
   storeName: 'saves',
   autosaveSlot: 'autosave',
@@ -1325,6 +1545,10 @@ export const TUNING = {
   RECRUIT,
   SCAVENGE,
   MISSIONS,
+  RELATIONSHIPS,
+  GALAXY,
+  HOOKS,
+  SPECIAL_WORLDS,
   AUTONOMY,
   ASSESSMENT,
   SAVE,

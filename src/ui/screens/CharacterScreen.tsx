@@ -16,9 +16,10 @@ import {
   conditionLabel as itemConditionLabel,
   equippedStack,
   getItem,
-  slotsUsed,
   type EquipSlot,
 } from '../../engine/inventory';
+import { standingLabel } from '../../engine/relationships';
+import { hookLines } from '../../engine/hooks';
 import { quoteAttributeUpgrade, quoteSkillUpgrade, skillCapLabel, spendableXp } from '../../engine/progression';
 import { developmentOptions, hasDevelopmentToSpend, recentSkills } from '../../engine/development';
 import { focuses, isStudying, studyOptions, studyVenue } from '../../engine/study';
@@ -31,6 +32,7 @@ import {
 } from '../../engine/lifeStory';
 import { conditionLabel, SEVERITY_LABELS } from '../../engine/wounds';
 import {
+  ROLE_LABELS,
   ATTRIBUTE_KEYS,
   ATTRIBUTE_LABELS,
   BODY_REGION_LABELS,
@@ -130,7 +132,7 @@ export function CharacterScreen() {
 
   const isCaptain = state.captainId === character.id;
   const untreated = character.wounds.filter((w) => !w.treated).length;
-  const packUsed = slotsUsed(character.backpack);
+  const carried = character.gear.length;
 
   const relationships = Object.entries(character.relationships)
     .map(([id, rel]) => ({ id, rel, other: state.characters[id] }))
@@ -670,8 +672,13 @@ export function CharacterScreen() {
                     <span className="row__title">
                       {other.name} {other.surname}
                     </span>
-                    <Chip>{titleCase(rel.kind)}</Chip>
+                    <Chip>{standingLabel(rel.value)}</Chip>
                   </div>
+                  {rel.roles.length > 0 && (
+                    <div className="tiny faint" style={{ marginTop: 2 }}>
+                      {rel.roles.map((role) => ROLE_LABELS[role]).join(' · ')}
+                    </div>
+                  )}
                   <div className="split" style={{ marginTop: 4 }}>
                     <span className="tiny faint">Hostile</span>
                     <span className="tiny faint">Devoted</span>
@@ -727,6 +734,12 @@ export function CharacterScreen() {
             ))}
           </>
         )}
+        {/* The authored exceptions, where this life has one. */}
+        {hookLines(character).map((line, index) => (
+          <p key={`hook_${index}`} className="prose" style={{ marginTop: 6 }}>
+            {line}
+          </p>
+        ))}
       </Fold>
 
       {/* -- Equipment ----------------------------------------------------- */}
@@ -770,29 +783,17 @@ export function CharacterScreen() {
         </div>
       </Fold>
 
-      {/* -- Backpack ------------------------------------------------------ */}
-      <Fold title={`Backpack (${packUsed}/${character.backpackSlots})`}>
-        <div className="split">
-          <span className="label">Slots used</span>
-          <span className="value readout">
-            {packUsed} / {character.backpackSlots}
-          </span>
-        </div>
-        <div style={{ marginTop: 4 }}>
-          <Meter
-            value={packUsed}
-            max={Math.max(1, character.backpackSlots)}
-            color={packUsed >= character.backpackSlots ? 'var(--red)' : 'var(--green)'}
-          />
-        </div>
-        <p className="tiny faint" style={{ marginTop: 4 }}>
-          Bulky gear cannot go in a pack at all; it stays in the hold.
+      {/* -- Carried ------------------------------------------------------- */}
+      <Fold title={`Carried (${carried})`}>
+        <p className="tiny faint">
+          Combat gear belongs to people. Food, medicine, parts and everything else
+          the crew lives on is shared, and it is in the hold.
         </p>
-        {character.backpack.length === 0 ? (
-          <Empty>The pack is empty.</Empty>
+        {character.gear.length === 0 ? (
+          <Empty>They are carrying nothing of their own.</Empty>
         ) : (
           <div className="rows" style={{ marginTop: 8 }}>
-            {character.backpack.map((stack) => {
+            {character.gear.map((stack) => {
               const def = getItem(stack.itemId);
               return (
                 <Row

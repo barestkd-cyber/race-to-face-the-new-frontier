@@ -39,8 +39,14 @@ src/
     access.ts     What you may physically do from where you stand
     situation.ts  What matters right now, said in sentences
     lifeStory.ts  The captain's generated life: age, trade, two events
+    hooks.ts      Authored exceptions in a life, and what each one costs
     personality.ts  The one personality system: roll, reactions, visibility
     tags.ts       Semantic tags — how the world tells personality what happened
+    relationships.ts  Pairwise standing, roles, and what moves them
+    ship.ts       Permanent Class and Trim, rooms, systems, quirks, naming
+    reliability.ts  What a worn system does at a stress point
+    planet.ts     Biome, modifiers, and the authored special worlds
+    galaxy.ts     The wider galaxy, and where Earth is this seed
     command.ts    Captain, crew lead, who holds the ship, and succession
     advice.ts     Who is best at a job, and what is wrong with them
     development.ts  One development decision instead of twenty +1 taps
@@ -53,7 +59,10 @@ src/
     simulate.ts   Headless campaign driver / playtest harness
     engine.test.ts
   content/     Pure data. No logic.
-    events/       195 authored events across nine scopes
+    events/       206 authored events across nine scopes
+    planets.ts    100 biomes and 300 environmental modifiers
+    shipNames.ts  150 vessel names, 50x50 compounds, builders and models
+    characterHooks.ts  The authored exceptions a life can carry
     items.ts      93 items
     names.ts      3,600 names, split by sex, plus alien pools
     professions.ts  250 working lives, for the captain
@@ -150,6 +159,41 @@ screen calls:
 - `treatmentFacility(state)` — the room the treatment actually happens in,
   whether that is a med bay aboard or the clinic you are standing in.
 - `recommend(pool, skill)` — who is best at this, and what is wrong with them.
+- `crewCapacity(ship)` — berths, from Quarters and Trim. There is no second,
+  quieter number underneath it.
+- `standingOf(value)` — where a pair sits on the ladder, derived from the one
+  number rather than stored beside it.
+
+One word, one meaning: the Condition band called *Degraded* (40–59) describes
+wear, and a **fault** names a capability a system has actually lost. A system
+can sit in the Degraded band having lost nothing. Faults are printed in full on
+the Ship screen rather than hidden in arithmetic.
+
+## The ship model
+
+Two facts about a hull are permanent and cannot be bought around.
+
+**Class** is how many rooms it will ever hold — Compact 3, Small 4–5, Medium
+6–8, Large 9–12, Massive 13–20, Capital 21–40. Each hull stores `maxRooms`
+inside that range. Fitting rooms fills a hull; it never buys a bigger one, and
+a Small never becomes a Medium.
+
+**Trim** is what those rooms and systems can do at their best — Makeshift 60%
+through Luxury 100% — and it does exactly two jobs: it sets Quarters capacity
+(1 to 5 berths per Quarters) and it caps room and system capability. There is
+no Quality Potential, no per-room quality, and no upgrade path.
+
+**Condition** is a third thing entirely. It belongs to core systems, it means
+*reliability*, and it is never multiplied against Trim. A worn system does not
+quietly shave a percentage off a check — it fails sometimes, out loud, at a
+moment when it was being leaned on: a launch, a hard burn, a fight, a demanding
+procedure. `reliability.ts` is the only thing that rolls it, and it is only
+called at those moments.
+
+A hull can also carry authored quirks — a permanent pull to one side, a hidden
+compartment that was built in and has not been found, a drive model notorious
+for stalling, an illegal darkening treatment. They are exceptions with direct
+effects, not a modification system.
 
 ## Two axes that are easy to confuse
 

@@ -147,9 +147,11 @@ export function App() {
             active={screen === 'character'}
             onClick={() => store.focusCharacter(state.playerId)}
           />
+          {/* There is no pack. This is the crew's shared hold, and who is
+              wearing what out of it. */}
           <NavButton
-            label="Pack"
-            icon="🎒"
+            label="Hold"
+            icon="📦"
             active={screen === 'inventory'}
             onClick={() => store.setScreen('inventory')}
           />

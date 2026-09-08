@@ -16,6 +16,7 @@ import {
   type Character,
   type CheckOutcome,
   type DamageType,
+  type ShipTrim,
   type Wound,
   type WoundSeverity,
 } from './types';
@@ -307,7 +308,8 @@ export interface WoundTickContext {
   fed: boolean;
   /** Whether the character is resting. */
   resting: boolean;
-  quartersQuality?: 'makeshift' | 'basic' | 'solid' | 'premium' | 'luxury';
+  /** The Trim of the ship they are recovering aboard, if any. */
+  quartersTrim?: ShipTrim;
 }
 
 export function tickWounds(
@@ -324,7 +326,7 @@ export function tickWounds(
     wound.ageHours += ctx.hours;
 
     const careMultiplier =
-      (ctx.quartersQuality ? MEDICINE.quartersRegenMultiplier[ctx.quartersQuality] : 1) *
+      (ctx.quartersTrim ? MEDICINE.quartersRegenMultiplier[ctx.quartersTrim] : 1) *
       (ctx.resting ? 1.6 : 1) *
       (ctx.fed ? 1 : 0.4);
 
@@ -419,7 +421,7 @@ export function tickWounds(
   const hasUntreated = character.wounds.some((w) => !w.treated);
   if (!bleeding && ctx.fed && character.health < character.maxHealth) {
     const multiplier =
-      (ctx.quartersQuality ? MEDICINE.quartersRegenMultiplier[ctx.quartersQuality] : 1) *
+      (ctx.quartersTrim ? MEDICINE.quartersRegenMultiplier[ctx.quartersTrim] : 1) *
       (ctx.resting ? 1.8 : 1) *
       (hasUntreated ? 0.45 : 1);
     character.health = Math.min(

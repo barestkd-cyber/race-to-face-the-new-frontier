@@ -12,11 +12,14 @@ import {
   generateProtagonistDraft,
   type ProtagonistDraft,
 } from './character';
+import { generateGalaxy, generateGarageShip } from './galaxy';
+import { hasHook } from './hooks';
 import { addItem, autoEquipParty, getItem } from './inventory';
 import { pushLog } from './log';
 import { generateSeed, normalizeSeed, streamRng, type Rng } from './rng';
 import { ensurePlaces, placeKnownCharacters } from './places';
-import { generateShip, recomputeShipCapacities } from './ship';
+import { generateShip, recomputeShipCapacities, shipRef, takenShipNames } from './ship';
+import { ensurePair } from './relationships';
 import { pruneDeadCrew } from './sim';
 import { MORALE, ONBOARDING, SAVE, SHIPS, START, PERSONALITY } from './tuning';
 import { startingCreditsDelta } from './lifeStory';
@@ -85,6 +88,33 @@ function stockShip(state: GameState, rng: Rng): void {
   }
 }
 
+/**
+ * What an authored life leaves you holding on day one.
+ *
+ * Two hooks put physical objects aboard, and only two. The mercenary's kit is
+ * the whole point of that hook — the memorable advantage of that work is the
+ * gear, not a skill number, and it is deliberately conventional: plate and
+ * ballistics, nothing that came out of a military energy-weapons programme.
+ */
+function stockHookKit(state: GameState, captain: Character, rng: Rng): void {
+  if (!state.ship) return;
+  const cargo = state.ship.cargo;
+
+  if (hasHook(captain, 'mercenaryKit')) {
+    addItem(cargo, 'plate_carrier', 1, rng.int(70, 95), rng);
+    addItem(cargo, 'helmet_combat', 1, rng.int(65, 95), rng);
+    addItem(cargo, rng.pick(['rifle_service', 'shotgun_breaching', 'carbine_worn']), 1, rng.int(62, 92), rng);
+    addItem(cargo, 'pistol_service', 1, rng.int(60, 90), rng);
+    addItem(cargo, 'combat_knife', 1, rng.int(70, 100), rng);
+  }
+
+  // Worth more than they will admit, and not for sale for reasons that are
+  // not about money.
+  if (hasHook(captain, 'valuablePossession')) {
+    addItem(cargo, 'heirloom_watch', 1, rng.int(80, 100), rng);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Committing the run
 // ---------------------------------------------------------------------------
@@ -96,9 +126,20 @@ function stockShip(state: GameState, rng: Rng): void {
 export function createGame(seed: string, protagonist: Character): GameState {
   const world = generateWorld(seed);
 
+  // The wider galaxy the seed decided on. Earth is in it, wherever it is, and
+  // nobody here knows that unless the captain's own history says otherwise.
+  const galaxy = generateGalaxy(seed);
+
   const shipRng = streamRng(seed, 'ship');
   const ship = generateShip(shipRng);
   recomputeShipCapacities(ship);
+
+  // The one life event that skips the discovery problem: a grandfather who
+  // went, came back with the route, and left a garage on the other end.
+  if (hasHook(protagonist, 'earthMap')) {
+    galaxy.earth.known = true;
+    galaxy.earth.garageShip = generateGarageShip(seed, takenShipNames([ship]));
+  }
 
   const crewRng = streamRng(seed, 'crew');
   const characters: Record<string, Character> = {};
@@ -125,15 +166,12 @@ export function createGame(seed: string, protagonist: Character): GameState {
     crewIds.push(member.id);
   }
 
-  // Everyone aboard has at least met.
+  // Everyone aboard has at least met. They are Peers: normal respect, no
+  // particular warmth, and nothing yet that either of them owes the other.
   for (const a of crewIds) {
     for (const b of crewIds) {
       if (a === b) continue;
-      characters[a]!.relationships[b] = {
-        value: crewRng.int(-5, 25),
-        familiarity: crewRng.int(15, 55),
-        kind: 'crew',
-      };
+      ensurePair(characters[a]!, characters[b]!, crewRng.int(15, 55));
     }
   }
 
@@ -148,7 +186,7 @@ export function createGame(seed: string, protagonist: Character): GameState {
   }
 
   const resourceRng = streamRng(seed, 'resources');
-  const resources = rollResources(resourceRng, SHIPS.fuelCapacity[ship.size]);
+  const resources = rollResources(resourceRng, SHIPS.fuelCapacity[ship.shipClass]);
 
   // A history that involved money leaves some of it behind, in either
   // direction. Only a handful of the five hundred events touch this, and the
@@ -182,6 +220,8 @@ export function createGame(seed: string, protagonist: Character): GameState {
 
     ship,
     resources,
+
+    galaxy,
 
     locations: world.locations,
     routeIds: world.routeIds,
@@ -231,6 +271,24 @@ export function createGame(seed: string, protagonist: Character): GameState {
   placeKnownCharacters(state, streamRng(seed, 'family', 'places'));
 
   stockShip(state, streamRng(seed, 'kit'));
+  stockHookKit(state, protagonist, streamRng(seed, 'kit', 'hooks'));
+
+  // A best friend from before any of this, out in the wider galaxy somewhere.
+  // They are a real generated person from the day the run starts, not a line
+  // of text invented later when an event needs one.
+  if (hasHook(protagonist, 'childhoodFriend')) {
+    const friendRng = streamRng(seed, 'friend');
+    const friend = createCharacter({ rng: friendRng, aboard: false });
+    friend.aboard = false;
+    friend.placeKnown = false;
+    friend.availability = 'unreachable';
+    friend.departedReason = undefined;
+    state.characters[friend.id] = friend;
+    ensurePair(protagonist, friend, 90);
+    protagonist.relationships[friend.id]!.value = 55;
+    friend.relationships[protagonist.id]!.value = 55;
+    state.flags.childhood_friend_id = friend.id;
+  }
 
   // Nobody walks off an inherited ship empty-handed when there is gear aboard.
   autoEquipParty(
@@ -238,11 +296,19 @@ export function createGame(seed: string, protagonist: Character): GameState {
     ship,
   );
 
+  if (galaxy.earth.known) {
+    pushLog(
+      state,
+      'milestone',
+      "Your grandfather's route is real, and you are the only person on this world who has it.",
+    );
+  }
+
   pushLog(state, 'milestone', `Run ${seed} begins on the Homeworld.`);
   pushLog(
     state,
     'system',
-    `You inherit the ${ship.name}. ${describeInheritance(state)}`,
+    `You inherit ${shipRef(ship)}. ${describeInheritance(state)}`,
   );
   pushLog(
     state,

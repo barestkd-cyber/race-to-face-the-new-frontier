@@ -11,7 +11,7 @@ import { performCheck, selectParticipants, type CheckContext, type Participation
 import { addItem } from './inventory';
 import { pushLog } from './log';
 import type { Rng } from './rng';
-import { damageSystem } from './ship';
+import { damageSystem, hasQuirk, QUIRK_TEXT, revealQuirk, shipRef } from './ship';
 import {
   activeParty,
   advanceTime,
@@ -24,6 +24,7 @@ import { reactTo, relationshipDelta } from './personality';
 import { tagsForChoice } from './tags';
 import { EVENTS, MORALE, SHIPS } from './tuning';
 import { applyRawWound } from './wounds';
+import { SHIP_TRIMS } from './types';
 import type {
   ActiveEvent,
   Character,
@@ -50,6 +51,9 @@ export function buildTokens(state: GameState, actor?: Character): Record<string,
     location: location?.name ?? 'open space',
     captain: captain ? captain.name : 'the captain',
     ship: state.ship && !state.ship.destroyed ? state.ship.name : 'the ship',
+    // Event prose says "{theShip} is carrying" where a sentence needs an
+    // article; {ship} stays the bare name for "aboard {ship}".
+    theShip: shipRef(state.ship),
     actor: actor ? actor.name : crew[0]?.name ?? 'someone',
     crew: crew.length > 1 ? 'the crew' : 'you',
   };
@@ -104,6 +108,16 @@ function meetsConditions(
   if (cond.flag && !state.flags[cond.flag]) return false;
   if (cond.notFlag && state.flags[cond.notFlag]) return false;
 
+  // Some events only make sense on a hull that actually has the thing. A ship
+  // with no hidden compartment can never be the ship where one turns up.
+  if (cond.shipQuirk) {
+    const quirk = state.ship?.quirks.find((q) => q.id === cond.shipQuirk!.id);
+    if (!quirk) return false;
+    if (cond.shipQuirk.revealed !== undefined && quirk.revealed !== cond.shipQuirk.revealed) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -137,7 +151,29 @@ export function selectEvent(
   }
 
   if (pool.length === 0) return null;
-  return rng.weighted(pool.map((e) => ({ value: e, weight: Math.max(1, e.weight) })));
+  return rng.weighted(
+    pool.map((e) => ({ value: e, weight: Math.max(1, e.weight * appetiteFor(state, e)) })),
+  );
+}
+
+/**
+ * How attractive this particular ship makes a particular kind of trouble.
+ *
+ * A visibly valuable hull is worth the fuel to somebody, and a hull that looks
+ * like nothing is not. This nudges the odds; it never makes a good ship a
+ * punishment, and it touches nothing except who comes looking.
+ */
+function appetiteFor(state: GameState, event: GameEventDef): number {
+  const ship = state.ship;
+  if (!ship || ship.destroyed) return 1;
+  const predatory = event.scope.includes('hostile') || (event.tags ?? []).includes('pirates');
+  if (!predatory) return 1;
+
+  // Trim is what a passing crew can actually see from a distance.
+  const shine = SHIP_TRIMS.indexOf(ship.trim) - 2; // -2 makeshift .. +2 luxury
+  // The illegal darkening treatment is exactly what it is for.
+  const dark = hasQuirk(ship, 'stealthTint') ? -1.5 : 0;
+  return Math.max(0.6, Math.min(1.6, 1 + (shine + dark) * 0.15));
 }
 
 /** Scopes appropriate to where the player currently is. */
@@ -284,7 +320,7 @@ export function applyEffects(
   // sold, carried, or handed over like anything else.
   if (effects.dataCores && effects.dataCores > 0) {
     const container = state.ship && !state.ship.destroyed ? state.ship.cargo : null;
-    const target = container ?? activeParty(state)[0]?.backpack;
+    const target = container ?? activeParty(state)[0]?.gear;
     if (target) {
       addItem(target, 'data_core', effects.dataCores, 100, rng);
       lines.push(
@@ -324,7 +360,7 @@ export function applyEffects(
 
   if (effects.items) {
     for (const entry of effects.items) {
-      const target = state.ship && !state.ship.destroyed ? state.ship.cargo : (actor ?? crewMembers(state)[0])?.backpack;
+      const target = state.ship && !state.ship.destroyed ? state.ship.cargo : (actor ?? crewMembers(state)[0])?.gear;
       if (!target) continue;
       addItem(target, entry.itemId, entry.qty, entry.condition ?? 100, rng);
       lines.push(`+${entry.qty} ${entry.itemId.replace(/_/g, ' ')}`);
@@ -339,6 +375,13 @@ export function applyEffects(
       lines.push(...result.lines);
       if (result.killed) deaths.push(victim);
     }
+  }
+
+  // A hidden feature was built into the hull. Finding it changes what you
+  // know, never what is there.
+  if (effects.revealQuirk && revealQuirk(state.ship, effects.revealQuirk)) {
+    lines.push(QUIRK_TEXT[effects.revealQuirk]);
+    pushLog(state, 'system', `Something about ${state.ship?.name} that was not on the plans.`);
   }
 
   if (effects.recruit) {
@@ -395,7 +438,7 @@ export function applyEffects(
 
   // Keep the ship's fuel tank honest after any capacity change.
   if (state.ship && !state.ship.destroyed) {
-    state.resources.fuelCapacity = SHIPS.fuelCapacity[state.ship.size];
+    state.resources.fuelCapacity = SHIPS.fuelCapacity[state.ship.shipClass];
     state.resources.fuel = Math.min(state.resources.fuel, state.resources.fuelCapacity);
   }
 

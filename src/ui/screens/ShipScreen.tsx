@@ -20,20 +20,23 @@ import {
 import { fuelValue } from '../../engine/inventory';
 import { formatDuration } from '../../engine/log';
 import {
+  crewCapacity,
+  degradedNotes,
   describeShip,
   estimateFuel,
   flightReadiness,
+  QUIRK_TEXT,
   ROOM_DESCRIPTIONS,
   ROOM_LABELS,
-  safeCrewCapacity,
   shipConditionLabel,
   SYSTEM_DESCRIPTIONS,
   SYSTEM_LABELS,
+  trimCeiling,
 } from '../../engine/ship';
 import { crewMembers } from '../../engine/sim';
 import {
-  SHIP_QUALITY_LABELS,
-  SHIP_SIZE_LABELS,
+  SHIP_CLASS_LABELS,
+  SHIP_TRIM_LABELS,
   SHIP_SYSTEM_KINDS,
 } from '../../engine/types';
 
@@ -58,7 +61,7 @@ export function ShipScreen() {
   }
 
   const crew = crewMembers(state);
-  const capacity = safeCrewCapacity(ship);
+  const capacity = crewCapacity(ship);
   // The one verdict the cockpit prints and Set Course obeys.
   const flight = flightReadiness(ship);
   const overBy = Math.max(0, crew.length - capacity);
@@ -89,7 +92,9 @@ export function ShipScreen() {
       <Panel title="Can She Fly?" aside={flight.canFly ? 'Flyable' : 'Grounded'}>
         <div className="split">
           <span className="value">{ship.name}</span>
-          <Chip tone={ship.destroyed ? 'red' : 'cyan'}>{SHIP_SIZE_LABELS[ship.size]}</Chip>
+          <Chip tone={ship.destroyed ? 'red' : 'cyan'}>
+            {SHIP_CLASS_LABELS[ship.shipClass]}
+          </Chip>
         </div>
         <p
           className={
@@ -120,19 +125,31 @@ export function ShipScreen() {
             Work on the {SYSTEM_LABELS[flight.worst.kind].toLowerCase()}
           </Btn>
         )}
+        {/* Faults are named out loud, never hidden in arithmetic. */}
+        {degradedNotes(ship).map((note) => (
+          <p key={note} className="tiny amber" style={{ marginTop: 6, marginBottom: 0 }}>
+            {note}
+          </p>
+        ))}
         <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
-          {describeShip(ship)} · {SHIP_QUALITY_LABELS[ship.quality]} build
+          {describeShip(ship)} · {SHIP_TRIM_LABELS[ship.trim]} trim · {ship.manufacturer}{' '}
+          {ship.model}
         </p>
       </Panel>
 
-      {/* -- Capacities ---------------------------------------------------- */}
+      {/* -- Capacity ------------------------------------------------------ */}
       <Fold title={`Capacity — ${crew.length} of ${capacity} aboard`}>
         <KV
           items={[
-            ['Quarters', <span className="readout">{ship.quartersCapacity}</span>],
-            ['Life support', <span className="readout">{ship.lifeSupportCapacity}</span>],
             [
-              'Safe crew',
+              'Quarters fitted',
+              <span className="readout">
+                {ship.rooms.filter((r) => r.kind === 'quarters').length}
+              </span>,
+            ],
+            ['Trim', <span className="readout">{SHIP_TRIM_LABELS[ship.trim]}</span>],
+            [
+              'Capacity',
               <span className={overBy > 0 ? 'red readout' : 'readout'}>{capacity}</span>,
             ],
             [
@@ -150,8 +167,8 @@ export function ShipScreen() {
         </div>
         <p className="prose prose--dim" style={{ marginTop: 8 }}>
           {overBy > 0
-            ? `You are ${overBy} over what the ship can hold safely. That runs as constant stress on the crew and a steady drag on morale until you fix the quarters, fix life support, or reduce the roster.`
-            : 'Safe crew is the lower of quarters and life support. Better rooms or a better life support system raise it.'}
+            ? `You are ${overBy} over what the ship has berths for. That runs as constant stress on the crew and a steady drag on morale until you fit more Quarters or reduce the roster.`
+            : 'Capacity is Quarters times Trim, and nothing else. Fitting another Quarters is the only way to raise it, and only while the hull has room left.'}
         </p>
       </Fold>
 
@@ -227,8 +244,9 @@ export function ShipScreen() {
                 title={SYSTEM_LABELS[kind]}
                 sub={
                   <span>
-                    {SHIP_QUALITY_LABELS[system.quality]} ·{' '}
-                    {shipConditionLabel(system.condition)} — {SYSTEM_DESCRIPTIONS[kind]}
+                    {shipConditionLabel(system.condition)}
+                    {system.faulted && <span className="amber"> · faulted</span>} —{' '}
+                    {SYSTEM_DESCRIPTIONS[kind]}
                   </span>
                 }
                 danger={system.condition < 20}
@@ -245,42 +263,50 @@ export function ShipScreen() {
       </Fold>
 
       {/* -- Rooms --------------------------------------------------------- */}
-      <Fold title={`Rooms (${ship.rooms.length})`}>
+      <Fold title={`Rooms (${ship.rooms.length} of ${ship.maxRooms})`}>
+        <p className="tiny faint" style={{ marginTop: 0 }}>
+          Rooms are spaces, not machines. They inherit the ship's Trim, they have no
+          condition of their own, and a {SHIP_CLASS_LABELS[ship.shipClass]} hull will
+          never hold more than {ship.maxRooms}.
+        </p>
         <div className="rows">
           {ship.rooms.map((room) => (
             <Row
               key={room.id}
               title={ROOM_LABELS[room.kind]}
-              sub={
-                <span>
-                  {SHIP_QUALITY_LABELS[room.quality]}
-                  {room.qualityPotential !== room.quality && (
-                    <span className="cyan">
-                      {' '}
-                      (up to {SHIP_QUALITY_LABELS[room.qualityPotential]})
-                    </span>
-                  )}{' '}
-                  · {shipConditionLabel(room.condition)} — {ROOM_DESCRIPTIONS[room.kind]}
-                </span>
-              }
-              danger={room.condition < 20}
+              sub={<span>{ROOM_DESCRIPTIONS[room.kind]}</span>}
               right={
-                <span style={{ display: 'inline-block', width: 64 }}>
-                  <Meter value={room.condition} max={100} />
-                  <span className="tiny readout">{Math.round(room.condition)}%</span>
-                </span>
+                <span className="tiny readout">{trimCeiling(ship.trim)}%</span>
               }
             />
           ))}
         </div>
+        {ship.rooms.length < ship.maxRooms && (
+          <p className="tiny cyan" style={{ marginTop: 6, marginBottom: 0 }}>
+            Space for {ship.maxRooms - ship.rooms.length} more.
+          </p>
+        )}
       </Fold>
+
+      {/* -- What is odd about this particular hull ------------------------ */}
+      {ship.quirks.some((q) => q.revealed) && (
+        <Fold title="This hull">
+          <div className="rows">
+            {ship.quirks
+              .filter((q) => q.revealed)
+              .map((quirk) => (
+                <Row key={quirk.id} title={QUIRK_TEXT[quirk.id]} />
+              ))}
+          </div>
+        </Fold>
+      )}
 
       {/* -- Repair -------------------------------------------------------- */}
       <Panel title="Repair" aside={`${targets.length} needing work`}>
         {ship.destroyed ? (
           <Empty>She is beyond repair.</Empty>
         ) : targets.length === 0 || !target || !selfQuote || !yardQuote ? (
-          <Empty>Every system and room is at full condition. Nothing needs work.</Empty>
+          <Empty>Every core system is at full condition. Nothing needs work.</Empty>
         ) : (
           <>
             <p className="prose prose--dim">
@@ -299,7 +325,7 @@ export function ShipScreen() {
                     setPointsWanted(Math.min(10, Math.max(1, Math.round(100 - entry.condition))));
                   }}
                   title={entry.label}
-                  sub={`${entry.kind === 'system' ? 'Core system' : 'Room'} · ${shipConditionLabel(entry.condition)}`}
+                  sub={`Core system · ${shipConditionLabel(entry.condition)}`}
                   danger={entry.condition < 20}
                   right={
                     <span style={{ display: 'inline-block', width: 58 }}>

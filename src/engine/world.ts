@@ -8,6 +8,12 @@
 
 import { streamRng, type Rng } from './rng';
 import { generateMarket } from './economy';
+import {
+  generateWorldTraits,
+  modifierDanger,
+  SPECIAL_WORLD_TEXT,
+  worldFacts,
+} from './planet';
 import { HOMEWORLD_CLOCK, TRAVEL } from './tuning';
 import type {
   HomeworldState,
@@ -437,6 +443,12 @@ export function generateWorld(seed: string): GeneratedWorld {
       populationTier: rng.int(1, 3),
       recruitVenues: VENUES_BY_KIND.moon,
     };
+    const traits = generateWorldTraits(rng, { allowSpecial: false });
+    loc.biome = traits.biome;
+    loc.modifiers = traits.modifiers;
+    loc.danger = Math.max(0, Math.min(100, loc.danger + modifierDanger(loc)));
+    loc.facts = [...loc.facts, ...worldFacts(loc)];
+
     loc.market = generateMarket(loc, rng, 0);
     locations[id] = loc;
     moonIds.push(id);
@@ -535,6 +547,23 @@ export function generateWorld(seed: string): GeneratedWorld {
       populationTier: condition === 'abandoned' ? 0 : spec.tier,
       recruitVenues: condition === 'abandoned' ? [] : VENUES_BY_KIND[spec.kind],
     };
+
+    // Worlds have physical identity; stations are structures bolted to a rock.
+    // The inhabited planet is authored as an ocean world, so its biome is
+    // fixed and only the modifiers vary.
+    if (spec.kind === 'inhabitedPlanet' || spec.kind === 'travelWorld') {
+      const traits = generateWorldTraits(rng, {
+        biome: spec.kind === 'inhabitedPlanet' ? 'ocean-world' : undefined,
+        // The two authored destinations of the opening route are already what
+        // they are. A haunting on top of the Travel Center would be noise.
+        allowSpecial: false,
+      });
+      loc.biome = traits.biome;
+      loc.modifiers = traits.modifiers;
+      loc.danger = Math.max(0, Math.min(100, loc.danger + modifierDanger(loc)));
+      loc.facts = [...loc.facts, ...worldFacts(loc)];
+    }
+
     if (condition !== 'abandoned') {
       loc.market = generateMarket(loc, rng, 0);
     }
@@ -649,6 +678,17 @@ const TEMP_NODE_TYPES: {
     danger: [5, 22],
     weight: 16,
   },
+  {
+    // The one node that is a place rather than an object. This is where an
+    // authored world can turn up on a route that is otherwise fixed.
+    kind: 'world',
+    name: 'Unmapped World',
+    subtitle: 'Not on any chart you carry',
+    description:
+      'A world nobody bothered to survey, close enough to the lane to be worth a look. The charts have a number for it and nothing else.',
+    danger: [20, 58],
+    weight: 14,
+  },
 ];
 
 let tempCounter = 0;
@@ -691,6 +731,27 @@ export function generateTemporaryNode(
 
   if (spec.kind === 'trader') {
     loc.market = generateMarket(loc, rng, currentHours);
+  }
+
+  // An unmapped world is a world: it gets a biome, its modifiers, and — this
+  // being the only variable body on an otherwise fixed route — a real chance
+  // at one of the authored worlds.
+  if (spec.kind === 'world') {
+    const traits = generateWorldTraits(rng, { allowSpecial: true });
+    loc.biome = traits.biome;
+    loc.modifiers = traits.modifiers;
+    loc.specialWorld = traits.specialWorld;
+    loc.danger = Math.max(0, Math.min(100, loc.danger + modifierDanger(loc)));
+    if (traits.specialWorld) {
+      const authored = SPECIAL_WORLD_TEXT[traits.specialWorld];
+      loc.name = authored.name;
+      loc.description = authored.description;
+    }
+    loc.facts = worldFacts(loc);
+    loc.actions = ['scavenge', 'depart'];
+    // A world does not evaporate the way a signal does. It stays until the
+    // route moves on.
+    loc.expiresAtHours = currentHours + rng.int(90, 260);
   }
 
   return loc;

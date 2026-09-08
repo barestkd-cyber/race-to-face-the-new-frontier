@@ -15,6 +15,7 @@ import { SOCIAL_EVENTS } from './events/social';
 import { TECHNICAL_EVENTS } from './events/technical';
 import { MEDICAL_EVENTS } from './events/medical';
 import { HOSTILE_EVENTS } from './events/hostile';
+import { AUTHORED_EVENTS, SHIP_HOOK_EVENTS } from './events/authored';
 import { ENCOUNTER_TEMPLATES } from './encounters';
 import { SITE_ARCHETYPES as HOME_SITE_ARCHETYPES } from './siteArchetypes';
 import { OUTER_SITE_ARCHETYPES } from './siteArchetypes.outer';
@@ -37,6 +38,8 @@ export const ALL_EVENTS: GameEventDef[] = [
   ...TECHNICAL_EVENTS,
   ...MEDICAL_EVENTS,
   ...HOSTILE_EVENTS,
+  ...AUTHORED_EVENTS,
+  ...SHIP_HOOK_EVENTS,
 ];
 
 /** Events indexed by scope so selection never scans the whole table. */
@@ -87,6 +90,7 @@ export function contentSummary(): Record<string, number> {
     technicalEvents: TECHNICAL_EVENTS.length,
     medicalEvents: MEDICAL_EVENTS.length,
     hostileEvents: HOSTILE_EVENTS.length,
+    authoredEvents: AUTHORED_EVENTS.length + SHIP_HOOK_EVENTS.length,
     encounters: ENCOUNTER_TEMPLATES.length,
     siteArchetypes: SITE_ARCHETYPES.length,
   };

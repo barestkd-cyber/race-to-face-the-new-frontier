@@ -6,8 +6,10 @@
  * backend can be dropped in later by implementing the same interface.
  */
 
-import { SAVE } from '../engine/tuning';
-import type { GameState } from '../engine/types';
+import { generateGalaxy } from '../engine/galaxy';
+import { recomputeShipCapacities, updateDegradedStates } from '../engine/ship';
+import { SAVE, SHIPS } from '../engine/tuning';
+import type { GameState, Ship } from '../engine/types';
 
 export interface SaveMeta {
   slot: string;
@@ -316,6 +318,60 @@ const RENAMED_TRAITS = new Map<string, string>([
   ['thick-skinned-pride-shame', 'thick-skinned'],
 ]);
 
+/**
+ * Bring one hull forward onto the permanent Class/Trim model.
+ *
+ * Every removed field is deleted outright. Trim takes the ship-wide value the
+ * old model called quality; rooms keep their kind and lose everything else;
+ * maxRooms is set from what is fitted, clamped into the Class range, so an old
+ * hull can never come back larger than its Class allows.
+ */
+function migrateShip(ship: Record<string, unknown> | null | undefined): void {
+  if (!ship) return;
+
+  if (ship.shipClass === undefined && typeof ship.size === 'string') {
+    ship.shipClass = ship.size;
+  }
+  delete ship.size;
+
+  if (ship.trim === undefined && typeof ship.quality === 'string') {
+    ship.trim = ship.quality;
+  }
+  delete ship.quality;
+
+  const shipClass = (ship.shipClass as keyof typeof SHIPS.roomCounts) ?? 'small';
+  const range = SHIPS.roomCounts[shipClass] ?? SHIPS.roomCounts.small;
+
+  const rooms = (ship.rooms as Record<string, unknown>[] | undefined) ?? [];
+  for (const room of rooms) {
+    delete room.quality;
+    delete room.qualityPotential;
+    delete room.condition;
+  }
+
+  if (typeof ship.maxRooms !== 'number') {
+    ship.maxRooms = Math.min(range[1], Math.max(range[0], rooms.length));
+  }
+  ship.maxRooms = Math.max(rooms.length, Math.min(range[1], ship.maxRooms as number));
+
+  const systems = (ship.systems as Record<string, Record<string, unknown>>) ?? {};
+  for (const system of Object.values(systems)) {
+    delete system.quality;
+  }
+
+  // Life Support stopped being a second, quieter crew number. If it fails now
+  // it is an emergency, not a smaller roster.
+  delete ship.lifeSupportCapacity;
+
+  ship.quirks ??= [];
+  ship.manufacturer ??= 'Unknown';
+  ship.model ??= 'Unrecorded';
+  ship.cargo ??= [];
+
+  recomputeShipCapacities(ship as unknown as Ship);
+  updateDegradedStates(ship as unknown as Ship);
+}
+
 /** Exported so the migration can be tested without touching IndexedDB. */
 export function migrateSavedState(state: GameState): GameState {
   return migrate(state);
@@ -383,6 +439,76 @@ function migrate(state: GameState): GameState {
       evidence: knowledge[index]?.evidence ?? 0,
     }));
     person.traits = migrated;
+  }
+
+  // -- The old ship model -------------------------------------------------
+  //
+  // Saves written before Class and Trim became permanent carry room quality,
+  // room condition, per-system quality, a Quality Potential on every room, and
+  // a second quieter crew number underneath Capacity. All of it is deleted
+  // here rather than left in place, because a field that still exists is a
+  // field something can start reading again.
+  migrateShip(patched.ship as unknown as Record<string, unknown> | null);
+  const earth = (patched.galaxy as { earth?: { garageShip?: unknown } } | undefined)?.earth;
+  if (earth?.garageShip) {
+    migrateShip(earth.garageShip as unknown as Record<string, unknown>);
+  }
+
+  // Saves from before the galaxy existed. Earth has always been out there;
+  // this run simply had not been told where.
+  if (!patched.galaxy) patched.galaxy = generateGalaxy(patched.seed as string);
+
+  // -- Personal inventory --------------------------------------------------
+  //
+  // The universal backpack is gone. Nothing is thrown away: equipped gear
+  // stays with the person who was using it, and everything else goes into the
+  // crew's shared hold, which is where ordinary supplies belonged all along.
+  const ship = patched.ship as Ship | null;
+  for (const person of Object.values(
+    patched.characters as Record<
+      string,
+      {
+        backpack?: { uid: string }[];
+        backpackSlots?: number;
+        gear?: { uid: string }[];
+        equipment?: Record<string, string | undefined>;
+      }
+    >,
+  )) {
+    person.gear ??= [];
+    const pack = person.backpack ?? [];
+    const equipped = new Set(Object.values(person.equipment ?? {}).filter(Boolean));
+    for (const stack of pack) {
+      if (equipped.has(stack.uid)) person.gear.push(stack);
+      else if (ship && !ship.destroyed) ship.cargo.push(stack as never);
+      else person.gear.push(stack);
+    }
+    delete person.backpack;
+    delete person.backpackSlots;
+  }
+
+  // -- Relationships -------------------------------------------------------
+  //
+  // A single `kind` word used to carry both how close two people were and what
+  // they were to each other. Standing now reads off the number, and the word
+  // survives only where it says something the number cannot.
+  for (const person of Object.values(
+    patched.characters as Record<
+      string,
+      { relationships?: Record<string, { kind?: string; roles?: string[] }> }
+    >,
+  )) {
+    for (const rel of Object.values(person.relationships ?? {})) {
+      if (Array.isArray(rel.roles)) {
+        delete rel.kind;
+        continue;
+      }
+      const roles: string[] = [];
+      if (rel.kind === 'family') roles.push('family');
+      if (rel.kind === 'partner') roles.push('family', 'romantic');
+      rel.roles = roles;
+      delete rel.kind;
+    }
   }
 
   // Data cores stopped being a resource axis and became ordinary items. Any

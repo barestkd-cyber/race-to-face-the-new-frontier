@@ -22,12 +22,21 @@ import { noteSkillUse } from './development';
 import { reactTo } from './personality';
 import { TAGS_FAMILY, TAGS_SOCIALISE, TAGS_TREATMENT, tagsForRepair } from './tags';
 import type { Rng } from './rng';
-import { medicalFacility, qualityIndex, safeCrewCapacity, SYSTEM_LABELS } from './ship';
+import {
+  crewCapacity,
+  hasRoom,
+  medicalFacility,
+  SYSTEM_LABELS,
+  updateDegradedStates,
+} from './ship';
+import { ensurePair } from './relationships';
+import { checkReliability } from './reliability';
 import { advanceTime, applyStress, clampMorale, crewMembers } from './sim';
 import { autoResolveRoutine, selectEvent } from './eventEngine';
 import { HOMEWORLD_CLOCK, MEDICINE, REPAIR, REST, SHIPS } from './tuning';
 import { requiresSurgery, treatWound } from './wounds';
 import { estimateTerminalDay } from './world';
+import { SHIP_TRIM_LABELS } from './types';
 import type {
   Character,
   FamilyConcern,
@@ -65,13 +74,15 @@ export function priceContext(state: GameState): PriceContext | null {
 // Repair
 // ---------------------------------------------------------------------------
 
+/**
+ * What can be worked on. Core systems, and only core systems — rooms are
+ * spaces, not maintenance objects, and they carry no Condition to repair.
+ */
 export interface RepairTarget {
   key: string;
   label: string;
   condition: number;
-  kind: 'system' | 'room';
-  systemKind?: ShipSystemKind;
-  roomId?: string;
+  systemKind: ShipSystemKind;
 }
 
 export function repairTargets(state: GameState): RepairTarget[] {
@@ -86,21 +97,54 @@ export function repairTargets(state: GameState): RepairTarget[] {
       key: `sys:${system.kind}`,
       label: SYSTEM_LABELS[system.kind],
       condition: system.condition,
-      kind: 'system',
       systemKind: system.kind,
     });
   }
-  for (const room of ship.rooms) {
-    if (room.condition >= 100) continue;
-    targets.push({
-      key: `room:${room.id}`,
-      label: room.kind.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
-      condition: room.condition,
-      kind: 'room',
-      roomId: room.id,
-    });
-  }
   return targets.sort((a, b) => a.condition - b.condition);
+}
+
+/**
+ * Who can put hands on this at the same time.
+ *
+ * Without an Engineering Bay exactly one person works a major repair — there
+ * is nowhere for a second pair of hands to stand. With one, several can: the
+ * work goes at the pace of the group while the quality follows their average.
+ * Three people at 90, 80 and 70 work at the capability of 80, roughly three
+ * times as fast as the 90 would manage alone.
+ */
+export interface RepairCrew {
+  workers: Character[];
+  /** Average relevant capability across everyone working. */
+  capability: number;
+  /** Multiplier on work rate from having more than one pair of hands. */
+  rate: number;
+  hasBay: boolean;
+}
+
+export function repairCrewFor(state: GameState): RepairCrew {
+  const ship = state.ship;
+  const hasBay = Boolean(ship && !ship.destroyed && hasRoom(ship, 'engineeringBay'));
+  const limit = hasBay
+    ? SHIPS.repairWorkers.withEngineeringBay
+    : SHIPS.repairWorkers.withoutEngineeringBay;
+
+  const rate = (c: Character) =>
+    c.skills.mechanicalEngineering + toolBonus(c, 'mechanicalEngineering', ship);
+
+  const able = crewMembers(state)
+    .filter((c) => c.alive && rate(c) > 0)
+    .sort((a, b) => rate(b) - rate(a));
+
+  const workers = able.slice(0, limit);
+  const capability =
+    workers.length > 0 ? workers.reduce((sum, w) => sum + rate(w), 0) / workers.length : 0;
+
+  return {
+    workers,
+    capability,
+    rate: Math.max(1, 1 + (workers.length - 1) * SHIPS.repairWorkers.additionalWorkerRate),
+    hasBay,
+  };
 }
 
 export interface RepairQuoteDetail {
@@ -111,29 +155,39 @@ export interface RepairQuoteDetail {
   canAfford: boolean;
   engineer: Character | null;
   engineeringSkill: number;
+  /** How many people can work this at once. */
+  workers: number;
+  hasEngineeringBay: boolean;
 }
 
 export function quoteRepairAction(
   state: GameState,
-  target: RepairTarget,
+  _target: RepairTarget,
   points: number,
   payYard: boolean,
 ): RepairQuoteDetail {
   const crew = crewMembers(state);
-  const engineer = bestAt(crew, 'mechanicalEngineering');
-  const skill = engineer
-    ? engineer.skills.mechanicalEngineering + toolBonus(engineer, 'mechanicalEngineering', state.ship)
-    : 0;
+  const repairCrew = repairCrewFor(state);
+  const engineer = repairCrew.workers[0] ?? bestAt(crew, 'mechanicalEngineering');
+  const skill =
+    repairCrew.workers.length > 0
+      ? repairCrew.capability
+      : engineer
+        ? engineer.skills.mechanicalEngineering +
+          toolBonus(engineer, 'mechanicalEngineering', state.ship)
+        : 0;
 
-  // Core systems are more demanding to work on than living space.
-  const targetFactor = target.kind === 'system' ? 1.25 : 0.8;
-  const sizeFactor = (state.ship ? SHIPS.massFactor[state.ship.size] : 1) * targetFactor;
+  const sizeFactor = (state.ship ? SHIPS.massFactor[state.ship.shipClass] : 1) * 1.25;
   const efficiency = 1 - Math.min(REPAIR.maxSkillEfficiency, (skill / 100) * REPAIR.maxSkillEfficiency);
 
   const parts = payYard ? 0 : Math.ceil(points * REPAIR.partsPerConditionPoint * sizeFactor * efficiency);
+  // More hands is more work done per hour. It never improves the outcome.
   const hours = payYard
     ? Math.max(1, points * REPAIR.hoursPerConditionPoint * sizeFactor * 0.4)
-    : Math.max(0.5, points * REPAIR.hoursPerConditionPoint * sizeFactor * efficiency);
+    : Math.max(
+        0.5,
+        (points * REPAIR.hoursPerConditionPoint * sizeFactor * efficiency) / repairCrew.rate,
+      );
   const credits = payYard ? Math.ceil(points * REPAIR.yardCreditsPerPoint * sizeFactor) : 0;
 
   return {
@@ -144,6 +198,8 @@ export function quoteRepairAction(
     canAfford: state.resources.repairParts >= parts && state.resources.credits >= credits,
     engineer,
     engineeringSkill: skill,
+    workers: repairCrew.workers.length,
+    hasEngineeringBay: repairCrew.hasBay,
   };
 }
 
@@ -181,7 +237,10 @@ export function performRepair(
       {
         skill: 'mechanicalEngineering',
         secondarySkill: 'electricalEngineering',
-        participantIds: selectParticipants(crewMembers(state), 'mechanicalEngineering', 'duo'),
+        participantIds:
+          quote.workers > 1
+            ? repairCrewFor(state).workers.map((w) => w.id)
+            : selectParticipants(crewMembers(state), 'mechanicalEngineering', 'individual'),
         leaderId: state.captainId,
         label: `Repair ${target.label}`,
       },
@@ -229,17 +288,12 @@ export function performRepair(
     applyStress(member, reactTo(member, tagsForRepair(payYard)).stress);
   }
 
-  if (target.kind === 'system' && target.systemKind) {
-    const system = ship.systems[target.systemKind];
-    system.condition = Math.max(0, Math.min(100, system.condition + achieved));
-    lines.push(`${SYSTEM_LABELS[target.systemKind]} condition is now ${Math.round(system.condition)}.`);
-  } else if (target.roomId) {
-    const room = ship.rooms.find((r) => r.id === target.roomId);
-    if (room) {
-      room.condition = Math.max(0, Math.min(100, room.condition + achieved));
-      lines.push(`Room condition is now ${Math.round(room.condition)}.`);
-    }
-  }
+  const system = ship.systems[target.systemKind];
+  system.condition = Math.max(0, Math.min(100, system.condition + achieved));
+  updateDegradedStates(ship);
+  lines.push(
+    `${SYSTEM_LABELS[target.systemKind]} condition is now ${Math.round(system.condition)}.`,
+  );
 
   pushLog(state, 'system', `Repaired ${target.label}.`);
   return lines;
@@ -321,6 +375,11 @@ export function performTreatment(
   const advance = advanceTime(state, hours, rng);
   lines.push(...advance.lines);
 
+  // A demanding procedure leans on Power and Life Support. A worn ship either
+  // holds for the length of it or it does not, and it says which.
+  const strain = option.needsSurgery ? checkReliability(state, 'procedure', rng) : null;
+  if (strain) lines.push(...strain.lines);
+
   const check = performCheck(
     {
       skill: option.skill,
@@ -330,6 +389,9 @@ export function performTreatment(
           ? [{ label: facility.ashore ? 'Clinic' : 'Medical facility', value: facilityBonus }]
           : [{ label: 'No proper facility', value: -8 }]),
         ...(toolHelp > 0 ? [{ label: 'Equipment', value: toolHelp }] : []),
+        ...(strain && strain.failed.length > 0
+          ? [{ label: 'The ship faulted mid-procedure', value: -20 }]
+          : []),
       ],
       criticalRisk: option.needsSurgery,
       participantIds: [medic.id],
@@ -514,8 +576,8 @@ function applyPurchase(
 
   if (!container) {
     const carrier = crewMembers(state)[0];
-    if (carrier) addItem(carrier.backpack, itemId, qty, condition, rng);
-    return ['Stowed in a pack — you have no hold.'];
+    if (carrier) addItem(carrier.gear, itemId, qty, condition, rng);
+    return ['Carried by hand — you have no hold.'];
   }
 
   addItem(container, itemId, qty, condition, rng);
@@ -945,14 +1007,14 @@ export function visitContact(state: GameState, id: string, rng: Rng): string[] {
   state.morale = clampMorale(state.morale + rng.int(0, 3));
 
   // Family is not the same as company, and some people are built around it.
-  const kin = state.homeworld.familyIds.includes(id) || rel.kind === 'family';
+  const kin = state.homeworld.familyIds.includes(id) || rel.roles.includes('family');
   for (const member of crewMembers(state)) {
     applyStress(member, reactTo(member, kin ? TAGS_FAMILY : TAGS_SOCIALISE).stress);
   }
 
   // The visit itself, in their voice. Family time on a dying world should not
   // read like a receipt.
-  const isKin = state.homeworld.familyIds.includes(id) || rel.kind === 'family';
+  const isKin = state.homeworld.familyIds.includes(id) || rel.roles.includes('family');
   const FAMILY_VISITS = [
     `${contact.name} cooks like the shortages are somebody else's problem, and for two hours they are.`,
     `You argue about the ship, the route, the risk — the way only family argues, where the fight is the closeness.`,
@@ -1168,17 +1230,19 @@ export function offerPassage(state: GameState, id: string, rng: Rng): string[] {
 
   for (const member of crewMembers(state)) {
     if (member.id === id) continue;
-    member.relationships[id] ??= { value: 0, familiarity: 5, kind: 'crew' };
-    contact.relationships[member.id] ??= { value: 0, familiarity: 5, kind: 'crew' };
+    // Peer, both ways. Nobody starts owing anybody anything.
+    ensurePair(member, contact, 5);
   }
 
   autoEquipParty([contact], state.ship);
   state.morale = clampMorale(state.morale + (family ? 8 : 4));
 
-  const capacity = state.ship ? safeCrewCapacity(state.ship) : 0;
+  const capacity = state.ship ? crewCapacity(state.ship) : 0;
   lines.push(`${contact.name} ${contact.surname} comes aboard.`);
   if (crewMembers(state).length > capacity) {
-    lines.push(`That puts you over safe capacity — ${crewMembers(state).length} against ${capacity}.`);
+    lines.push(
+      `That puts you over capacity — ${crewMembers(state).length} against ${capacity} berths.`,
+    );
   }
   pushLog(state, 'crew', `${contact.name} ${contact.surname} came aboard.`);
 
@@ -1207,7 +1271,8 @@ export interface TreatmentFacility {
 
 export function treatmentFacility(state: GameState): TreatmentFacility {
   const aboard: ShipRoom | null = medicalFacility(state.ship);
-  const aboardBonus = aboard ? MEDICINE.medBayBonus[aboard.quality] : 0;
+  // The room inherits the ship's Trim. There is no room quality of its own.
+  const aboardBonus = aboard && state.ship ? MEDICINE.medBayBonus[state.ship.trim] : 0;
 
   const place = state.currentPlaceId ? state.places[state.currentPlaceId] : undefined;
   const clinic = place?.actions.includes('medical') ? place : undefined;
@@ -1220,12 +1285,11 @@ export function treatmentFacility(state: GameState): TreatmentFacility {
       label: `${clinic.name} — their room, their light, their hands to hold things. +${clinicBonus} to treatment.`,
     };
   }
-  if (aboard) {
-    const quality = aboard.quality;
+  if (aboard && state.ship) {
     return {
       bonus: aboardBonus,
       ashore: false,
-      label: `${aboard.kind === 'medicalWard' ? 'Medical Ward' : 'Med Bay'} (${quality}), +${aboardBonus} to treatment.`,
+      label: `${aboard.kind === 'medicalWard' ? 'Medical Ward' : 'Med Bay'}, ${SHIP_TRIM_LABELS[state.ship.trim]} trim, +${aboardBonus} to treatment.`,
     };
   }
   return {
@@ -1248,10 +1312,6 @@ export function bestEngineerLabel(state: GameState): string {
   const engineer = bestAt(crewMembers(state), 'mechanicalEngineering');
   if (!engineer) return 'Nobody aboard can do this work.';
   return `${engineer.name} — Mechanical Engineering ${engineer.skills.mechanicalEngineering}`;
-}
-
-export function qualityRank(room: ShipRoom): number {
-  return qualityIndex(room.quality);
 }
 
 export function untreatedWoundCount(state: GameState): number {

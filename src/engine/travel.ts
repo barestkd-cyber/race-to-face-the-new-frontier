@@ -9,10 +9,14 @@
 
 import { autoResolveRoutine, beginEvent, selectEvent } from './eventEngine';
 import { pushLog } from './log';
+import { checkReliability } from './reliability';
+import { reactTo } from './personality';
+import { hookStress } from './hooks';
+import { tagsForWorld } from './tags';
 import { ensurePlaces } from './places';
 import type { Rng } from './rng';
 import { fuelPerHour, isFlyable } from './ship';
-import { advanceTime, applyCrewStress, crewMembers } from './sim';
+import { advanceTime, applyCrewStress, applyStress, crewMembers } from './sim';
 import { TIME, TRAVEL } from './tuning';
 import { generateMarket, shouldRestock } from './economy';
 import { isFinalLeg } from './world';
@@ -152,6 +156,12 @@ export function beginTravel(
     'travel',
     `Left ${state.locations[from]?.name ?? 'orbit'} for ${to.name}. Estimated ${(estimate.hours / 24).toFixed(1)} days.`,
   );
+
+  // Launch is a real stress point. A worn system either holds or it does not,
+  // and it says which out loud rather than shaving a hidden percentage.
+  for (const line of checkReliability(state, 'launch', rng).lines) {
+    pushLog(state, 'warning', line);
+  }
 
   if (state.locations[from]) state.locations[from]!.visited = true;
 
@@ -309,6 +319,16 @@ export function arriveAt(state: GameState, locationId: LocationId, rng: Rng): vo
   }
 
   pushLog(state, 'travel', `Docked at ${location.name}.`);
+
+  // Standing somewhere authored is felt by everyone aboard, and felt harder by
+  // the one person whose history is specifically about this.
+  const worldTags = tagsForWorld(location);
+  if (worldTags.length > 0) {
+    for (const member of crewMembers(state)) {
+      const felt = reactTo(member, worldTags);
+      applyStress(member, felt.stress + hookStress(member, worldTags));
+    }
+  }
 
   if (firstVisit) {
     pushLog(state, 'milestone', `First arrival: ${location.name}. ${location.subtitle}`);

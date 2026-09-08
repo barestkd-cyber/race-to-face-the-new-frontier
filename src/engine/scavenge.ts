@@ -584,7 +584,7 @@ export function exitExpedition(state: GameState, rng: Rng): string[] {
   const container = state.ship && !state.ship.destroyed ? state.ship.cargo : null;
 
   for (const entry of expedition.carried) {
-    const target = container ?? expeditionParty(state)[0]?.backpack;
+    const target = container ?? expeditionParty(state)[0]?.gear;
     if (!target) continue;
     addItem(target, entry.itemId, entry.qty, entry.condition ?? 100, rng);
   }

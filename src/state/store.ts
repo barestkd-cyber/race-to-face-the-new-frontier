@@ -41,9 +41,8 @@ import { beginEvent, dismissEvent, resolveChoice, scopesForLocation, selectEvent
 import {
   autoEquipParty,
   equip as equipItem,
-  moveToBackpack,
-  moveToCargo,
   unequip,
+  type EquipSlot,
 } from '../engine/inventory';
 import { pushLog } from '../engine/log';
 import { applyDevelopment } from '../engine/development';
@@ -182,7 +181,7 @@ class GameStore {
       if (state.pendingFarewells.some((f) => f.characterId === id)) continue;
       const relation =
         state.homeworld.familyIds.includes(id) ||
-        state.characters[state.playerId]?.relationships[id]?.kind === 'family'
+        state.characters[state.playerId]?.relationships[id]?.roles.includes('family')
           ? 'family'
           : 'crew';
       state.pendingFarewells.push({
@@ -862,6 +861,11 @@ class GameStore {
     });
   };
 
+  /**
+   * Take something out of the hold and put it on. There is no pack to put it
+   * in — either it goes in one of this person's four slots or it stays in the
+   * crew's stores where it belongs.
+   */
   takeFromHold = (characterId: string, uid: string): void => {
     this.mutate((state) => {
       const access = canAccessHold(state);
@@ -871,7 +875,7 @@ class GameStore {
       }
       const character = state.characters[characterId];
       if (!character || !state.ship) return;
-      const error = moveToBackpack(state.ship, character, uid);
+      const error = equipItem(character, uid, state.ship);
       if (error) this.pushToast([error]);
     });
   };
@@ -885,8 +889,10 @@ class GameStore {
       }
       const character = state.characters[characterId];
       if (!character || !state.ship) return;
-      const error = moveToCargo(state.ship, character, uid);
-      if (error) this.pushToast([error]);
+      const slot = (Object.keys(character.equipment) as EquipSlot[]).find(
+        (key) => character.equipment[key] === uid,
+      );
+      if (slot) unequip(character, slot, state.ship);
     });
   };
 

@@ -11,7 +11,7 @@ import {
   readConfidenceNote,
 } from '../../engine/assess';
 import { canMeetTerms, availableBeats } from '../../engine/recruit';
-import { safeCrewCapacity } from '../../engine/ship';
+import { crewCapacity } from '../../engine/ship';
 import { crewMembers } from '../../engine/sim';
 import { RECRUIT } from '../../engine/tuning';
 import {
@@ -74,7 +74,7 @@ export function RecruitCandidateScreen() {
 
   const candidates = recruitment.candidates;
   const crew = crewMembers(state);
-  const capacity = state.ship ? safeCrewCapacity(state.ship) : 0;
+  const capacity = state.ship ? crewCapacity(state.ship) : 0;
   const overCapacity = crew.length >= capacity;
 
   if (candidates.length === 0) {
@@ -137,7 +137,7 @@ export function RecruitCandidateScreen() {
         {overCapacity && (
           <Panel title="Capacity">
             <p className="prose">
-              {crew.length} aboard against a safe capacity of {capacity}. Anyone else you sign on
+              {crew.length} aboard against {capacity} berths. Anyone else you sign on
               will be sleeping somewhere they should not, and the whole crew will carry the stress
               of it.
             </p>
@@ -380,7 +380,7 @@ export function RecruitCandidateScreen() {
       {overCapacity && (
         <Panel title="Capacity">
           <p className="prose">
-            {crew.length} aboard against a safe capacity of {capacity}. You can still take them, but
+            {crew.length} aboard against {capacity} berths. You can still take them, but
             everyone will feel the crowding.
           </p>
         </Panel>

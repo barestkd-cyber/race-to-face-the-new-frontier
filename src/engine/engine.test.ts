@@ -35,7 +35,7 @@ import {
   flightReadiness,
   generateShip,
   isFlyable,
-  safeCrewCapacity,
+  crewCapacity,
   shipConditionLabel,
 } from './ship';
 import { applyDevelopment, developmentOptions, noteSkillUse, recentSkills } from './development';
@@ -59,6 +59,34 @@ import {
   traitById,
 } from './personality';
 import { EMITTED_TAGS, tagsForChoice } from './tags';
+import { simulateRun } from './simulate';
+import {
+  addRoom,
+  canAddRoom,
+  degradedNotes,
+  failureChance,
+  generateVesselName,
+  hasQuirk,
+  recomputeShipCapacities,
+  revealQuirk,
+  trimCeiling,
+  updateDegradedStates,
+} from './ship';
+import { checkReliability } from './reliability';
+import { generateGalaxy } from './galaxy';
+import { addHook, hasHook, hookStress, treatmentWillingness } from './hooks';
+import { autoEquipParty, equippedStack, strayGear } from './inventory';
+import { addRole, adjust, ensurePair, standingOf } from './relationships';
+import { quoteRepairAction, repairCrewFor, repairTargets } from './actions';
+import {
+  biomeById,
+  generateWorldTraits,
+  modifierById,
+  rollSpecialWorld,
+  sensorsUnreliable,
+} from './planet';
+import { GALAXY, HOOKS, RELATIONSHIPS, SHIPS } from './tuning';
+
 import { migrateSavedState } from '../persistence/storage';
 import {
   berthSecurity,
@@ -75,7 +103,7 @@ import { treatmentFacility } from './actions';
 import { ATTRIBUTE_GEN, CHECK, HOMEWORLD_CLOCK, POTENTIAL_CAP, SPEC } from './tuning';
 import { generateWorld, rollTerminalDay } from './world';
 import { checkRunEnded, createGame } from './newGame';
-import { simulateRun } from './simulate';
+
 import {
   ATTRIBUTE_KEYS,
   SKILL_KEYS,
@@ -403,10 +431,10 @@ describe('ship generation', () => {
       expect(kinds).toContain('cockpit');
       expect(kinds).toContain('quarters');
       expect(kinds).toContain('engineBay');
-      expect(safeCrewCapacity(ship)).toBeGreaterThanOrEqual(1);
+      expect(crewCapacity(ship)).toBeGreaterThanOrEqual(1);
 
-      if (ship.size === 'compact') expect(ship.rooms).toHaveLength(3);
-      if (ship.size === 'small') {
+      if (ship.shipClass === 'compact') expect(ship.rooms).toHaveLength(3);
+      if (ship.shipClass === 'small') {
         expect(ship.rooms.length).toBeGreaterThanOrEqual(4);
         expect(ship.rooms.length).toBeLessThanOrEqual(5);
       }
@@ -590,7 +618,7 @@ describe('flight readiness', () => {
   it('never disagrees with the rule that actually gates travel', () => {
     // One verdict feeds the cockpit, the ship screen and Set Course, so it must
     // agree with isFlyable at every condition, not just the comfortable ones.
-    const ship = generateShip(new Rng('FLY-1'), { size: 'small' });
+    const ship = generateShip(new Rng('FLY-1'), { shipClass: 'small' });
     for (const condition of [0, 3, 5, 6, 14, 29, 30, 54, 55, 80, 100]) {
       ship.systems.engines.condition = condition;
       expect(flightReadiness(ship).canFly).toBe(isFlyable(ship));
@@ -598,7 +626,7 @@ describe('flight readiness', () => {
   });
 
   it('says something is wrong whenever something is wrong', () => {
-    const ship = generateShip(new Rng('FLY-2'), { size: 'small' });
+    const ship = generateShip(new Rng('FLY-2'), { shipClass: 'small' });
     for (const system of Object.values(ship.systems)) system.condition = 100;
     expect(flightReadiness(ship).tone).toBe('ok');
 
@@ -810,7 +838,7 @@ describe('places', () => {
     // do not ask somebody to abandon their world before you have talked to them.
     state.currentPlaceId = relative.placeId!;
     const player = state.characters[state.playerId]!;
-    player.relationships[relative.id] = { value: 60, familiarity: 80, kind: 'family' };
+    player.relationships[relative.id] = { value: 60, familiarity: 80, roles: ['family'] };
     offerPassage(state, relative.id, rng);
     expect(state.crewIds.length, 'must talk before asking').toBe(crewBefore);
 
@@ -818,7 +846,7 @@ describe('places', () => {
     visitContact(state, relative.id, rng);
     expect(relative.spokenTo).toBe(true);
     relative.concernResolved = true;
-    player.relationships[relative.id] = { value: 90, familiarity: 90, kind: 'family' };
+    player.relationships[relative.id] = { value: 90, familiarity: 90, roles: ['family'] };
     offerPassage(state, relative.id, rng);
     expect(state.crewIds.length, 'talked to and willing should work').toBe(crewBefore + 1);
   });
@@ -976,9 +1004,6 @@ describe('study', () => {
     state.ship!.rooms.push({
       id: 'room_study_test',
       kind: 'study',
-      quality: 'solid',
-      qualityPotential: 'solid',
-      condition: 90,
     });
     tickStudy(state, SPEC.hoursToTier[1.05]! * 20);
     expect(captain.potential[practised].specialization).toBe(1.05);
@@ -1018,9 +1043,6 @@ describe('study', () => {
     state.ship!.rooms.push({
       id: 'room_study_test2',
       kind: 'study',
-      quality: 'solid',
-      qualityPotential: 'solid',
-      condition: 90,
     });
     beginStudy(captain, practised);
     state.expedition = {
@@ -1049,7 +1071,7 @@ describe('campaign simulation', () => {
     expect(state.crewIds.length).toBe(1);
     expect(state.characters[state.playerId]?.isPlayer).toBe(true);
     // A solo start must never be in violation of safe capacity on any hull.
-    expect(state.crewIds.length).toBeLessThanOrEqual(safeCrewCapacity(state.ship!));
+    expect(state.crewIds.length).toBeLessThanOrEqual(crewCapacity(state.ship!));
     expect(state.ship).toBeTruthy();
     expect(state.resources.food).toBeGreaterThan(0);
     expect(state.resources.fuel).toBeGreaterThan(0);
@@ -1241,7 +1263,7 @@ describe('places', () => {
     // do not ask somebody to abandon their world before you have talked to them.
     state.currentPlaceId = relative.placeId!;
     const player = state.characters[state.playerId]!;
-    player.relationships[relative.id] = { value: 60, familiarity: 80, kind: 'family' };
+    player.relationships[relative.id] = { value: 60, familiarity: 80, roles: ['family'] };
     offerPassage(state, relative.id, rng);
     expect(state.crewIds.length, 'must talk before asking').toBe(crewBefore);
 
@@ -1249,7 +1271,7 @@ describe('places', () => {
     visitContact(state, relative.id, rng);
     expect(relative.spokenTo).toBe(true);
     relative.concernResolved = true;
-    player.relationships[relative.id] = { value: 90, familiarity: 90, kind: 'family' };
+    player.relationships[relative.id] = { value: 90, familiarity: 90, roles: ['family'] };
     offerPassage(state, relative.id, rng);
     expect(state.crewIds.length, 'talked to and willing should work').toBe(crewBefore + 1);
   });
@@ -1407,9 +1429,6 @@ describe('study', () => {
     state.ship!.rooms.push({
       id: 'room_study_test',
       kind: 'study',
-      quality: 'solid',
-      qualityPotential: 'solid',
-      condition: 90,
     });
     tickStudy(state, SPEC.hoursToTier[1.05]! * 20);
     expect(captain.potential[practised].specialization).toBe(1.05);
@@ -1449,9 +1468,6 @@ describe('study', () => {
     state.ship!.rooms.push({
       id: 'room_study_test2',
       kind: 'study',
-      quality: 'solid',
-      qualityPotential: 'solid',
-      condition: 90,
     });
     beginStudy(captain, practised);
     state.expedition = {
@@ -1480,7 +1496,7 @@ describe('campaign simulation', () => {
     expect(state.crewIds.length).toBe(1);
     expect(state.characters[state.playerId]?.isPlayer).toBe(true);
     // A solo start must never be in violation of safe capacity on any hull.
-    expect(state.crewIds.length).toBeLessThanOrEqual(safeCrewCapacity(state.ship!));
+    expect(state.crewIds.length).toBeLessThanOrEqual(crewCapacity(state.ship!));
     expect(state.ship).toBeTruthy();
     expect(state.resources.food).toBeGreaterThan(0);
     expect(state.resources.fuel).toBeGreaterThan(0);
@@ -2233,5 +2249,608 @@ describe('the tags the world emits', () => {
     // Two thirds of the library is live today; the rest waits on content that
     // does not exist yet, which is the intended shape.
     expect(reached.length).toBeGreaterThan(150);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The permanent ship model
+//
+// Class and Trim are facts about a hull, not upgrades. These tests exist
+// because the old model — Size Potential, Quality Potential, per-room quality
+// and condition, and a quiet second crew number under Capacity — was replaced
+// rather than hidden, and none of it may come back.
+// ---------------------------------------------------------------------------
+
+describe('the permanent ship model', () => {
+  it('never changes Class, however many rooms are added', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const ship = generateShip(new Rng(`CLASS-${seed}`));
+      const before = { shipClass: ship.shipClass, maxRooms: ship.maxRooms };
+      const [lo, hi] = SHIPS.roomCounts[ship.shipClass];
+      const rng = new Rng(`CLASS-add-${seed}`);
+      // Fill the hull completely, then keep asking. Filling a hull is the only
+      // thing room-fitting does: it can never buy a bigger one.
+      for (let i = 0; i < 60; i++) addRoom(ship, 'cargoBay', rng);
+      expect(ship.shipClass).toBe(before.shipClass);
+      expect(ship.maxRooms).toBe(before.maxRooms);
+      expect(ship.maxRooms).toBeLessThanOrEqual(hi);
+      expect(ship.maxRooms).toBeGreaterThanOrEqual(lo);
+      expect(ship.rooms.length).toBe(ship.maxRooms);
+    }
+  });
+
+  it('keeps maxRooms inside the Class range and never below what is fitted', () => {
+    for (let seed = 0; seed < 120; seed++) {
+      const ship = generateShip(new Rng(`MAX-${seed}`));
+      const [lo, hi] = SHIPS.roomCounts[ship.shipClass];
+      expect(ship.maxRooms).toBeGreaterThanOrEqual(lo);
+      expect(ship.maxRooms).toBeLessThanOrEqual(hi);
+      expect(ship.maxRooms).toBeGreaterThanOrEqual(ship.rooms.length);
+    }
+  });
+
+  it('stops fitting rooms once the hull is full', () => {
+    const ship = generateShip(new Rng('FULL-1'), { shipClass: 'small' });
+    const rng = new Rng('FULL-1-add');
+    while (canAddRoom(ship)) addRoom(ship, 'quarters', rng);
+    expect(ship.rooms.length).toBe(ship.maxRooms);
+    expect(addRoom(ship, 'quarters', rng)).toBeNull();
+  });
+
+  it('never changes Trim, Class or maxRooms across a whole campaign', () => {
+    // The strongest version of "permanent" available: play the game and see.
+    // Nothing across a full run — repairs, events, damage, room fitting, ship
+    // loss — may move any of the three facts that define a hull.
+    for (let seed = 0; seed < 6; seed++) {
+      const draft = generateProtagonistDraft(streamRng(`PERM-${seed}`, 'protagonist'));
+      const start = createGame(`PERM-${seed}`, draft.character);
+      const before = {
+        shipClass: start.ship!.shipClass,
+        trim: start.ship!.trim,
+        maxRooms: start.ship!.maxRooms,
+      };
+
+      const result = simulateRun(`PERM-${seed}`, { maxSteps: 6000, strategy: 'balanced' });
+      const after = result.finalState.ship;
+      if (!after) continue; // losing the ship is allowed; changing it is not
+      expect(after.shipClass).toBe(before.shipClass);
+      expect(after.trim).toBe(before.trim);
+      expect(after.maxRooms).toBe(before.maxRooms);
+      expect(after.rooms.length).toBeLessThanOrEqual(after.maxRooms);
+    }
+  });
+
+  it('takes Capacity from Quarters and Trim, and from nothing else', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const ship = generateShip(new Rng(`CAP-${seed}`));
+      const quarters = ship.rooms.filter((r) => r.kind === 'quarters').length;
+      expect(crewCapacity(ship)).toBe(quarters * SHIPS.quartersCapacity[ship.trim]);
+    }
+  });
+
+  it('does not let Life Support create a second crew number', () => {
+    const ship = generateShip(new Rng('LS-1'), { shipClass: 'small' });
+    const before = crewCapacity(ship);
+    // Life support failing is an emergency, not a smaller roster.
+    ship.systems.lifeSupport.condition = 0;
+    recomputeShipCapacities(ship);
+    expect(crewCapacity(ship)).toBe(before);
+    expect(ship as unknown as Record<string, unknown>).not.toHaveProperty('lifeSupportCapacity');
+  });
+
+  it('gives rooms no Condition at all', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const ship = generateShip(new Rng(`ROOM-${seed}`));
+      for (const room of ship.rooms) {
+        expect(room).not.toHaveProperty('condition');
+        expect(room).not.toHaveProperty('quality');
+        expect(room).not.toHaveProperty('qualityPotential');
+      }
+    }
+    // And nothing on the repair board is a room.
+    const draft = generateProtagonistDraft(streamRng('ROOM-REPAIR', 'protagonist'));
+    const state = createGame('ROOM-REPAIR', draft.character);
+    for (const system of Object.values(state.ship!.systems)) system.condition = 50;
+    const targets = repairTargets(state);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
+      expect(state.ship!.systems[target.systemKind]).toBeDefined();
+    }
+  });
+
+  it('turns low Condition into failure events, never into a Trim multiplier', () => {
+    const ship = generateShip(new Rng('REL-1'), { shipClass: 'small', trim: 'luxury' });
+
+    // Capability is Trim. It does not move with Condition.
+    for (const condition of [100, 60, 20, 0]) {
+      ship.systems.engines.condition = condition;
+      expect(trimCeiling(ship.trim)).toBe(SHIPS.trimCeiling.luxury);
+    }
+
+    // Reliability is Condition. A healthy system never rolls at all.
+    ship.systems.engines.condition = 100;
+    expect(failureChance(ship, 'engines')).toBe(0);
+    ship.systems.engines.condition = 20;
+    expect(failureChance(ship, 'engines')).toBeGreaterThan(0);
+
+    // And a failing ship actually fails, out loud, at a stress point.
+    const draft = generateProtagonistDraft(streamRng('REL-2', 'protagonist'));
+    const state = createGame('REL-2', draft.character);
+    for (const system of Object.values(state.ship!.systems)) system.condition = 4;
+    let failures = 0;
+    for (let i = 0; i < 200; i++) {
+      failures += checkReliability(state, 'launch', new Rng(`REL-2-${i}`)).failed.length;
+      for (const system of Object.values(state.ship!.systems)) system.condition = 4;
+    }
+    expect(failures).toBeGreaterThan(0);
+  });
+
+  it('names a degraded system out loud instead of hiding it in arithmetic', () => {
+    const ship = generateShip(new Rng('DEG-1'), { shipClass: 'small' });
+    for (const system of Object.values(ship.systems)) system.condition = 90;
+    updateDegradedStates(ship);
+    expect(degradedNotes(ship)).toEqual([]);
+
+    ship.systems.engines.condition = 12;
+    updateDegradedStates(ship);
+    expect(ship.systems.engines.faulted).toBe(true);
+    expect(degradedNotes(ship).some((n) => n.includes('ENGINE FAULT'))).toBe(true);
+
+    // A system merely inside the Degraded band has lost nothing yet. The band
+    // is a description; the fault is a consequence, and they are not the same.
+    ship.systems.engines.condition = 50;
+    updateDegradedStates(ship);
+    expect(shipConditionLabel(50)).toBe('Degraded');
+    expect(ship.systems.engines.faulted).toBeUndefined();
+    expect(degradedNotes(ship)).toEqual([]);
+  });
+});
+
+describe('repairing a ship', () => {
+  it('limits a major repair to one worker without an Engineering Bay', () => {
+    const draft = generateProtagonistDraft(streamRng('ENG-1', 'protagonist'));
+    const state = createGame('ENG-1', draft.character);
+    const ship = state.ship!;
+    ship.rooms = ship.rooms.filter((r) => r.kind !== 'engineeringBay');
+
+    // Fill the ship with capable hands. It changes nothing without the room.
+    const rng = streamRng('ENG-1', 'crew');
+    for (let i = 0; i < 3; i++) {
+      const member = createCharacter({ rng, aboard: true });
+      member.skills.mechanicalEngineering = 60 + i;
+      state.characters[member.id] = member;
+      state.crewIds.push(member.id);
+    }
+
+    const crew = repairCrewFor(state);
+    expect(crew.hasBay).toBe(false);
+    expect(crew.workers.length).toBe(1);
+    expect(crew.rate).toBe(1);
+  });
+
+  it('lets several people work at once with an Engineering Bay', () => {
+    const draft = generateProtagonistDraft(streamRng('ENG-2', 'protagonist'));
+    const state = createGame('ENG-2', draft.character);
+    const ship = state.ship!;
+    if (!ship.rooms.some((r) => r.kind === 'engineeringBay')) {
+      ship.rooms.push({ id: 'room_eng_test', kind: 'engineeringBay' });
+    }
+
+    const rng = streamRng('ENG-2', 'crew');
+    for (const skill of [90, 80, 70]) {
+      const member = createCharacter({ rng, aboard: true });
+      member.skills.mechanicalEngineering = skill;
+      member.equipment = {};
+      state.characters[member.id] = member;
+      state.crewIds.push(member.id);
+    }
+
+    const crew = repairCrewFor(state);
+    expect(crew.hasBay).toBe(true);
+    expect(crew.workers.length).toBeGreaterThan(1);
+    // Quality follows the average of everyone working; the rate follows the
+    // head count. Three at 90/80/70 work at 80, about three times as fast.
+    expect(crew.rate).toBeGreaterThan(1);
+
+    const soloHours = (() => {
+      ship.rooms = ship.rooms.filter((r) => r.kind !== 'engineeringBay');
+      const quote = quoteRepairAction(state, repairTargets(state)[0]!, 10, false);
+      ship.rooms.push({ id: 'room_eng_test2', kind: 'engineeringBay' });
+      return quote.hours;
+    })();
+    const teamHours = quoteRepairAction(state, repairTargets(state)[0]!, 10, false).hours;
+    expect(teamHours).toBeLessThan(soloHours);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ship identity
+// ---------------------------------------------------------------------------
+
+describe('ship names', () => {
+  it('never issues the same full name twice in one universe', () => {
+    const taken = new Set<string>();
+    const rng = new Rng('NAME-1');
+    const names: string[] = [];
+    for (let i = 0; i < 400; i++) names.push(generateVesselName(rng, taken));
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('allows the same base name back with a different number', () => {
+    const taken = new Set<string>();
+    const rng = new Rng('NAME-2');
+    const names: string[] = [];
+    for (let i = 0; i < 3000; i++) names.push(generateVesselName(rng, taken));
+
+    const stem = (name: string) => name.replace(/^The /, '').replace(/ [1-4]$/, '');
+    const bySt = new Map<string, Set<string>>();
+    for (const name of names) {
+      const key = stem(name);
+      if (!bySt.has(key)) bySt.set(key, new Set());
+      bySt.get(key)!.add(name);
+    }
+    // Somewhere in a universe this size, a Wobbly Sprocket 2 and a Wobbly
+    // Sprocket 3 both exist. That is the point of the suffix.
+    expect([...bySt.values()].some((set) => set.size > 1)).toBe(true);
+  });
+
+  it('keeps manufacturer, model and vessel name as three separate things', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const ship = generateShip(new Rng(`ID-${seed}`));
+      expect(ship.manufacturer.length).toBeGreaterThan(0);
+      expect(ship.model.length).toBeGreaterThan(0);
+      expect(ship.name.length).toBeGreaterThan(0);
+      expect(ship.name).not.toBe(ship.model);
+    }
+  });
+});
+
+describe('hidden hull features', () => {
+  it('exists before anyone finds it, and is only revealed later', () => {
+    let found = false;
+    for (let seed = 0; seed < 300 && !found; seed++) {
+      const ship = generateShip(new Rng(`HID-${seed}`));
+      const compartment = ship.quirks.find((q) => q.id === 'hiddenCompartment');
+      if (!compartment) continue;
+      found = true;
+
+      // It is in the hull from the day it was built, and unknown.
+      expect(compartment.revealed).toBe(false);
+      expect(hasQuirk(ship, 'hiddenCompartment')).toBe(false);
+      expect(hasQuirk(ship, 'hiddenCompartment', false)).toBe(true);
+
+      // An event finds it. Nothing creates it.
+      expect(revealQuirk(ship, 'hiddenCompartment')).toBe(true);
+      expect(hasQuirk(ship, 'hiddenCompartment')).toBe(true);
+      // And it cannot be found twice.
+      expect(revealQuirk(ship, 'hiddenCompartment')).toBe(false);
+    }
+    expect(found, 'hidden compartments must actually generate').toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Earth
+// ---------------------------------------------------------------------------
+
+describe('Earth', () => {
+  it('exists in every seed', () => {
+    for (let seed = 0; seed < 80; seed++) {
+      const galaxy = generateGalaxy(`EARTH-${seed}`);
+      expect(galaxy.earth.systemId.length).toBeGreaterThan(0);
+      expect(galaxy.earth.distanceLy).toBeGreaterThan(0);
+      expect(galaxy.systemCount).toBeGreaterThanOrEqual(GALAXY.systemCount[0]);
+      expect(galaxy.systemCount).toBeLessThanOrEqual(GALAXY.systemCount[1]);
+    }
+  });
+
+  it('is not known to an ordinary captain starting in the Meridian system', () => {
+    let ordinary = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const draft = generateProtagonistDraft(streamRng(`EARTH-RUN-${seed}`, 'protagonist'));
+      const state = createGame(`EARTH-RUN-${seed}`, draft.character);
+      if (hasHook(state.characters[state.playerId]!, 'earthMap')) continue;
+      ordinary += 1;
+      expect(state.galaxy.earth.known).toBe(false);
+      expect(state.galaxy.earth.garageShip).toBeUndefined();
+    }
+    expect(ordinary).toBeGreaterThan(30);
+  });
+
+  it("hands the grandfather's captain the map and the garage ship", () => {
+    const draft = generateProtagonistDraft(streamRng('EARTH-HOOK', 'protagonist'));
+    // The hook is deliberately rare; force it rather than search a thousand
+    // seeds for one, because what is under test is the consequence.
+    addHook(draft.character, 'earthMap');
+    const state = createGame('EARTH-HOOK', draft.character);
+
+    expect(state.galaxy.earth.known).toBe(true);
+    const garage = state.galaxy.earth.garageShip;
+    expect(garage).toBeDefined();
+    expect(['medium', 'large']).toContain(garage!.shipClass);
+    expect(['premium', 'luxury']).toContain(garage!.trim);
+    // Everything else about it is still rolled.
+    expect(garage!.rooms.length).toBeGreaterThanOrEqual(
+      SHIPS.roomCounts[garage!.shipClass][0],
+    );
+    expect(garage!.name).not.toBe(state.ship!.name);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Personal equipment
+// ---------------------------------------------------------------------------
+
+describe('personal equipment', () => {
+  it('is only what a person wears and carries in their hands', () => {
+    const draft = generateProtagonistDraft(streamRng('KIT-1', 'protagonist'));
+    const state = createGame('KIT-1', draft.character);
+
+    for (const person of Object.values(state.characters)) {
+      expect(person).not.toHaveProperty('backpack');
+      expect(person).not.toHaveProperty('backpackSlots');
+      // Whatever they carry is in a slot. There is no private pile.
+      expect(strayGear(person)).toEqual([]);
+      expect(person.gear.length).toBeLessThanOrEqual(4);
+    }
+
+    // Ordinary survival stores live with the crew, in the hold.
+    expect(state.ship!.cargo.length).toBeGreaterThan(0);
+  });
+
+  it('leaves gear with the person when the ship is gone', () => {
+    const draft = generateProtagonistDraft(streamRng('KIT-2', 'protagonist'));
+    const state = createGame('KIT-2', draft.character);
+    const captain = state.characters[state.playerId]!;
+    autoEquipParty([captain], state.ship);
+    if (captain.gear.length === 0) return;
+
+    state.ship!.destroyed = true;
+    expect(captain.gear.length).toBeGreaterThan(0);
+    expect(equippedStack(captain, 'weapon', null) ?? equippedStack(captain, 'armor', null))
+      .toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pairwise relationships
+// ---------------------------------------------------------------------------
+
+describe('pairwise relationships', () => {
+  it('starts every ordinary pairing at Peer', () => {
+    const draft = generateProtagonistDraft(streamRng('REL-P1', 'protagonist'));
+    const state = createGame('REL-P1', draft.character);
+
+    for (const id of state.crewIds) {
+      const person = state.characters[id]!;
+      for (const otherId of state.crewIds) {
+        if (id === otherId) continue;
+        const rel = person.relationships[otherId];
+        expect(rel).toBeDefined();
+        // Family is a role and may sit anywhere. Ordinary crew start at Peer.
+        if (rel!.roles.includes('family')) continue;
+        expect(standingOf(rel!.value)).toBe('peer');
+      }
+    }
+  });
+
+  it('moves the pair the event actually happened to, and only that pair', () => {
+    const rng = streamRng('REL-P2', 'crew');
+    const a = createCharacter({ rng, aboard: true });
+    const b = createCharacter({ rng, aboard: true });
+    const c = createCharacter({ rng, aboard: true });
+    ensurePair(a, b);
+    ensurePair(a, c);
+    ensurePair(b, c);
+
+    const shift = adjust(a, b, RELATIONSHIPS.shift.rescued * 3);
+    expect(shift).not.toBeNull();
+    expect(shift!.fromId).toBe(a.id);
+    expect(shift!.toId).toBe(b.id);
+    expect(standingOf(a.relationships[b.id]!.value)).toBe('friend');
+
+    // One direction only: being carried is not the same as carrying.
+    expect(standingOf(b.relationships[a.id]!.value)).toBe('peer');
+    // And nobody else in the room is touched by it.
+    expect(a.relationships[c.id]!.value).toBe(RELATIONSHIPS.startingValue);
+    expect(c.relationships[a.id]!.value).toBe(RELATIONSHIPS.startingValue);
+    expect(b.relationships[c.id]!.value).toBe(RELATIONSHIPS.startingValue);
+  });
+
+  it('keeps roles separate from standing', () => {
+    const rng = streamRng('REL-P3', 'crew');
+    const mentor = createCharacter({ rng, aboard: true });
+    const student = createCharacter({ rng, aboard: true });
+    addRole(mentor, student, 'mentor');
+
+    expect(mentor.relationships[student.id]!.roles).toContain('mentor');
+    expect(student.relationships[mentor.id]!.roles).toContain('student');
+    // A role says who they are to each other; the number says how it is going.
+    expect(standingOf(mentor.relationships[student.id]!.value)).toBe('peer');
+
+    adjust(mentor, student, -60);
+    expect(standingOf(mentor.relationships[student.id]!.value)).toBe('disregarded');
+    expect(mentor.relationships[student.id]!.roles).toContain('mentor');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Old saves
+// ---------------------------------------------------------------------------
+
+describe('loading a save written against the old ship model', () => {
+  it('deletes the old mechanics rather than leaving them where something can read them', () => {
+    const draft = generateProtagonistDraft(streamRng('MIG-1', 'protagonist'));
+    const state = createGame('MIG-1', draft.character);
+
+    // Rebuild a save the way the old model wrote one.
+    const legacy = JSON.parse(JSON.stringify(state)) as Record<string, never>;
+    const ship = (legacy as unknown as { ship: Record<string, unknown> }).ship;
+    ship.size = 'small';
+    ship.quality = 'solid';
+    ship.lifeSupportCapacity = 2;
+    delete ship.shipClass;
+    delete ship.trim;
+    delete ship.maxRooms;
+    delete ship.quirks;
+    for (const room of ship.rooms as Record<string, unknown>[]) {
+      room.quality = 'basic';
+      room.qualityPotential = 'premium';
+      room.condition = 44;
+    }
+    for (const system of Object.values(ship.systems as Record<string, Record<string, unknown>>)) {
+      system.quality = 'basic';
+    }
+    delete (legacy as unknown as { galaxy?: unknown }).galaxy;
+
+    const characters = (legacy as unknown as { characters: Record<string, Record<string, unknown>> })
+      .characters;
+    const first = Object.values(characters)[0]!;
+    first.backpackSlots = 8;
+    first.backpack = [{ uid: 'stk_old_1', itemId: 'trade_textiles', qty: 2, condition: 80 }];
+    delete first.gear;
+    const second = Object.values(characters)[1] ?? first;
+    second.relationships = { [Object.keys(characters)[0]!]: { value: 20, familiarity: 30, kind: 'family' } };
+
+    const migrated = migrateSavedState(legacy as unknown as GameState);
+    const hull = migrated.ship!;
+
+    // The old ship model is gone, not hidden.
+    expect(hull).not.toHaveProperty('size');
+    expect(hull).not.toHaveProperty('quality');
+    expect(hull).not.toHaveProperty('lifeSupportCapacity');
+    expect(hull.shipClass).toBe('small');
+    expect(hull.trim).toBe('solid');
+    expect(hull.maxRooms).toBeGreaterThanOrEqual(hull.rooms.length);
+    expect(hull.maxRooms).toBeLessThanOrEqual(SHIPS.roomCounts.small[1]);
+    for (const room of hull.rooms) {
+      expect(room).not.toHaveProperty('quality');
+      expect(room).not.toHaveProperty('qualityPotential');
+      expect(room).not.toHaveProperty('condition');
+    }
+    for (const system of Object.values(hull.systems)) {
+      expect(system).not.toHaveProperty('quality');
+    }
+    expect(crewCapacity(hull)).toBe(
+      hull.rooms.filter((r) => r.kind === 'quarters').length * SHIPS.quartersCapacity[hull.trim],
+    );
+
+    // Earth was always out there; the save simply predates knowing about it.
+    expect(migrated.galaxy.earth.systemId.length).toBeGreaterThan(0);
+
+    // Nothing the player owned was thrown away — the pack went into the hold.
+    const owner = migrated.characters[Object.keys(characters)[0]!]!;
+    expect(owner).not.toHaveProperty('backpack');
+    expect(owner).not.toHaveProperty('backpackSlots');
+    const stowed = hull.cargo.some((s) => s.uid === 'stk_old_1');
+    const carried = owner.gear.some((s) => s.uid === 'stk_old_1');
+    expect(stowed || carried).toBe(true);
+
+    // Relationship kinds became roles, and standing reads off the number.
+    for (const person of Object.values(migrated.characters)) {
+      for (const rel of Object.values(person.relationships)) {
+        expect(rel).not.toHaveProperty('kind');
+        expect(Array.isArray(rel.roles)).toBe(true);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authored hooks
+// ---------------------------------------------------------------------------
+
+describe('authored character hooks', () => {
+  it('caps Agility permanently for somebody with a prosthetic leg', () => {
+    const rng = streamRng('HOOK-1', 'crew');
+    let capped = 0;
+    for (let i = 0; i < 400; i++) {
+      const person = createCharacter({ rng, aboard: true });
+      if (!hasHook(person, 'prosthetic')) continue;
+      capped += 1;
+      expect(person.attributes.agility).toBeLessThanOrEqual(HOOKS.prostheticAgilityCap);
+    }
+    expect(capped, 'the prosthetic hook must actually roll').toBeGreaterThan(0);
+  });
+
+  it('stays rare, and never stacks a life full of exceptions', () => {
+    const rng = streamRng('HOOK-2', 'crew');
+    let withHooks = 0;
+    for (let i = 0; i < 300; i++) {
+      const person = createCharacter({ rng, aboard: true });
+      const hooks = (person.hooks ?? []).filter((h) => h !== 'mercenaryKit');
+      expect(hooks.length).toBeLessThanOrEqual(2);
+      if (hooks.length > 0) withHooks += 1;
+    }
+    expect(withHooks).toBeGreaterThan(0);
+    expect(withHooks).toBeLessThan(120);
+  });
+
+  it('makes a fear cost something without becoming a fear stat', () => {
+    const rng = streamRng('HOOK-3', 'crew');
+    const afraid = createCharacter({ rng, aboard: true });
+    addHook(afraid, 'fearOfGhosts');
+    const steady = createCharacter({ rng, aboard: true });
+
+    const haunted = ['mystery', 'uncertainty', 'danger'];
+    expect(hookStress(afraid, haunted)).toBeGreaterThan(0);
+    expect(hookStress(steady, haunted)).toBe(0);
+    // And nowhere else.
+    expect(hookStress(afraid, ['wealth', 'trade'])).toBe(0);
+  });
+
+  it('slows a prejudiced surgeon without ever refusing for them', () => {
+    const rng = streamRng('HOOK-4', 'crew');
+    const surgeon = createCharacter({ rng, aboard: true });
+    addHook(surgeon, 'prejudicedSurgeon');
+    surgeon.prejudiceTarget = 'Oruun';
+
+    expect(treatmentWillingness(surgeon, 'Oruun')).toBeLessThan(0);
+    expect(treatmentWillingness(surgeon, 'Tavren')).toBe(0);
+    expect(treatmentWillingness(surgeon, undefined)).toBe(0);
+    // It is a modifier on willingness, never a hard no.
+    expect(treatmentWillingness(surgeon, 'Oruun')).toBeGreaterThan(-100);
+  });
+});
+
+describe('authored worlds', () => {
+  it('gives every generated world one biome and at most three modifiers', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const traits = generateWorldTraits(new Rng(`WORLD-${seed}`), { allowSpecial: true });
+      expect(biomeById(traits.biome)).toBeDefined();
+      expect(traits.modifiers.length).toBeLessThanOrEqual(3);
+      expect(new Set(traits.modifiers).size).toBe(traits.modifiers.length);
+      for (const id of traits.modifiers) expect(modifierById(id)).toBeDefined();
+    }
+  });
+
+  it('never puts two contradictory modifiers on the same world', () => {
+    for (let seed = 0; seed < 600; seed++) {
+      const traits = generateWorldTraits(new Rng(`CONTRA-${seed}`));
+      expect(traits.modifiers).not.toEqual(
+        expect.arrayContaining(['low-gravity', 'high-gravity']),
+      );
+      expect(traits.modifiers).not.toEqual(
+        expect.arrayContaining(['water-rich-surface', 'water-poor-surface']),
+      );
+    }
+  });
+
+  it('makes the Ghost Planet common enough to matter and rare enough to mean something', () => {
+    let ghosts = 0;
+    const runs = 2000;
+    for (let seed = 0; seed < runs; seed++) {
+      if (rollSpecialWorld(new Rng(`GHOST-${seed}`)) === 'ghostPlanet') ghosts += 1;
+    }
+    const rate = ghosts / runs;
+    expect(rate).toBeGreaterThan(0.15);
+    expect(rate).toBeLessThan(0.5);
+  });
+
+  it('makes sensors unreliable on a haunted world, and nowhere ordinary', () => {
+    const haunted = { id: 'x', specialWorld: 'ghostPlanet' } as never;
+    const ordinary = { id: 'y', modifiers: ['calm-climate'] } as never;
+    expect(sensorsUnreliable(haunted)).toBe(true);
+    expect(sensorsUnreliable(ordinary)).toBe(false);
   });
 });

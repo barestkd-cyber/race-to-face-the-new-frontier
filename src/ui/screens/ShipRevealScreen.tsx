@@ -8,13 +8,13 @@
 
 import { Rng } from '../../engine/rng';
 import {
+  crewCapacity,
   notableFacts,
   overallCondition,
-  safeCrewCapacity,
   shipArchetype,
   shipConditionLabel,
 } from '../../engine/ship';
-import { SHIP_QUALITY_LABELS, type Ship } from '../../engine/types';
+import { SHIP_CLASS_LABELS, SHIP_TRIM_LABELS, type Ship } from '../../engine/types';
 import { Btn, Empty, Meter, Panel } from '../components';
 import { store, useGame } from '../useStore';
 
@@ -26,7 +26,7 @@ export function ShipRevealScreen() {
 
   const ship = state.ship;
   const condition = overallCondition(ship);
-  const capacity = safeCrewCapacity(ship);
+  const capacity = crewCapacity(ship);
   const facts = notableFacts(ship);
 
   return (
@@ -45,14 +45,19 @@ export function ShipRevealScreen() {
         <div className="reveal-in reveal-in--late" style={{ padding: '4px 2px' }}>
           <div className="reveal-name">{ship.name}</div>
           <div className="reveal-type">{shipArchetype(ship)}</div>
+          <div className="tiny faint" style={{ marginTop: 2 }}>
+            {ship.manufacturer} {ship.model}
+          </div>
         </div>
 
         <Panel title="What You Have Been Left" flush>
           <div className="reveal-in reveal-in--late">
             <div className="grid2">
               <div>
-                <span className="label">Construction</span>
-                <div className="value">{SHIP_QUALITY_LABELS[ship.quality]}</div>
+                <span className="label">Class · Trim</span>
+                <div className="value">
+                  {SHIP_CLASS_LABELS[ship.shipClass]} · {SHIP_TRIM_LABELS[ship.trim]}
+                </div>
               </div>
               <div>
                 <span className="label">Condition</span>
@@ -74,12 +79,18 @@ export function ShipRevealScreen() {
             <div className="divider" />
 
             <div className="split">
-              <span className="label">Safe crew capacity</span>
+              <span className="label">Rooms</span>
+              <span className="value readout">
+                {ship.rooms.length} / {ship.maxRooms}
+              </span>
+            </div>
+            <div className="split" style={{ marginTop: 4 }}>
+              <span className="label">Capacity</span>
               <span className="value readout">{capacity}</span>
             </div>
             <p className="tiny faint" style={{ marginTop: 2, marginBottom: 0 }}>
-              The lower of berths and breathable air. You are one person; the rest of
-              those bunks are empty.
+              Berths, from the Quarters she was built with. You are one person; the
+              rest of those bunks are empty.
             </p>
 
             {facts.length > 0 && (
@@ -125,7 +136,7 @@ function ShipExterior({ ship, seed }: { ship: Ship; seed: string }) {
     o: rng.float(0.2, 0.8),
   }));
 
-  const long = ship.size !== 'compact';
+  const long = ship.shipClass !== 'compact';
   const bodyW = long ? 186 : 148;
   const bodyH = long ? 40 : 34;
   const x = (W - bodyW) / 2;

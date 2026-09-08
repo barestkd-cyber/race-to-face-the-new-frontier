@@ -247,3 +247,70 @@ withholding rather than as the character not knowing.
 
 **Names.** 1,000 per sex. Repeats fell from 95% of runs to 26%. A handful of
 names sit in the wrong sex column in the source list; they surface rarely.
+
+---
+
+## 7. The permanent ship model — measured, and the one number that mattered
+
+The old ship model was replaced rather than hidden: Class and Trim are now
+permanent, rooms carry no quality and no condition, Capacity comes from Quarters
+and Trim alone, and Condition means reliability on core systems.
+
+The mechanic with real balance weight is the reliability roll. A worn system
+now fails *sometimes*, at a stress point, instead of shaving a hidden
+percentage off everything.
+
+**What the first guess did.** At a 45% failure chance at Condition 0, with each
+failure taking a further 4–14 condition off the system, the win rate fell from
+25% to 15% and — more tellingly — a crewed run stopped beating a solo rush,
+because the compounding damage hit the ships that flew the most legs hardest.
+
+**What it is set to now.** 22% failure chance at Condition 0, falling linearly
+to zero at Condition 80, and 1–5 condition lost per failure. Measured over
+identical seeds:
+
+| | victories / 20 | deaths |
+|---|---:|---:|
+| Crewed, balanced bot | 3 | 15 |
+| Solo, rush bot | 0 | 20 |
+
+and 6 victories in 30 on the standard win-rate seeds — a 20% win rate, inside
+the 10–75% guard, against 25% before the mechanic existed.
+
+**What to watch.** The compounding is the dangerous part, not the chance. If
+failures start to feel like a spiral rather than a story, cut the per-failure
+condition loss before touching the chance — a ship that breaks and gets fixed
+is the intended loop; a ship that breaks itself to death is not.
+
+**Everything else in the ship pass is close to free.** Removing room condition
+took the repair board from ten-odd entries down to six core systems, which is
+a straight simplification. Capacity went up slightly on most hulls, because the
+old model took the lower of Quarters and Life Support and the new one takes
+Quarters alone — expect fewer overcrowding penalties and, with them, slightly
+easier recruiting than the numbers above assume.
+
+## 8. Authored content added, and its rarity
+
+All of these are V1 PROVISIONAL and none of them has been measured in play.
+
+- **Ghost Planet: 30%** chance of being the authored world when one attaches to
+  an unmapped world, which sits in the middle of the 15–50% band design
+  discussed. Unmapped worlds are themselves one of six temporary-node types, so
+  the practical rate of seeing one in a run is far lower than 30%.
+- **The grandfather's Earth map: 1.2%** of captains. Deliberately rare enough
+  that most players will hear about it before they see it. Earth itself exists
+  in every seed regardless; the life event only skips the discovery problem.
+- **Han Dublo: 0.08%** of captains. An Easter egg should be a story people tell
+  each other, not a thing they expect.
+- **Hidden compartment: 14%** of hulls, unfound at generation. This is the one
+  quirk rate chosen to be *common*, because the event that finds it is one of
+  the better small moments in the game and a 3% rate would waste it.
+- **Lemon hull: 3.5%**, which multiplies that ship's failure chance by 2.2. On
+  a low-Condition hull this is genuinely punishing; it is meant to be, and it
+  is the rate most likely to need cutting.
+- Prosthetic leg 3.5%, unhoused 5%, near-drowning 5%, fear of ghosts 5%,
+  valuable possession 7%, childhood friend 9%, chess 6%, famous singer 2%. A
+  captain draws at most one of these.
+- **Prejudiced surgeon: 3%** of generated crew who are already good enough at
+  surgery for the reluctance to cost anyone anything. Never applied to the
+  player's own captain.

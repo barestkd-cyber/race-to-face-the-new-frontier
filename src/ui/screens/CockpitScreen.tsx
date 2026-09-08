@@ -21,10 +21,11 @@ import {
   hullCondition,
   isFlyable,
   medicalFacility,
-  safeCrewCapacity,
+  crewCapacity,
   sensorIntel,
   shipConditionLabel,
 } from '../../engine/ship';
+import { sensorsUnreliable } from '../../engine/planet';
 import { crewMembers, daysOfFoodRemaining, moraleBand } from '../../engine/sim';
 import { situationReport, type SituationGo } from '../../engine/situation';
 import { estimateLeg, travelProgress } from '../../engine/travel';
@@ -92,12 +93,15 @@ export function CockpitScreen() {
   const legEstimate = selected ? estimateLeg(state, selected.id) : null;
 
   const fuel = estimateFuel(state.ship, crew, state.resources.fuel);
-  const capacity = state.ship ? safeCrewCapacity(state.ship) : 0;
+  const capacity = state.ship ? crewCapacity(state.ship) : 0;
   const morale = moraleBand(state.morale);
   const hull = hullCondition(state.ship);
 
   const assessor = bestAssessor(crew);
-  const intel = sensorIntel(state.ship);
+  // A haunted world, or geology that swamps a magnetometer, makes the array
+  // worth less than the window. The reading gets vaguer, never confidently
+  // wrong — poor assessment is imprecise, not a lie.
+  const intel = sensorsUnreliable(selected) ? 0 : sensorIntel(state.ship);
   const risk = selected
     ? assessDanger(selected.danger, { assessor, relevantSkill: 'navigation', intel })
     : null;

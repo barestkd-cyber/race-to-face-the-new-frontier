@@ -13,7 +13,7 @@ import { untreatedWoundCount } from './actions';
 import { hasDevelopmentToSpend } from './development';
 import { missionsHere } from './missions';
 import { flightReadiness } from './ship';
-import { estimateFuel, safeCrewCapacity } from './ship';
+import { crewCapacity, estimateFuel } from './ship';
 import { crewMembers, daysOfFoodRemaining, isStarving } from './sim';
 import { CHECK } from './tuning';
 import { estimateTerminalDay } from './world';
@@ -167,7 +167,7 @@ export function situationReport(state: GameState): SituationLine[] {
 
   // -- Opportunity, not just alarm ---------------------------------------
   if (!underway && state.ship && !state.ship.destroyed) {
-    const capacity = safeCrewCapacity(state.ship);
+    const capacity = crewCapacity(state.ship);
     if (crew.length === 1 && capacity > 1) {
       lines.push({
         id: 'alone',

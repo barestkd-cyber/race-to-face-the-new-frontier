@@ -428,7 +428,7 @@ export function resolveMission(
     // The job ran on one skill; everyone who went has now done that work.
     notePartySkillUse(party, missionPrimarySkill(mission));
     if (mission.rewardItems) {
-      const container = state.ship && !state.ship.destroyed ? state.ship.cargo : party[0]!.backpack;
+      const container = state.ship && !state.ship.destroyed ? state.ship.cargo : party[0]!.gear;
       for (const reward of mission.rewardItems) {
         addItem(container, reward.itemId, reward.qty, 100, rng);
       }

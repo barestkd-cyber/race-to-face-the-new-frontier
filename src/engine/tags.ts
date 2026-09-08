@@ -83,6 +83,8 @@ export const EMITTED_TAGS: PersonalityTag[] = [
   'humor',
   'accountability',
   'routine',
+  // Where you are standing
+  'uncertainty',
   // Work and the world
   'plan',
   'verify',
@@ -221,6 +223,41 @@ export const TAGS_RESCUE: PersonalityTag[] = ['rescue', 'protect_others', 'dange
 
 /** Somewhere nobody aboard has been before. */
 export const TAGS_NEW_PLACE: PersonalityTag[] = ['novelty', 'explore'];
+
+/**
+ * What a world feels like to stand on.
+ *
+ * Only the authored worlds say anything here. An ordinary biome is scenery;
+ * a haunting is not, and neither is a place where the government can decide
+ * you are not leaving.
+ */
+export function tagsForWorld(location: {
+  specialWorld?: string;
+  modifiers?: string[];
+}): PersonalityTag[] {
+  const tags = new Set<PersonalityTag>();
+  switch (location.specialWorld) {
+    case 'ghostPlanet':
+      push(tags, 'mystery', 'uncertainty', 'danger');
+      break;
+    case 'gravityLockdown':
+      push(tags, 'institution', 'control', 'autonomy');
+      break;
+    case 'obelisk':
+      push(tags, 'mystery', 'novelty', 'explore');
+      break;
+    case 'goldenDiamond':
+      push(tags, 'wealth', 'opportunity');
+      break;
+    case 'underwaterCity':
+    case 'dirtValuing':
+      push(tags, 'novelty', 'explore');
+      break;
+    default:
+      break;
+  }
+  return [...tags];
+}
 
 /**
  * Who is leading this away party.

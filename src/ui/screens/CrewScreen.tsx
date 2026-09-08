@@ -18,7 +18,7 @@ import {
   crewLeadOf,
 } from '../../engine/command';
 import { COMMAND } from '../../engine/tuning';
-import { safeCrewCapacity } from '../../engine/ship';
+import { crewCapacity } from '../../engine/ship';
 import { crewMembers, moraleBand } from '../../engine/sim';
 import { conditionLabel } from '../../engine/wounds';
 import type { Character } from '../../engine/types';
@@ -36,7 +36,7 @@ export function CrewScreen() {
 
   const ship = state.ship;
   const shipUsable = Boolean(ship && !ship.destroyed);
-  const capacity = ship && !ship.destroyed ? safeCrewCapacity(ship) : 0;
+  const capacity = ship && !ship.destroyed ? crewCapacity(ship) : 0;
   const overBy = Math.max(0, crew.length - capacity);
 
   const band = moraleBand(state.morale);
@@ -93,7 +93,7 @@ export function CrewScreen() {
         ) : overBy > 0 ? (
           <p className="prose" style={{ marginTop: 8 }}>
             <span className="red">
-              You are {overBy} over safe capacity.
+              You are {overBy} over capacity.
             </span>{' '}
             Quarters and life support only stretch to {capacity}. Every head above
             that adds stress to the whole crew and drags morale down for as long as

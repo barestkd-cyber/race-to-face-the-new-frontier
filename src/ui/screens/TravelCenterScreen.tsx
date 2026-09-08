@@ -14,7 +14,7 @@ import {
   describeShip,
   estimateFuel,
   hullCondition,
-  safeCrewCapacity,
+  crewCapacity,
   shipConditionLabel,
 } from '../../engine/ship';
 import { crewMembers, foodConsumptionPerDay } from '../../engine/sim';
@@ -42,7 +42,7 @@ export function TravelCenterScreen() {
   const perDay = foodConsumptionPerDay(state);
   const foodDays = perDay > 0 ? state.resources.food / perDay : Infinity;
   const fuelDays = ship ? estimateFuel(ship, crew, state.resources.fuel).daysRemaining : 0;
-  const capacity = ship ? safeCrewCapacity(ship) : 0;
+  const capacity = ship ? crewCapacity(ship) : 0;
 
   return (
     <div className="stack">
