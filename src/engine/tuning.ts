@@ -1496,6 +1496,8 @@ export const LOCAL = {
   venueHours: [0.2, 0.8] as [number, number],
   /** Walking back out to the ship. */
   returnToShipHours: 0.5,
+  /** Down the ladder onto whatever the ship is parked on. */
+  disembarkHours: 0.1,
 } as const;
 
 // ---------------------------------------------------------------------------

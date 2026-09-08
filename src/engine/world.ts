@@ -169,6 +169,8 @@ export interface ClockEstimate {
   low: number;
   high: number;
   text: string;
+  /** The same forecast as a clause, for anywhere with room for one line. */
+  range: string;
   /** Days already elapsed. */
   elapsedDays: number;
   urgency: 'calm' | 'pressing' | 'urgent' | 'critical';
@@ -201,7 +203,10 @@ export function estimateTerminalDay(
       ? 'Forecasts disagree. Somewhere between weeks and days.'
       : `Terminal window estimated: day ${low}–${high}`;
 
-  return { low, high, text, elapsedDays, urgency };
+  const range =
+    quality === 0 ? 'days to weeks, nobody agrees' : `day ${low}–${high}`;
+
+  return { low, high, text, range, elapsedDays, urgency };
 }
 
 export function advanceHomeworldClock(homeworld: HomeworldState, hours: number): void {

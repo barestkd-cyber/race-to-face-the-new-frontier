@@ -370,6 +370,73 @@ function ResourceCell({
   );
 }
 
+/**
+ * The same stores as one line.
+ *
+ * The cockpit has room for a glance, not a grid. Four figures, in the form
+ * that answers a travel decision: how many of us, how far the tanks go, how
+ * long the food lasts, what is in the account. Parts and medicine are a Hold
+ * question and live there.
+ */
+export interface ResourceLineProps {
+  resources: Resources;
+  crewCount: number;
+  crewCapacity: number;
+  foodDays: number;
+  fuelDays: number;
+}
+
+export function ResourceLine({
+  resources,
+  crewCount,
+  crewCapacity,
+  foodDays,
+  fuelDays,
+}: ResourceLineProps) {
+  const fuelPct = resources.fuelCapacity > 0 ? resources.fuel / resources.fuelCapacity : 0;
+  const days = (value: number): string =>
+    !Number.isFinite(value) ? '∞' : `${Math.floor(Math.max(0, value))}d`;
+
+  return (
+    <div className="readline">
+      <span className={crewCount > crewCapacity ? 'readline__item readline__item--warn' : 'readline__item'}>
+        <span className="readline__label">Crew</span>
+        <span className="readline__value">
+          {crewCount}/{crewCapacity}
+        </span>
+      </span>
+      <span
+        className={
+          fuelPct < 0.12
+            ? 'readline__item readline__item--crit'
+            : fuelPct < 0.25
+              ? 'readline__item readline__item--warn'
+              : 'readline__item'
+        }
+      >
+        <span className="readline__label">Fuel</span>
+        <span className="readline__value">{days(fuelDays)}</span>
+      </span>
+      <span
+        className={
+          foodDays < 2
+            ? 'readline__item readline__item--crit'
+            : foodDays < 5
+              ? 'readline__item readline__item--warn'
+              : 'readline__item'
+        }
+      >
+        <span className="readline__label">Food</span>
+        <span className="readline__value">{days(foodDays)}</span>
+      </span>
+      <span className="readline__item">
+        <span className="readline__label">₡</span>
+        <span className="readline__value">{Math.round(resources.credits).toLocaleString()}</span>
+      </span>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Crew row
 // ---------------------------------------------------------------------------

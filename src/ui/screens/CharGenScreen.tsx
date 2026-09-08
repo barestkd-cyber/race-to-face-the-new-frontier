@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Btn, Chip, Empty, Fold, Panel, StatLine } from '../components';
 import { Portrait } from '../Portrait';
 import { store, useDraft } from '../useStore';
-import { autoSpendDraft, deriveMaxHealth, sexLabel } from '../../engine/character';
+import { attributeTotal, autoSpendDraft, deriveMaxHealth, sexLabel } from '../../engine/character';
 import { skillCap } from '../../engine/check';
 import { ATTRIBUTE_INFO, SKILL_INFO } from '../../engine/glossary';
 import type { NewRunDraft } from '../../engine/newGame';
@@ -107,6 +107,17 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
   const skillRemaining = skillPoints - skillSpent;
   const unspent = attrRemaining > 0 || skillRemaining > 0;
 
+  /**
+   * What the roll gave this captain across all 18 attributes, placed and
+   * unplaced together. Starting totals run 75-165 and cluster between 105 and
+   * 135; the ceiling here is the highest a starting roll can reach, not the
+   * theoretical 270 of eighteen maxed attributes, which nobody starts near.
+   *
+   * Deliberately unjudged. No grade, no colour, no "good roll" — what a number
+   * means is something to learn across runs.
+   */
+  const attributePool = attributeTotal(attributes) + attrRemaining;
+
   const bumpAttribute = (key: AttributeKey, delta: number) => {
     setAttributes((previous) => {
       const next = previous[key] + delta;
@@ -167,6 +178,7 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
     return (
       <CaptainIntro
         character={character}
+        attributePoints={attributePoints}
         onContinue={() => setStep('points')}
         onReroll={onReroll}
       />
@@ -180,7 +192,11 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
         attribute totals and backpack slots were on it because they existed,
         not because they helped answer that.
       */}
-      <Panel title="Remaining Points" tight>
+      <Panel
+        title="Remaining Points"
+        aside={`Pool ${attributePool} / ${ATTRIBUTE_GEN.absoluteMax}`}
+        tight
+      >
         <div className="grid2">
           <div>
             <span className="label">Attributes</span>
@@ -344,10 +360,13 @@ function CharGen({ draft, onReroll }: { draft: NewRunDraft; onReroll: () => void
  */
 function CaptainIntro({
   character,
+  attributePoints,
   onContinue,
   onReroll,
 }: {
   character: Character;
+  /** The points still unplaced, so the pool reads the same on both screens. */
+  attributePoints: number;
   onContinue: () => void;
   onReroll: () => void;
 }) {
@@ -370,6 +389,13 @@ function CaptainIntro({
             </div>
             <div className="chips" style={{ marginTop: 6 }}>
               <Chip tone="amber">{character.profession ?? character.lifeHistory.career}</Chip>
+            </div>
+            <div className="tiny faint" style={{ marginTop: 4 }}>
+              Attribute pool{' '}
+              <span className="readout">
+                {attributeTotal(character.attributes) + attributePoints}
+              </span>{' '}
+              / {ATTRIBUTE_GEN.absoluteMax}
             </div>
           </div>
         </div>

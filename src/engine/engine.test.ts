@@ -19,6 +19,7 @@ import { attributeTotal, createCharacter, generateProtagonistDraft } from './cha
 import { applyRawWound, computeSeverityScore, severityFromScore, tickWounds } from './wounds';
 import {
   childPlaces,
+  disembark,
   districtsAt,
   shipPlace,
   walkEstimateHours,
@@ -85,7 +86,7 @@ import {
   rollSpecialWorld,
   sensorsUnreliable,
 } from './planet';
-import { GALAXY, HOOKS, RELATIONSHIPS, SHIPS } from './tuning';
+import { GALAXY, HOOKS, LOCAL, RELATIONSHIPS, SHIPS } from './tuning';
 
 import { migrateSavedState } from '../persistence/storage';
 import {
@@ -589,6 +590,23 @@ describe('walking somewhere', () => {
     const move = walkTo(state, target.place.id, new Rng('WALK-1:move'));
     expect(move.ok).toBe(true);
     expect(state.hours - before).toBeCloseTo(quoted, 6);
+  });
+
+  it('quotes stepping outside as the hatch it is', () => {
+    // The windshield lists the ground the ship is parked on beside everywhere
+    // else, so the price on that row has to be the price disembarking charges.
+    const draft = generateProtagonistDraft(streamRng('WALK-STEP', 'protagonist'));
+    const state = createGame('WALK-STEP', draft.character);
+
+    const parked = shipPlace(state)!;
+    expect(parked).toBeTruthy();
+    const quoted = walkOptions(state).find((o) => o.place.id === parked.id)?.hours;
+    expect(quoted).toBe(LOCAL.disembarkHours);
+
+    const before = state.hours;
+    disembark(state, new Rng('WALK-STEP:out'));
+    expect(state.hours - before).toBeCloseTo(quoted!, 6);
+    expect(state.currentPlaceId).toBe(parked.id);
   });
 
   it('charges for crossing a district as well as walking in', () => {

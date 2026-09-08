@@ -195,6 +195,22 @@ compartment that was built in and has not been found, a drive model notorious
 for stalling, an illegal darkening treatment. They are exceptions with direct
 effects, not a modification system.
 
+## The windshield is the navigation interface
+
+The cockpit answers three questions and stops: where am I, what can I do, is
+anything urgent. Every subsystem has its own screen; the cockpit's job is to be
+the place you look out of.
+
+Landed, the windshield has two modes and the player switches between them —
+the ground under the ship, and the space around it. Choosing a destination
+happens in the glass in both modes, which is why there is no Step Outside
+button and no Plot a Course button: those were two taps standing in front of
+the same list.
+
+Nothing on the cockpit is a permanent gauge. Hull, morale and flight readiness
+appear as a single line only once they have crossed into something the player
+has to answer, and the line points at the screen carrying the full explanation.
+
 ## Two axes that are easy to confuse
 
 **Potential** is how far a raw skill can ever be trained — C caps at 70, B at

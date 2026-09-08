@@ -712,6 +712,11 @@ export function walkEstimateHours(state: GameState, target: Place): number {
   const from = currentPlace(state);
   if (from && from.id === target.id) return 0;
 
+  // From aboard, the ground the ship is standing on is a hatch and a ladder,
+  // not a walk across a world. The windshield quotes this, so it has to be
+  // the same number `disembark` actually charges.
+  if (!from && target.shipHere) return LOCAL.disembarkHours;
+
   // Moving inside one district — or in and out of its own venues — is quick.
   const sameDistrict =
     from &&
@@ -801,7 +806,7 @@ export function boardShip(state: GameState, rng: Rng): MoveResult {
 export function disembark(state: GameState, rng: Rng): MoveResult {
   const parked = shipPlace(state);
   if (!parked) return { ok: false, lines: [], reason: 'There is nowhere to step out to.' };
-  const advance = advanceTime(state, 0.1, rng);
+  const advance = advanceTime(state, LOCAL.disembarkHours, rng);
   state.currentPlaceId = parked.id;
   parked.visited = true;
   for (const child of childPlaces(state, parked.id)) child.discovered = true;

@@ -1766,17 +1766,219 @@ textarea {
   }
 }
 
-/* A gentle nudge, not an enforced orientation. */
-.rotate-nudge {
-  display: none;
+/* ------------------------------------------------------------------ */
+/* The windshield — one framed unit: glass, display selector, targets  */
+/* ------------------------------------------------------------------ */
+
+.windshield {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bevel-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
 }
 
-@media (orientation: portrait) and (max-width: 560px) {
-  .rotate-nudge {
-    display: block;
-    font-size: 10.5px;
-    color: var(--ink-faint);
-    text-align: center;
-    padding: 4px 0 0;
+/* The glass sits flush inside the frame rather than carrying its own. */
+.windshield > .scene,
+.windshield > .viewport {
+  border: 0;
+  border-radius: 0;
+}
+
+/* The display selector. Two modes, and the lit one is what the glass shows. */
+.windshield__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--bevel-dark);
+  border-top: 1px solid var(--bevel-dark);
+  border-bottom: 1px solid var(--bevel-dark);
+}
+
+.modebtn {
+  appearance: none;
+  border: 0;
+  min-height: 40px;
+  padding: 8px 6px;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: linear-gradient(180deg, #161c25 0%, #0f141b 100%);
+  cursor: pointer;
+}
+
+.modebtn:hover {
+  color: var(--ink);
+}
+
+.modebtn--on {
+  color: #06202a;
+  background: linear-gradient(180deg, var(--cyan) 0%, #3f9ec4 100%);
+  text-shadow: none;
+}
+
+.modebtn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -3px;
+}
+
+/* The target list, scrolling inside the frame so the cockpit stays one screen. */
+.windshield__list {
+  max-height: 34vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
+}
+
+/* Once a destination is chosen the list has done its job; the numbers that
+   decide the leg get the room instead. */
+.windshield__list--short {
+  max-height: 14vh;
+}
+
+.windshield__empty {
+  margin: 0;
+  padding: 10px 4px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* Selected space destination, in the same list. */
+.placecard--on {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--cyan);
+}
+
+/* ------------------------------------------------------------------ */
+/* Resource line — the stores as one glance                            */
+/* ------------------------------------------------------------------ */
+
+.readline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--bevel-dark);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #171d26 0%, #10151c 100%);
+}
+
+.readline__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.readline__label {
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.readline__value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.readline__item--warn .readline__value {
+  color: var(--amber);
+}
+
+.readline__item--crit .readline__value {
+  color: var(--red);
+}
+
+/* ------------------------------------------------------------------ */
+/* Alerts — a line each, and only when there is something to answer    */
+/* ------------------------------------------------------------------ */
+
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bevel-dark);
+  border: 1px solid var(--bevel-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.alert {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  border-left: 3px solid var(--seam);
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: linear-gradient(180deg, #161c25 0%, #10151c 100%);
+  cursor: pointer;
+}
+
+.alert--flat {
+  cursor: default;
+}
+
+.alert--warn {
+  border-left-color: var(--amber);
+}
+
+.alert--bad {
+  border-left-color: var(--red);
+}
+
+.alert__label {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.alert--warn .alert__label {
+  color: var(--amber);
+}
+
+.alert--bad .alert__label {
+  color: var(--red);
+}
+
+.alert__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.alert__go {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+}
+
+.alert:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -3px;
+}
+
+/* Landscape puts the world beside the instruments; the glass can be taller. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .windshield__list {
+    max-height: 26vh;
   }
 }

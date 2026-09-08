@@ -53,7 +53,14 @@ import {
   noteSuccession,
   payShipWatch,
 } from '../engine/command';
-import { bindSitesToPlaces, boardShip, disembark, ensurePlaces, walkTo } from '../engine/places';
+import {
+  bindSitesToPlaces,
+  boardShip,
+  disembark,
+  ensurePlaces,
+  shipPlace,
+  walkTo,
+} from '../engine/places';
 import { canAccessHold, canEquipFromHold, canUseRepairYard, canWorkOnShip } from '../engine/access';
 import { acceptMission, abandonMission, refreshMissions, resolveMission } from '../engine/missions';
 import { beginNewRun, checkRunEnded, createGame, rerollProtagonist, type NewRunDraft } from '../engine/newGame';
@@ -376,8 +383,20 @@ class GameStore {
     });
   };
 
-  /** Walk to a district or venue. Costs time. */
+  /**
+   * Walk to a district or venue. Costs time.
+   *
+   * Selecting the ground the ship is parked on, from aboard, is stepping
+   * outside — the same short hop it always was, not a walk across a world.
+   */
   goToPlace = (placeId: string): void => {
+    if (this.state && !this.state.currentPlaceId) {
+      const parked = shipPlace(this.state);
+      if (parked && parked.id === placeId) {
+        this.stepOutside();
+        return;
+      }
+    }
     this.mutate((state) => {
       const result = walkTo(state, placeId, this.rng);
       if (!result.ok) {
@@ -386,8 +405,9 @@ class GameStore {
       }
       if (result.lines.length > 0) this.pushToast(result.lines);
       state.screen = 'place';
-      // Walking somewhere on purpose is proof the opening has landed.
-      this.advanceOnboardingTo(state, ONBOARDING.DONE);
+      // Off the ship and somewhere on purpose. The second beat is knowing what
+      // the whole trip is for.
+      this.advanceOnboardingTo(state, ONBOARDING.GOALS);
     });
     void this.autosave();
   };

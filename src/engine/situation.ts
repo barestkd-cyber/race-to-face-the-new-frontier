@@ -10,10 +10,11 @@
  */
 
 import { untreatedWoundCount } from './actions';
+import { SYSTEM_LABELS } from './ship';
 import { hasDevelopmentToSpend } from './development';
 import { missionsHere } from './missions';
 import { flightReadiness } from './ship';
-import { crewCapacity, estimateFuel } from './ship';
+import { estimateFuel } from './ship';
 import { crewMembers, daysOfFoodRemaining, isStarving } from './sim';
 import { CHECK } from './tuning';
 import { estimateTerminalDay } from './world';
@@ -37,11 +38,20 @@ export interface SituationLine {
   label: string;
   /** The whole point, as a sentence. */
   text: string;
+  /**
+   * The same thing in a clause, for the cockpit, which has room for a line and
+   * not a paragraph. Everywhere with room reads `text`.
+   */
+  short: string;
   action?: { label: string; go: SituationGo };
 }
 
 /** How many days of food are worth mentioning. Display only. */
 const FOOD_WARN_DAYS = 6;
+/** Hull below this stops being a gauge and becomes a thing to answer. */
+const HULL_ALARM = 25;
+/** Morale below this is the crew telling you something. */
+const MORALE_ALARM = 30;
 /** Fuel range below this many days is worth mentioning. Display only. */
 const FUEL_WARN_DAYS = 3;
 
@@ -62,6 +72,7 @@ export function situationReport(state: GameState): SituationLine[] {
       tone: clock.urgency === 'calm' ? 'ok' : clock.urgency === 'pressing' ? 'warn' : 'bad',
       label: 'This world',
       text: `${clock.text} You are on day ${clock.elapsedDays + 1}.`,
+      short: `Collapse forecast: ${clock.range}`,
     });
   }
 
@@ -72,6 +83,7 @@ export function situationReport(state: GameState): SituationLine[] {
       tone: 'warn',
       label: 'Party out',
       text: 'You have people at a site right now. The ship runs without them until they are back.',
+      short: 'A party is deployed',
       action: { label: 'Go to the party', go: 'expedition' },
     });
   }
@@ -86,6 +98,7 @@ export function situationReport(state: GameState): SituationLine[] {
         wounded === 1
           ? 'Somebody is carrying an untreated wound. Left alone it closes slowly and badly.'
           : `${wounded} untreated wounds aboard. Left alone they close slowly and badly.`,
+      short: wounded === 1 ? 'One untreated wound' : `${wounded} untreated wounds`,
       action: { label: 'Treat them', go: 'medical' },
     });
   }
@@ -101,6 +114,7 @@ export function situationReport(state: GameState): SituationLine[] {
       tone: 'warn',
       label: 'Exhausted',
       text: `${who}. Everything they attempt is worse until they sleep.`,
+      short: tired.length === 1 ? `${tired[0]!.name} is exhausted` : `${tired.length} exhausted`,
       action: aboard ? { label: 'Stand down and rest', go: 'rest' } : undefined,
     });
   }
@@ -108,12 +122,44 @@ export function situationReport(state: GameState): SituationLine[] {
   // -- The ship ----------------------------------------------------------
   const flight = flightReadiness(state.ship);
   if (flight.tone !== 'ok') {
+    const worst = flight.worst;
+    const system = worst ? SYSTEM_LABELS[worst.kind].toUpperCase() : 'SHIP';
     lines.push({
       id: 'ship',
       tone: flight.tone,
-      label: flight.canFly ? 'Ship' : 'Grounded',
+      label: flight.canFly ? system : `${system} OFFLINE`,
       text: `${flight.headline} ${flight.detail}`,
-      action: { label: 'Look at the ship', go: 'ship' },
+      short: flight.canFly
+        ? `${worst ? `${Math.round(worst.condition)}% · ` : ''}still flyable`
+        : 'Cannot depart',
+      action: { label: 'Work on ship', go: 'ship' },
+    });
+  }
+
+  // Hull and morale are not permanent gauges on the cockpit. They speak only
+  // when they have crossed into something the player has to answer.
+  if (state.ship && !state.ship.destroyed) {
+    const hull = state.ship.systems.hull;
+    if (hull.installed && hull.condition < HULL_ALARM) {
+      lines.push({
+        id: 'hull',
+        tone: 'bad',
+        label: 'Hull breach',
+        text: `The hull is at ${Math.round(hull.condition)}% and will not take another hard hit.`,
+        short: 'Repair required',
+        action: { label: 'Work on ship', go: 'ship' },
+      });
+    }
+  }
+
+  if (state.morale < MORALE_ALARM) {
+    lines.push({
+      id: 'morale',
+      tone: state.morale < MORALE_ALARM / 2 ? 'bad' : 'warn',
+      label: 'Morale breaking',
+      text: 'The crew are close to done. People start leaving, or worse, from here.',
+      short: 'People will start leaving',
+      action: { label: 'Open the crew', go: 'crew' },
     });
   }
 
@@ -124,6 +170,7 @@ export function situationReport(state: GameState): SituationLine[] {
       tone: 'bad',
       label: 'No food',
       text: 'The stores are empty and people are going hungry. This gets ugly fast.',
+      short: 'The stores are empty',
     });
   } else {
     const foodDays = daysOfFoodRemaining(state);
@@ -133,6 +180,7 @@ export function situationReport(state: GameState): SituationLine[] {
         tone: foodDays < 2 ? 'bad' : 'warn',
         label: 'Food',
         text: `Roughly ${Math.max(0, Math.floor(foodDays))} days of food aboard at the current headcount.`,
+        short: `${Math.max(0, Math.floor(foodDays))} days aboard`,
       });
     }
   }
@@ -145,6 +193,7 @@ export function situationReport(state: GameState): SituationLine[] {
         tone: fuel.daysRemaining < 1 ? 'bad' : 'warn',
         label: 'Fuel',
         text: `The tanks are good for about ${fuel.daysRemaining.toFixed(1)} days of burn. Most legs cost more than that.`,
+        short: `${fuel.daysRemaining.toFixed(1)} days of burn — most legs cost more`,
       });
     }
   }
@@ -161,21 +210,12 @@ export function situationReport(state: GameState): SituationLine[] {
       tone: 'ok',
       label: 'Experience',
       text: `${who}. One decision each — the direction, not the arithmetic.`,
+      short:
+        improved.length === 1
+          ? `${improved[0]!.name} can get better at something`
+          : `${improved.length} can get better at something`,
       action: { label: 'Open the crew', go: 'crew' },
     });
-  }
-
-  // -- Opportunity, not just alarm ---------------------------------------
-  if (!underway && state.ship && !state.ship.destroyed) {
-    const capacity = crewCapacity(state.ship);
-    if (crew.length === 1 && capacity > 1) {
-      lines.push({
-        id: 'alone',
-        tone: 'warn',
-        label: 'Alone',
-          text: `You are one person with ${capacity} berths. Nobody out there is coming to find you.`,
-      });
-    }
   }
 
   if (!underway && location) {
@@ -186,6 +226,7 @@ export function situationReport(state: GameState): SituationLine[] {
         tone: 'ok',
         label: 'Work',
         text: `${posted} job${posted === 1 ? '' : 's'} posted on this world right now.`,
+        short: `${posted} job${posted === 1 ? '' : 's'} posted here`,
       });
     }
   }
@@ -199,6 +240,7 @@ export function situationReport(state: GameState): SituationLine[] {
       text: underway
         ? 'The ship is flying itself. Nothing aboard needs you.'
         : 'Nothing aboard needs you. The only thing still moving is the clock.',
+      short: underway ? 'The ship is flying itself' : 'Only the clock is moving',
     });
   }
 

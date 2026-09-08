@@ -88,10 +88,6 @@ export function ShipRevealScreen() {
               <span className="label">Capacity</span>
               <span className="value readout">{capacity}</span>
             </div>
-            <p className="tiny faint" style={{ marginTop: 2, marginBottom: 0 }}>
-              Berths, from the Quarters she was built with. You are one person; the
-              rest of those bunks are empty.
-            </p>
 
             {facts.length > 0 && (
               <>
